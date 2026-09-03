@@ -1,0 +1,20 @@
+[
+  {
+    "memory_id": "d14c8e67ad7d49629f6ef53a0e0c5bb2",
+    "content": "Auth API projem unittest kullanıyor.",
+    "created_at": "2026-09-03T13:40:18.865577+00:00",
+    "updated_at": "2026-09-03T13:40:18.865577+00:00",
+    "subject": "Auth API",
+    "relation": "test_framework",
+    "value": "unittest"
+  },
+  {
+    "memory_id": "621e70bf6b244fbda84c7c5e41737d4b",
+    "content": "yazılım geliştirme için kullanılan teknoloji",
+    "created_at": "2026-09-03T13:42:20.622709+00:00",
+    "updated_at": "2026-09-03T13:42:20.622709+00:00",
+    "subject": "projeler",
+    "relation": "backend_framework",
+    "value": "react"
+  }
+]
