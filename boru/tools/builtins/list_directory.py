@@ -1,0 +1,91 @@
+from boru.tools.models import (
+    ToolResult,
+    ToolRisk,
+)
+from boru.tools.contracts import (
+    WorkspaceReader,
+)
+
+
+class ListDirectoryTool:
+    """İzin verilen workspace içindeki klasör içeriğini listeler."""
+
+    def __init__(
+        self,
+        workspace: WorkspaceReader,
+    ):
+        self._workspace = workspace
+
+    @property
+    def name(self) -> str:
+        return "list_directory"
+
+    @property
+    def description(self) -> str:
+        return (
+            "İzin verilen proje workspace'i içindeki "
+            "bir klasörün dosya ve alt klasörlerini listeler."
+        )
+
+    @property
+    def risk(self) -> ToolRisk:
+        return ToolRisk.READ_ONLY
+
+    def execute(
+        self,
+        arguments: dict[str, object],
+    ) -> ToolResult:
+        unexpected = set(arguments) - {"path"}
+        if unexpected:
+            raise ValueError(
+                "list_directory yalnızca 'path' argümanını kabul eder."
+            )
+
+        raw_path = arguments.get(
+            "path",
+            ".",
+        )
+
+        if not isinstance(raw_path, str):
+            raise ValueError(
+                "'path' metin olmalıdır."
+            )
+
+        relative_path = raw_path.strip() or "."
+        listing = self._workspace.list_directory(
+            relative_path
+        )
+
+        display_path = (
+            "proje kökü"
+            if relative_path == "."
+            else relative_path
+        )
+
+        lines = [
+            f"Klasör: {display_path}"
+        ]
+
+        if not listing.entries:
+            lines.append("(boş klasör)")
+        else:
+            for entry in listing.entries:
+                kind = (
+                    "DIR"
+                    if entry.is_directory
+                    else "FILE"
+                )
+                lines.append(
+                    f"[{kind}] {entry.relative_path}"
+                )
+
+        if listing.truncated:
+            lines.append(
+                "(liste güvenlik limiti nedeniyle kısaltıldı)"
+            )
+
+        return ToolResult(
+            tool_name=self.name,
+            success=True,
+            content="\n".join(lines),
+        )

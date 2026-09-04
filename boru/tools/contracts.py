@@ -8,6 +8,9 @@ from boru.tools.models import (
     ToolResult,
     ToolRisk,
 )
+from boru.tools.workspace import (
+    DirectoryListing,
+)
 
 
 class Tool(Protocol):
@@ -64,4 +67,18 @@ class ToolExecutorPort(Protocol):
         self,
         call: ToolCall,
     ) -> ToolResult:
+        ...
+
+
+class WorkspaceReader(Protocol):
+    def list_directory(
+        self,
+        relative_path: str = ".",
+    ) -> DirectoryListing:
+        ...
+
+    def read_text_file(
+        self,
+        relative_path: str,
+    ) -> str:
         ...

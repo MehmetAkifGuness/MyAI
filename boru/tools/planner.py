@@ -7,7 +7,7 @@ from boru.tools.models import (
 
 
 class RuleBasedToolPlanner:
-    """V0.10 için açık ve düşük riskli tool niyetlerini deterministik seçer."""
+    """Açık ve düşük riskli tool niyetlerini deterministik seçer."""
 
     _TIME_PATTERNS = (
         re.compile(r"\bsaat\s+kaç\b", re.IGNORECASE),
@@ -15,6 +15,42 @@ class RuleBasedToolPlanner:
         re.compile(r"\bbugünün\s+tarihi\b", re.IGNORECASE),
         re.compile(r"\bbugün\s+tarih\b", re.IGNORECASE),
         re.compile(r"\btarih\s+ne\b", re.IGNORECASE),
+    )
+
+    _READ_FILE_PATTERNS = (
+        re.compile(
+            r"^\s*(?P<path>.+?)\s+dosyasını\s+"
+            r"(?:oku|göster|aç)\s*[?!.]*\s*$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^\s*(?P<path>.+?)\s+dosyasının\s+içeriğini\s+"
+            r"(?:oku|göster)\s*[?!.]*\s*$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^\s*(?P<path>.+?)\s+içeriğini\s+"
+            r"(?:oku|göster)\s*[?!.]*\s*$",
+            re.IGNORECASE,
+        ),
+    )
+
+    _LIST_DIRECTORY_PATTERNS = (
+        re.compile(
+            r"^\s*(?P<path>.+?)\s+klasöründeki\s+dosyaları\s+"
+            r"(?:listele|göster)\s*[?!.]*\s*$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^\s*(?P<path>.+?)\s+klasörünü\s+"
+            r"(?:listele|göster)\s*[?!.]*\s*$",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"^\s*(?:proje\s+)?(?:klasöründeki\s+)?dosyaları\s+"
+            r"(?:listele|göster)\s*[?!.]*\s*$",
+            re.IGNORECASE,
+        ),
     )
 
     _WORD_OPERATORS = (
@@ -62,6 +98,38 @@ class RuleBasedToolPlanner:
                 reason="Açık tarih/saat isteği.",
             )
 
+        file_path = self._match_path(
+            text,
+            self._READ_FILE_PATTERNS,
+        )
+
+        if file_path is not None:
+            return ToolDecision.use(
+                ToolCall(
+                    tool_name="read_file",
+                    arguments={
+                        "path": file_path,
+                    },
+                ),
+                reason="Açık dosya okuma isteği.",
+            )
+
+        directory_path = self._match_path(
+            text,
+            self._LIST_DIRECTORY_PATTERNS,
+        )
+
+        if directory_path is not None:
+            return ToolDecision.use(
+                ToolCall(
+                    tool_name="list_directory",
+                    arguments={
+                        "path": directory_path,
+                    },
+                ),
+                reason="Açık klasör listeleme isteği.",
+            )
+
         expression = self._extract_expression(
             text
         )
@@ -80,6 +148,52 @@ class RuleBasedToolPlanner:
             ),
             reason="Açık aritmetik hesaplama isteği.",
         )
+
+    @classmethod
+    def _match_path(
+        cls,
+        text: str,
+        patterns: tuple[re.Pattern[str], ...],
+    ) -> str | None:
+        for pattern in patterns:
+            match = pattern.fullmatch(text)
+            if match is None:
+                continue
+
+            raw_path = match.groupdict().get(
+                "path"
+            )
+
+            if raw_path is None:
+                return "."
+
+            return cls._clean_path_phrase(
+                raw_path
+            )
+
+        return None
+
+    @staticmethod
+    def _clean_path_phrase(
+        value: str,
+    ) -> str:
+        cleaned = value.strip()
+
+        if (
+            len(cleaned) >= 2
+            and cleaned[0] == cleaned[-1]
+            and cleaned[0] in {'"', "'"}
+        ):
+            cleaned = cleaned[1:-1].strip()
+
+        if cleaned.casefold() in {
+            "proje",
+            "proje kökü",
+            "proje klasörü",
+        }:
+            return "."
+
+        return cleaned or "."
 
     def _extract_expression(
         self,

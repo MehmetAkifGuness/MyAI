@@ -1,6 +1,8 @@
 from boru.tools.builtins import (
     CalculatorTool,
     CurrentTimeTool,
+    ListDirectoryTool,
+    ReadFileTool,
 )
 from boru.tools.coordinator import (
     ToolCoordinator,
@@ -24,11 +26,22 @@ from boru.tools.policy import (
 from boru.tools.registry import (
     ToolRegistry,
 )
+from boru.tools.workspace import (
+    DirectoryListing,
+    ReadOnlyWorkspace,
+    WorkspaceAccessError,
+    WorkspaceEntry,
+    WorkspacePathResolver,
+)
 
 
 __all__ = [
     "CalculatorTool",
     "CurrentTimeTool",
+    "DirectoryListing",
+    "ListDirectoryTool",
+    "ReadFileTool",
+    "ReadOnlyWorkspace",
     "RiskBasedToolPolicy",
     "RuleBasedToolPlanner",
     "ToolCall",
@@ -39,4 +52,7 @@ __all__ = [
     "ToolRegistry",
     "ToolResult",
     "ToolRisk",
+    "WorkspaceAccessError",
+    "WorkspaceEntry",
+    "WorkspacePathResolver",
 ]

@@ -46,6 +46,25 @@ class ConservativeMemoryDecisionGate:
         ),
     )
 
+    _ONE_TIME_TASK_PATTERNS = (
+        re.compile(
+            r"\bdosyasını\s+(?:oku|göster|aç)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\bdosyasının\s+içeriğini\s+(?:oku|göster)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\bklasör(?:ünü|ündeki)\b.*\b(?:listele|göster)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\bdosyaları\s+(?:listele|göster)\b",
+            re.IGNORECASE,
+        ),
+    )
+
     _PROFILE_PATTERNS = (
         re.compile(r"\b(?:benim\s+)?adım\b", re.IGNORECASE),
         re.compile(r"\bismim\b", re.IGNORECASE),
@@ -147,6 +166,12 @@ class ConservativeMemoryDecisionGate:
         if self._matches_any(
             text,
             self._MEMORY_META_PATTERNS,
+        ):
+            return False
+
+        if self._matches_any(
+            text,
+            self._ONE_TIME_TASK_PATTERNS,
         ):
             return False
 
