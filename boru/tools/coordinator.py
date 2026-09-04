@@ -1,19 +1,25 @@
 from boru.tools.contracts import (
     ToolExecutorPort,
     ToolPlanner,
+    ToolResultSynthesizer,
+)
+from boru.tools.models import (
+    ToolResponseMode,
 )
 
 
 class ToolCoordinator:
-    """Tool planlama ve çalıştırmayı AssistantService'ten ayrı tutar."""
+    """Tek-tool planlama, çalıştırma ve isteğe bağlı sentezi yönetir."""
 
     def __init__(
         self,
         planner: ToolPlanner,
         executor: ToolExecutorPort,
+        synthesizer: ToolResultSynthesizer | None = None,
     ):
         self._planner = planner
         self._executor = executor
+        self._synthesizer = synthesizer
 
     def resolve(
         self,
@@ -35,15 +41,29 @@ class ToolCoordinator:
             decision.tool_call
         )
 
-        if result.success:
-            cleaned = result.content.strip()
-            if not cleaned:
-                raise RuntimeError(
-                    "Tool başarılı ancak boş sonuç döndürdü."
-                )
+        if not result.success:
+            return (
+                "Aracı çalıştıramadım: "
+                f"{result.error}"
+            )
+
+        cleaned = result.content.strip()
+        if not cleaned:
+            raise RuntimeError(
+                "Tool başarılı ancak boş sonuç döndürdü."
+            )
+
+        if decision.response_mode is ToolResponseMode.DIRECT:
             return cleaned
 
-        return (
-            "Aracı çalıştıramadım: "
-            f"{result.error}"
+        if self._synthesizer is None:
+            raise RuntimeError(
+                "Tool sonucu sentezlenmek istendi ancak synthesizer yapılandırılmadı."
+            )
+
+        return self._synthesizer.synthesize(
+            user_message=user_message,
+            instruction=decision.synthesis_instruction,
+            tool_call=decision.tool_call,
+            tool_result=result,
         )

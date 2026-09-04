@@ -13,6 +13,11 @@ class ToolRisk(str, Enum):
     NETWORK = "network"
 
 
+class ToolResponseMode(str, Enum):
+    DIRECT = "direct"
+    SYNTHESIZE = "synthesize"
+
+
 @dataclass(frozen=True, slots=True)
 class ToolDefinition:
     name: str
@@ -70,6 +75,8 @@ class ToolDecision:
     should_use_tool: bool
     tool_call: ToolCall | None = None
     reason: str = ""
+    response_mode: ToolResponseMode = ToolResponseMode.DIRECT
+    synthesis_instruction: str = ""
 
     def __post_init__(self) -> None:
         if self.should_use_tool and self.tool_call is None:
@@ -80,6 +87,34 @@ class ToolDecision:
         if not self.should_use_tool and self.tool_call is not None:
             raise ValueError(
                 "Tool kullanılmayacaksa ToolCall olmamalıdır."
+            )
+
+        cleaned_instruction = self.synthesis_instruction.strip()
+        object.__setattr__(
+            self,
+            "synthesis_instruction",
+            cleaned_instruction,
+        )
+
+        if not self.should_use_tool:
+            if self.response_mode is not ToolResponseMode.DIRECT:
+                raise ValueError(
+                    "Tool kullanılmayan kararda response_mode DIRECT olmalıdır."
+                )
+
+            if cleaned_instruction:
+                raise ValueError(
+                    "Tool kullanılmayan kararda sentez talimatı olamaz."
+                )
+
+        if self.response_mode is ToolResponseMode.SYNTHESIZE:
+            if not cleaned_instruction:
+                raise ValueError(
+                    "SYNTHESIZE modu için sentez talimatı gereklidir."
+                )
+        elif cleaned_instruction:
+            raise ValueError(
+                "DIRECT modu sentez talimatı içeremez."
             )
 
     @classmethod
@@ -97,9 +132,14 @@ class ToolDecision:
         cls,
         tool_call: ToolCall,
         reason: str = "",
+        *,
+        response_mode: ToolResponseMode = ToolResponseMode.DIRECT,
+        synthesis_instruction: str = "",
     ) -> "ToolDecision":
         return cls(
             should_use_tool=True,
             tool_call=tool_call,
             reason=reason,
+            response_mode=response_mode,
+            synthesis_instruction=synthesis_instruction,
         )

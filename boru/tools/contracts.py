@@ -70,6 +70,18 @@ class ToolExecutorPort(Protocol):
         ...
 
 
+class ToolResultSynthesizer(Protocol):
+    def synthesize(
+        self,
+        *,
+        user_message: str,
+        instruction: str,
+        tool_call: ToolCall,
+        tool_result: ToolResult,
+    ) -> str:
+        ...
+
+
 class WorkspaceReader(Protocol):
     def list_directory(
         self,

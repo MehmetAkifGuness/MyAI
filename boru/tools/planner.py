@@ -3,6 +3,7 @@ import re
 from boru.tools.models import (
     ToolCall,
     ToolDecision,
+    ToolResponseMode,
 )
 
 
@@ -20,17 +21,20 @@ class RuleBasedToolPlanner:
     _READ_FILE_PATTERNS = (
         re.compile(
             r"^\s*(?P<path>.+?)\s+dosyasını\s+"
-            r"(?:oku|göster|aç)\s*[?!.]*\s*$",
+            r"(?:oku|göster|aç)"
+            r"(?P<instruction>.*?)\s*$",
             re.IGNORECASE,
         ),
         re.compile(
             r"^\s*(?P<path>.+?)\s+dosyasının\s+içeriğini\s+"
-            r"(?:oku|göster)\s*[?!.]*\s*$",
+            r"(?:oku|göster)"
+            r"(?P<instruction>.*?)\s*$",
             re.IGNORECASE,
         ),
         re.compile(
             r"^\s*(?P<path>.+?)\s+içeriğini\s+"
-            r"(?:oku|göster)\s*[?!.]*\s*$",
+            r"(?:oku|göster)"
+            r"(?P<instruction>.*?)\s*$",
             re.IGNORECASE,
         ),
     )
@@ -38,17 +42,20 @@ class RuleBasedToolPlanner:
     _LIST_DIRECTORY_PATTERNS = (
         re.compile(
             r"^\s*(?P<path>.+?)\s+klasöründeki\s+dosyaları\s+"
-            r"(?:listele|göster)\s*[?!.]*\s*$",
+            r"(?:listele|göster)"
+            r"(?P<instruction>.*?)\s*$",
             re.IGNORECASE,
         ),
         re.compile(
             r"^\s*(?P<path>.+?)\s+klasörünü\s+"
-            r"(?:listele|göster)\s*[?!.]*\s*$",
+            r"(?:listele|göster)"
+            r"(?P<instruction>.*?)\s*$",
             re.IGNORECASE,
         ),
         re.compile(
             r"^\s*(?:proje\s+)?(?:klasöründeki\s+)?dosyaları\s+"
-            r"(?:listele|göster)\s*[?!.]*\s*$",
+            r"(?:listele|göster)"
+            r"(?P<instruction>.*?)\s*$",
             re.IGNORECASE,
         ),
     )
@@ -72,6 +79,11 @@ class RuleBasedToolPlanner:
 
     _VALID_EXPRESSION = re.compile(
         r"^[0-9\s()+\-*/%.]+$"
+    )
+
+    _INSTRUCTION_PREFIX = re.compile(
+        r"^[\s,;:-]*(?:(?:ve|sonra|ardından)\s+)?",
+        re.IGNORECASE,
     )
 
     def plan(
@@ -98,35 +110,31 @@ class RuleBasedToolPlanner:
                 reason="Açık tarih/saat isteği.",
             )
 
-        file_path = self._match_path(
+        file_match = self._match_tool_request(
             text,
             self._READ_FILE_PATTERNS,
         )
 
-        if file_path is not None:
-            return ToolDecision.use(
-                ToolCall(
-                    tool_name="read_file",
-                    arguments={
-                        "path": file_path,
-                    },
-                ),
+        if file_match is not None:
+            file_path, instruction = file_match
+            return self._build_tool_decision(
+                tool_name="read_file",
+                path=file_path,
+                instruction=instruction,
                 reason="Açık dosya okuma isteği.",
             )
 
-        directory_path = self._match_path(
+        directory_match = self._match_tool_request(
             text,
             self._LIST_DIRECTORY_PATTERNS,
         )
 
-        if directory_path is not None:
-            return ToolDecision.use(
-                ToolCall(
-                    tool_name="list_directory",
-                    arguments={
-                        "path": directory_path,
-                    },
-                ),
+        if directory_match is not None:
+            directory_path, instruction = directory_match
+            return self._build_tool_decision(
+                tool_name="list_directory",
+                path=directory_path,
+                instruction=instruction,
                 reason="Açık klasör listeleme isteği.",
             )
 
@@ -150,28 +158,60 @@ class RuleBasedToolPlanner:
         )
 
     @classmethod
-    def _match_path(
+    def _match_tool_request(
         cls,
         text: str,
         patterns: tuple[re.Pattern[str], ...],
-    ) -> str | None:
+    ) -> tuple[str, str] | None:
         for pattern in patterns:
             match = pattern.fullmatch(text)
             if match is None:
                 continue
 
-            raw_path = match.groupdict().get(
-                "path"
+            groups = match.groupdict()
+            raw_path = groups.get("path")
+            path = (
+                "."
+                if raw_path is None
+                else cls._clean_path_phrase(raw_path)
             )
 
-            if raw_path is None:
-                return "."
-
-            return cls._clean_path_phrase(
-                raw_path
+            instruction = cls._clean_instruction(
+                groups.get("instruction") or ""
             )
+
+            return path, instruction
 
         return None
+
+    @classmethod
+    def _build_tool_decision(
+        cls,
+        *,
+        tool_name: str,
+        path: str,
+        instruction: str,
+        reason: str,
+    ) -> ToolDecision:
+        call = ToolCall(
+            tool_name=tool_name,
+            arguments={
+                "path": path,
+            },
+        )
+
+        if not instruction:
+            return ToolDecision.use(
+                call,
+                reason=reason,
+            )
+
+        return ToolDecision.use(
+            call,
+            reason=reason,
+            response_mode=ToolResponseMode.SYNTHESIZE,
+            synthesis_instruction=instruction,
+        )
 
     @staticmethod
     def _clean_path_phrase(
@@ -194,6 +234,19 @@ class RuleBasedToolPlanner:
             return "."
 
         return cleaned or "."
+
+    @classmethod
+    def _clean_instruction(
+        cls,
+        value: str,
+    ) -> str:
+        cleaned = value.strip()
+        cleaned = cls._INSTRUCTION_PREFIX.sub(
+            "",
+            cleaned,
+            count=1,
+        )
+        return cleaned.strip(" \t\r\n.,;:!?")
 
     def _extract_expression(
         self,

@@ -14,6 +14,7 @@ from boru.tools.models import (
     ToolCall,
     ToolDecision,
     ToolDefinition,
+    ToolResponseMode,
     ToolResult,
     ToolRisk,
 )
@@ -25,6 +26,9 @@ from boru.tools.policy import (
 )
 from boru.tools.registry import (
     ToolRegistry,
+)
+from boru.tools.synthesizer import (
+    LLMToolResultSynthesizer,
 )
 from boru.tools.workspace import (
     DirectoryListing,
@@ -39,6 +43,7 @@ __all__ = [
     "CalculatorTool",
     "CurrentTimeTool",
     "DirectoryListing",
+    "LLMToolResultSynthesizer",
     "ListDirectoryTool",
     "ReadFileTool",
     "ReadOnlyWorkspace",
@@ -50,6 +55,7 @@ __all__ = [
     "ToolDefinition",
     "ToolExecutor",
     "ToolRegistry",
+    "ToolResponseMode",
     "ToolResult",
     "ToolRisk",
     "WorkspaceAccessError",
