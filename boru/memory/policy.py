@@ -94,6 +94,10 @@ class ConservativeMemoryDecisionGate:
             r".*\b(?:yap|değiştir|düzenle|güncelle|ayarla|çevir)\b",
             re.IGNORECASE | re.DOTALL,
         ),
+        re.compile(
+            r"^\s*(?:proje\s+düzenle\s*:|projede\s+|projedeki\s+).+",
+            re.IGNORECASE | re.DOTALL,
+        ),
     )
 
     _PROFILE_PATTERNS = (

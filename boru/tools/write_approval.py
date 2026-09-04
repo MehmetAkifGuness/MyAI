@@ -15,6 +15,14 @@ from boru.tools.edit_models import (
 from boru.tools.models import (
     ToolCall,
 )
+from boru.tools.project_edit_contracts import (
+    ProjectEditApplier,
+    ProjectEditProposalPreparer,
+    ProjectEditRequestParser,
+)
+from boru.tools.project_edit_models import (
+    ProjectEditProposal,
+)
 from boru.tools.write_contracts import (
     WriteIntentDetector,
     WriteRequestParser,
@@ -25,7 +33,7 @@ from boru.tools.write_models import (
 
 
 class ControlledWriteCoordinator:
-    """Create/edit isteklerini önizler ve yalnızca açık onaydan sonra uygular."""
+    """Create/edit/project-edit isteklerini önizler ve yalnızca açık onaydan sonra uygular."""
 
     _APPROVE_COMMANDS = {
         "onayla",
@@ -33,6 +41,7 @@ class ControlledWriteCoordinator:
         "dosya yazımını onayla",
         "değişikliği onayla",
         "düzenlemeyi onayla",
+        "proje değişikliğini onayla",
     }
 
     _CANCEL_COMMANDS = {
@@ -41,6 +50,7 @@ class ControlledWriteCoordinator:
         "yazmayı iptal et",
         "değişikliği iptal et",
         "düzenlemeyi iptal et",
+        "proje değişikliğini iptal et",
     }
 
     def __init__(
@@ -53,7 +63,10 @@ class ControlledWriteCoordinator:
         edit_preparer: EditProposalPreparer | None = None,
         smart_edit_parser: SmartEditRequestParser | None = None,
         smart_edit_preparer: SmartEditProposalPreparer | None = None,
-        preview_characters: int = 3000,
+        project_edit_parser: ProjectEditRequestParser | None = None,
+        project_edit_preparer: ProjectEditProposalPreparer | None = None,
+        project_edit_applier: ProjectEditApplier | None = None,
+        preview_characters: int = 6000,
     ):
         if preview_characters < 1:
             raise ValueError(
@@ -76,6 +89,23 @@ class ControlledWriteCoordinator:
                 "smart_edit_parser ve smart_edit_preparer birlikte verilmelidir."
             )
 
+        project_parts = (
+            project_edit_parser,
+            project_edit_preparer,
+            project_edit_applier,
+        )
+
+        if any(
+            item is not None
+            for item in project_parts
+        ) and not all(
+            item is not None
+            for item in project_parts
+        ):
+            raise ValueError(
+                "project_edit_parser, project_edit_preparer ve project_edit_applier birlikte verilmelidir."
+            )
+
         self._parser = parser
         self._intent_detector = intent_detector
         self._executor = executor
@@ -83,8 +113,16 @@ class ControlledWriteCoordinator:
         self._edit_preparer = edit_preparer
         self._smart_edit_parser = smart_edit_parser
         self._smart_edit_preparer = smart_edit_preparer
+        self._project_edit_parser = project_edit_parser
+        self._project_edit_preparer = project_edit_preparer
+        self._project_edit_applier = project_edit_applier
         self._preview_characters = preview_characters
-        self._pending: WriteRequest | EditProposal | None = None
+        self._pending: (
+            WriteRequest
+            | EditProposal
+            | ProjectEditProposal
+            | None
+        ) = None
         self._lock = RLock()
 
     def resolve(
@@ -123,6 +161,13 @@ class ControlledWriteCoordinator:
 
             if edit_response is not None:
                 return edit_response
+
+            project_response = self._try_stage_project_edit(
+                user_message
+            )
+
+            if project_response is not None:
+                return project_response
 
             smart_edit_response = self._try_stage_smart_edit(
                 user_message
@@ -200,6 +245,51 @@ class ControlledWriteCoordinator:
             proposal
         )
 
+    def _try_stage_project_edit(
+        self,
+        user_message: str,
+    ) -> str | None:
+        if (
+            self._project_edit_parser is None
+            or self._project_edit_preparer is None
+        ):
+            return None
+
+        try:
+            request = self._project_edit_parser.parse(
+                user_message
+            )
+        except Exception as error:
+            return (
+                "Proje düzenleme isteği geçersiz: "
+                f"{error}"
+            )
+
+        if request is None:
+            return None
+
+        if self._pending is not None:
+            return self._pending_message()
+
+        try:
+            proposal = (
+                self._project_edit_preparer
+                .prepare_project_edit(
+                    request
+                )
+            )
+        except Exception as error:
+            return (
+                "Proje düzenleme hazırlanamadı: "
+                f"{error}"
+            )
+
+        self._pending = proposal
+
+        return self._render_project_edit_preview(
+            proposal
+        )
+
     def _try_stage_smart_edit(
         self,
         user_message: str,
@@ -247,13 +337,25 @@ class ControlledWriteCoordinator:
 
     def _execute_pending(
         self,
-        pending: WriteRequest | EditProposal,
+        pending: (
+            WriteRequest
+            | EditProposal
+            | ProjectEditProposal
+        ),
     ) -> str:
         if isinstance(
             pending,
             WriteRequest,
         ):
             return self._execute_create(
+                pending
+            )
+
+        if isinstance(
+            pending,
+            ProjectEditProposal,
+        ):
+            return self._execute_project_edit(
                 pending
             )
 
@@ -307,6 +409,39 @@ class ControlledWriteCoordinator:
             )
 
         return result.content.strip()
+
+    def _execute_project_edit(
+        self,
+        proposal: ProjectEditProposal,
+    ) -> str:
+        if self._project_edit_applier is None:
+            return (
+                "Proje düzenleme applier yapılandırılmamış."
+            )
+
+        try:
+            outcome = (
+                self._project_edit_applier
+                .apply_project_edit(
+                    proposal
+                )
+            )
+        except Exception as error:
+            return (
+                "Proje düzenleme işlemi uygulanamadı: "
+                f"{error}"
+            )
+
+        paths = "\n".join(
+            f"- {item.relative_path}"
+            for item in outcome.outcomes
+        )
+
+        return (
+            "Proje düzenlemesi uygulandı: "
+            f"{len(outcome.outcomes)} dosya\n"
+            f"{paths}"
+        )
 
     def _render_create_preview(
         self,
@@ -370,6 +505,50 @@ class ControlledWriteCoordinator:
             "Uygulamak için yalnızca 'onayla', vazgeçmek için 'iptal' yaz."
         )
 
+    def _render_project_edit_preview(
+        self,
+        proposal: ProjectEditProposal,
+    ) -> str:
+        combined_diff = "\n".join(
+            (
+                f"===== {edit.path} =====\n"
+                f"{edit.diff.rstrip()}"
+            )
+            for edit in proposal.edits
+        )
+
+        diff_preview = combined_diff[
+            : self._preview_characters
+        ]
+
+        truncated = (
+            len(combined_diff)
+            > self._preview_characters
+        )
+
+        suffix = (
+            "\n... (toplu diff önizlemesi kısaltıldı)"
+            if truncated
+            else ""
+        )
+
+        paths = ", ".join(
+            edit.path
+            for edit in proposal.edits
+        )
+
+        return (
+            "Proje düzenlemesi hazırlandı ancak henüz uygulanmadı.\n"
+            f"Dosya sayısı: {len(proposal.edits)}\n"
+            f"Hedefler: {paths}\n"
+            "Mod: mevcut dosyalarda grounded exact patch; tek onayla toplu uygulama.\n"
+            "Herhangi bir hedef dosya onaydan önce değişirse hiçbir toplu değişiklik uygulanmaz.\n"
+            "Toplu diff:\n"
+            f"{diff_preview}"
+            f"{suffix}\n\n"
+            "Tüm değişiklikleri uygulamak için 'onayla', vazgeçmek için 'iptal' yaz."
+        )
+
     def _render_usage_guidance(
         self,
     ) -> str:
@@ -398,6 +577,14 @@ class ControlledWriteCoordinator:
                 "model_name: str = \"llama3.2\""
             )
 
+        project_guidance = ""
+
+        if self._project_edit_parser is not None:
+            project_guidance = (
+                "\n\nProject-aware toplu düzenleme örneği:\n"
+                "proje düzenle: config ayarını güncelle ve bu ayarı kullanan ilgili servisi de uyumlu hale getir"
+            )
+
         return (
             "Kontrollü dosya oluşturma, exact-replace ve doğal dil akıllı düzenleme destekleniyor.\n"
             "Doğal düzenleme örneği:\n"
@@ -408,6 +595,7 @@ class ControlledWriteCoordinator:
             "model_name: str = \"llama3.1\"\n"
             "Yeni:\n"
             "model_name: str = \"llama3.2\""
+            f"{project_guidance}"
         )
 
     @staticmethod

@@ -80,6 +80,36 @@ from boru.tools.planner import (
 from boru.tools.policy import (
     RiskBasedToolPolicy,
 )
+from boru.tools.project_edit import (
+    JsonProjectFileSelectionParser,
+    JsonProjectPatchParser,
+    LLMProjectEditProposalPreparer,
+    LLMProjectFileSelector,
+    ProjectPatchSpec,
+)
+from boru.tools.project_edit_contracts import (
+    ProjectEditApplier,
+    ProjectEditProposalPreparer,
+    ProjectEditRequestParser,
+    ProjectFileIndexer,
+    ProjectFileSelector,
+)
+from boru.tools.project_edit_models import (
+    ProjectEditOutcome,
+    ProjectEditProposal,
+    ProjectEditRequest,
+    ProjectFileSelection,
+)
+from boru.tools.project_edit_parser import (
+    RuleBasedProjectEditRequestParser,
+)
+from boru.tools.project_index import (
+    SafeProjectFileIndex,
+)
+from boru.tools.project_transaction import (
+    BatchProjectEditApplier,
+    ProjectTransactionWorkspace,
+)
 from boru.tools.registry import (
     ToolRegistry,
 )
@@ -167,6 +197,24 @@ __all__ = [
     "NaturalLanguageToolPlanner",
     "ReadFileTool",
     "ReadOnlyWorkspace",
+    "BatchProjectEditApplier",
+    "JsonProjectFileSelectionParser",
+    "JsonProjectPatchParser",
+    "LLMProjectEditProposalPreparer",
+    "LLMProjectFileSelector",
+    "ProjectEditApplier",
+    "ProjectEditOutcome",
+    "ProjectEditProposal",
+    "ProjectEditProposalPreparer",
+    "ProjectEditRequest",
+    "ProjectEditRequestParser",
+    "ProjectFileIndexer",
+    "ProjectFileSelection",
+    "ProjectFileSelector",
+    "ProjectPatchSpec",
+    "ProjectTransactionWorkspace",
+    "RuleBasedProjectEditRequestParser",
+    "SafeProjectFileIndex",
     "RequiredEvidenceFact",
     "RiskBasedToolPolicy",
     "RuleBasedAssignmentEditProposalPreparer",
