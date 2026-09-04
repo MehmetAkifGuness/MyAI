@@ -8,6 +8,7 @@ from boru.tools.arguments import (
 from boru.tools.builtins import (
     CalculatorTool,
     CurrentTimeTool,
+    EditFileTool,
     ListDirectoryTool,
     ReadFileTool,
     WriteFileTool,
@@ -17,6 +18,23 @@ from boru.tools.coordinator import (
 )
 from boru.tools.deterministic_synthesis import (
     DirectoryCountSynthesisResolver,
+)
+from boru.tools.edit_contracts import (
+    EditProposalPreparer,
+    EditRequestParser,
+    WorkspaceEditor,
+)
+from boru.tools.edit_models import (
+    EditOutcome,
+    EditProposal,
+    EditRequest,
+)
+from boru.tools.edit_parser import (
+    RuleBasedEditRequestParser,
+)
+from boru.tools.edit_workspace import (
+    SafeEditWorkspace,
+    WorkspaceEditError,
 )
 from boru.tools.executor import (
     ToolExecutor,
@@ -106,6 +124,12 @@ __all__ = [
     "CurrentTimeTool",
     "DirectoryCountSynthesisResolver",
     "DirectoryListing",
+    "EditFileTool",
+    "EditOutcome",
+    "EditProposal",
+    "EditProposalPreparer",
+    "EditRequest",
+    "EditRequestParser",
     "FallbackToolPlanner",
     "GroundedLLMToolResultSynthesizer",
     "GroundedSynthesisPayload",
@@ -122,10 +146,12 @@ __all__ = [
     "ReadOnlyWorkspace",
     "RequiredEvidenceFact",
     "RiskBasedToolPolicy",
+    "RuleBasedEditRequestParser",
     "RuleBasedToolCandidateDetector",
     "RuleBasedToolPlanner",
     "RuleBasedWriteIntentDetector",
     "RuleBasedWriteRequestParser",
+    "SafeEditWorkspace",
     "SafeWriteWorkspace",
     "ToolArgumentSchema",
     "ToolArgumentSpec",
@@ -142,6 +168,8 @@ __all__ = [
     "ToolResult",
     "ToolRisk",
     "WorkspaceAccessError",
+    "WorkspaceEditError",
+    "WorkspaceEditor",
     "WorkspaceEntry",
     "WorkspacePathResolver",
     "WorkspaceWriteError",

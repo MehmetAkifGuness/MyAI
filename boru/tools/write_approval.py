@@ -3,6 +3,13 @@ from threading import RLock
 from boru.tools.contracts import (
     ToolExecutorPort,
 )
+from boru.tools.edit_contracts import (
+    EditProposalPreparer,
+    EditRequestParser,
+)
+from boru.tools.edit_models import (
+    EditProposal,
+)
 from boru.tools.models import (
     ToolCall,
 )
@@ -16,13 +23,14 @@ from boru.tools.write_models import (
 
 
 class ControlledWriteCoordinator:
-    """Yazma isteğini önce beklemeye alır, yalnızca açık onaydan sonra çalıştırır."""
+    """Create/edit isteklerini önizler ve yalnızca açık onaydan sonra uygular."""
 
     _APPROVE_COMMANDS = {
         "onayla",
         "yazmayı onayla",
         "dosya yazımını onayla",
         "değişikliği onayla",
+        "düzenlemeyi onayla",
     }
 
     _CANCEL_COMMANDS = {
@@ -30,6 +38,7 @@ class ControlledWriteCoordinator:
         "vazgeç",
         "yazmayı iptal et",
         "değişikliği iptal et",
+        "düzenlemeyi iptal et",
     }
 
     def __init__(
@@ -38,6 +47,8 @@ class ControlledWriteCoordinator:
         parser: WriteRequestParser,
         intent_detector: WriteIntentDetector,
         executor: ToolExecutorPort,
+        edit_parser: EditRequestParser | None = None,
+        edit_preparer: EditProposalPreparer | None = None,
         preview_characters: int = 3000,
     ):
         if preview_characters < 1:
@@ -45,19 +56,21 @@ class ControlledWriteCoordinator:
                 "preview_characters en az 1 olmalıdır."
             )
 
+        if (
+            (edit_parser is None)
+            != (edit_preparer is None)
+        ):
+            raise ValueError(
+                "edit_parser ve edit_preparer birlikte verilmelidir."
+            )
+
         self._parser = parser
-        self._intent_detector = (
-            intent_detector
-        )
+        self._intent_detector = intent_detector
         self._executor = executor
-        self._preview_characters = (
-            preview_characters
-        )
-
-        self._pending: WriteRequest | None = (
-            None
-        )
-
+        self._edit_parser = edit_parser
+        self._edit_preparer = edit_preparer
+        self._preview_characters = preview_characters
+        self._pending: WriteRequest | EditProposal | None = None
         self._lock = RLock()
 
     def resolve(
@@ -71,26 +84,31 @@ class ControlledWriteCoordinator:
         with self._lock:
             if (
                 self._pending is not None
-                and normalized
-                in self._APPROVE_COMMANDS
+                and normalized in self._APPROVE_COMMANDS
             ):
                 pending = self._pending
                 self._pending = None
 
-                return self._execute(
+                return self._execute_pending(
                     pending
                 )
 
             if (
                 self._pending is not None
-                and normalized
-                in self._CANCEL_COMMANDS
+                and normalized in self._CANCEL_COMMANDS
             ):
                 self._pending = None
 
                 return (
-                    "Bekleyen dosya yazma işlemi iptal edildi."
+                    "Bekleyen dosya değişikliği iptal edildi."
                 )
+
+            edit_response = self._try_stage_edit(
+                user_message
+            )
+
+            if edit_response is not None:
+                return edit_response
 
             request = self._parser.parse(
                 user_message
@@ -98,14 +116,11 @@ class ControlledWriteCoordinator:
 
             if request is not None:
                 if self._pending is not None:
-                    return (
-                        "Zaten onay bekleyen bir dosya yazma işlemi var. "
-                        "Önce 'onayla' veya 'iptal' demelisin."
-                    )
+                    return self._pending_message()
 
                 self._pending = request
 
-                return self._render_preview(
+                return self._render_create_preview(
                     request
                 )
 
@@ -113,23 +128,74 @@ class ControlledWriteCoordinator:
                 user_message
             ):
                 if self._pending is not None:
-                    return (
-                        "Zaten onay bekleyen bir dosya yazma işlemi var. "
-                        "Önce 'onayla' veya 'iptal' demelisin."
-                    )
+                    return self._pending_message()
 
-                return (
-                    "Bu sürüm kontrollü olarak yalnızca tam içerik verilen "
-                    "yeni dosya oluşturma işlemini destekliyor. "
-                    "Örnek biçim:\n"
-                    "dosya oluştur: notes/ornek.txt\n"
-                    "İçerik:\n"
-                    "Merhaba Börü"
-                )
+                return self._render_usage_guidance()
 
         return None
 
-    def _execute(
+    def _try_stage_edit(
+        self,
+        user_message: str,
+    ) -> str | None:
+        if (
+            self._edit_parser is None
+            or self._edit_preparer is None
+        ):
+            return None
+
+        try:
+            request = self._edit_parser.parse(
+                user_message
+            )
+        except Exception as error:
+            return (
+                "Düzenleme isteği geçersiz: "
+                f"{error}"
+            )
+
+        if request is None:
+            return None
+
+        if self._pending is not None:
+            return self._pending_message()
+
+        try:
+            proposal = (
+                self._edit_preparer
+                .prepare_exact_replacement(
+                    request
+                )
+            )
+        except Exception as error:
+            return (
+                "Düzenleme hazırlanamadı: "
+                f"{error}"
+            )
+
+        self._pending = proposal
+
+        return self._render_edit_preview(
+            proposal
+        )
+
+    def _execute_pending(
+        self,
+        pending: WriteRequest | EditProposal,
+    ) -> str:
+        if isinstance(
+            pending,
+            WriteRequest,
+        ):
+            return self._execute_create(
+                pending
+            )
+
+        return self._execute_edit(
+            pending
+        )
+
+    def _execute_create(
         self,
         request: WriteRequest,
     ) -> str:
@@ -151,7 +217,32 @@ class ControlledWriteCoordinator:
 
         return result.content.strip()
 
-    def _render_preview(
+    def _execute_edit(
+        self,
+        proposal: EditProposal,
+    ) -> str:
+        result = self._executor.execute(
+            ToolCall(
+                tool_name="edit_file",
+                arguments={
+                    "path": proposal.path,
+                    "content": proposal.updated_content,
+                    "expected_sha256": (
+                        proposal.expected_sha256
+                    ),
+                },
+            )
+        )
+
+        if not result.success:
+            return (
+                "Dosya düzenleme işlemi uygulanamadı: "
+                f"{result.error}"
+            )
+
+        return result.content.strip()
+
+    def _render_create_preview(
         self,
         request: WriteRequest,
     ) -> str:
@@ -179,6 +270,72 @@ class ControlledWriteCoordinator:
             f"{preview}"
             f"{suffix}\n\n"
             "Uygulamak için yalnızca 'onayla', vazgeçmek için 'iptal' yaz."
+        )
+
+    def _render_edit_preview(
+        self,
+        proposal: EditProposal,
+    ) -> str:
+        diff_preview = proposal.diff[
+            : self._preview_characters
+        ]
+
+        truncated = (
+            len(proposal.diff)
+            > self._preview_characters
+        )
+
+        suffix = (
+            "\n... (diff önizlemesi kısaltıldı)"
+            if truncated
+            else ""
+        )
+
+        return (
+            "Düzenleme hazırlandı ancak henüz uygulanmadı.\n"
+            f"Hedef: {proposal.path}\n"
+            "Mod: mevcut dosyada tek ve tam eşleşen içerik değiştirme.\n"
+            f"Karakter: {proposal.original_character_count} → "
+            f"{proposal.updated_character_count}\n"
+            "Dosya onaydan önce değişirse işlem otomatik iptal edilir.\n"
+            "Diff:\n"
+            f"{diff_preview}"
+            f"{suffix}\n\n"
+            "Uygulamak için yalnızca 'onayla', vazgeçmek için 'iptal' yaz."
+        )
+
+    def _render_usage_guidance(
+        self,
+    ) -> str:
+        if self._edit_parser is None:
+            return (
+                "Bu sürüm kontrollü olarak yalnızca tam içerik verilen "
+                "yeni dosya oluşturma işlemini destekliyor. "
+                "Örnek biçim:\n"
+                "dosya oluştur: notes/ornek.txt\n"
+                "İçerik:\n"
+                "Merhaba Börü"
+            )
+
+        return (
+            "Kontrollü dosya oluşturma ve exact-replace düzenleme destekleniyor.\n"
+            "Yeni dosya örneği:\n"
+            "dosya oluştur: notes/ornek.txt\n"
+            "İçerik:\n"
+            "Merhaba Börü\n\n"
+            "Mevcut dosya düzenleme örneği:\n"
+            "dosya düzenle: boru/config.py\n"
+            "Eski:\n"
+            "model_name: str = \"llama3.1\"\n"
+            "Yeni:\n"
+            "model_name: str = \"llama3.2\""
+        )
+
+    @staticmethod
+    def _pending_message() -> str:
+        return (
+            "Zaten onay bekleyen bir dosya değişikliği var. "
+            "Önce 'onayla' veya 'iptal' demelisin."
         )
 
     @staticmethod

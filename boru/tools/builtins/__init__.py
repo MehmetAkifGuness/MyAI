@@ -4,6 +4,9 @@ from boru.tools.builtins.calculator import (
 from boru.tools.builtins.current_time import (
     CurrentTimeTool,
 )
+from boru.tools.builtins.edit_file import (
+    EditFileTool,
+)
 from boru.tools.builtins.list_directory import (
     ListDirectoryTool,
 )
@@ -18,6 +21,7 @@ from boru.tools.builtins.write_file import (
 __all__ = [
     "CalculatorTool",
     "CurrentTimeTool",
+    "EditFileTool",
     "ListDirectoryTool",
     "ReadFileTool",
     "WriteFileTool",
