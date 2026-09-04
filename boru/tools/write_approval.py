@@ -155,6 +155,9 @@ class ControlledWriteCoordinator:
                     "Bekleyen dosya değişikliği iptal edildi."
                 )
 
+            if self._pending is not None:
+                return self._pending_message()
+
             edit_response = self._try_stage_edit(
                 user_message
             )

@@ -1,2 +1,2 @@
-if FEATURE == false:
+if FEATURE == true:
     print("disabled")
