@@ -16,6 +16,15 @@ from boru.tools.builtins import (
 from boru.tools.coordinator import (
     ToolCoordinator,
 )
+from boru.tools.autofix_coordinator import (
+    ControlledAutoFixCoordinator,
+)
+from boru.tools.autofix_models import (
+    AutoFixSession,
+)
+from boru.tools.autofix_parser import (
+    RuleBasedAutoFixRequestParser,
+)
 from boru.tools.command_contracts import (
     CommandExecutor,
     CommandPolicy,
@@ -104,6 +113,16 @@ from boru.tools.filesystem_workspace import (
 from boru.tools.grounded_synthesizer import (
     GroundedLLMToolResultSynthesizer,
 )
+from boru.tools.git_coordinator import (
+    ControlledGitCoordinator,
+    PendingGitOperation,
+)
+from boru.tools.git_parser import (
+    RuleBasedGitRequestParser,
+)
+from boru.tools.git_policy import (
+    GitCommandPolicy,
+)
 from boru.tools.llm_planner import (
     JsonLLMToolPlanningParser,
     LLMToolPlanner,
@@ -188,6 +207,10 @@ from boru.tools.synthesis_pipeline import (
 from boru.tools.synthesizer import (
     LLMToolResultSynthesizer,
 )
+from boru.tools.operation_router import (
+    ExclusiveOperationCoordinator,
+    PendingAwareResolver,
+)
 from boru.tools.test_results import (
     TestOutputParser,
 )
@@ -222,6 +245,7 @@ from boru.tools.write_workspace import (
 
 __all__ = [
     "AssignmentRequiredEvidenceExtractor",
+    "AutoFixSession",
     "CalculatorTool",
     "ChainedToolPlanner",
     "CompositeToolResultSynthesizer",
@@ -234,6 +258,8 @@ __all__ = [
     "CommandRisk",
     "CommandSpec",
     "ControlledWriteCoordinator",
+    "ControlledGitCoordinator",
+    "ControlledAutoFixCoordinator",
     "CurrentTimeTool",
     "DirectoryCountSynthesisResolver",
     "DirectoryListing",
@@ -244,6 +270,7 @@ __all__ = [
     "EditRequest",
     "EditRequestParser",
     "EditSource",
+    "ExclusiveOperationCoordinator",
     "FallbackSmartEditProposalPreparer",
     "FallbackToolPlanner",
     "FilesystemOperation",
@@ -254,6 +281,7 @@ __all__ = [
     "FilesystemOperationRequestParser",
     "FilesystemOperationWorkspace",
     "GroundedLLMToolResultSynthesizer",
+    "GitCommandPolicy",
     "GroundedMultiPatchComposer",
     "GroundedSynthesisPayload",
     "GroundedSynthesisValidator",
@@ -267,6 +295,8 @@ __all__ = [
     "LLMSmartEditProposalPreparer",
     "ListDirectoryTool",
     "NaturalLanguageToolPlanner",
+    "PendingGitOperation",
+    "PendingAwareResolver",
     "ReadFileTool",
     "ReadOnlyWorkspace",
     "BatchProjectEditApplier",
@@ -297,8 +327,10 @@ __all__ = [
     "RequiredEvidenceFact",
     "RiskBasedToolPolicy",
     "RuleBasedAssignmentEditProposalPreparer",
+    "RuleBasedAutoFixRequestParser",
     "RuleBasedEditRequestParser",
     "RuleBasedFilesystemOperationParser",
+    "RuleBasedGitRequestParser",
     "RuleBasedSmartEditRequestParser",
     "RuleBasedToolCandidateDetector",
     "RuleBasedToolPlanner",

@@ -115,6 +115,10 @@ class ConservativeMemoryDecisionGate:
             r"\b(?:komut|terminal|powershell|cmd)\b.*\bçalıştır\b",
             re.IGNORECASE | re.DOTALL,
         ),
+        re.compile(
+            r"^\s*git\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
     )
 
     _PROFILE_PATTERNS = (

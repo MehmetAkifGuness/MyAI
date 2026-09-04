@@ -7,6 +7,13 @@ class CommandKind(str, Enum):
     PYTEST = "pytest"
     RUFF = "ruff"
     MYPY = "mypy"
+    GIT_STATUS = "git_status"
+    GIT_DIFF = "git_diff"
+    GIT_BRANCH = "git_branch"
+    GIT_LOG = "git_log"
+    GIT_ADD = "git_add"
+    GIT_COMMIT = "git_commit"
+    GIT_RESTORE = "git_restore"
 
 
 class CommandRisk(str, Enum):

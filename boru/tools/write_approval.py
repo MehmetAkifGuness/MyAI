@@ -150,6 +150,11 @@ class ControlledWriteCoordinator:
         ) = None
         self._lock = RLock()
 
+    @property
+    def has_pending(self) -> bool:
+        with self._lock:
+            return self._pending is not None
+
     def resolve(
         self,
         user_message: str,
