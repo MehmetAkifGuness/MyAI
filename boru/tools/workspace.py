@@ -19,6 +19,7 @@ class WorkspaceEntry:
 class DirectoryListing:
     entries: tuple[WorkspaceEntry, ...]
     truncated: bool = False
+    total_entries: int | None = None
 
 
 class WorkspacePathResolver:
@@ -244,8 +245,11 @@ class ReadOnlyWorkspace:
             )
         )
 
+        total_entries = len(
+            visible_children
+        )
         truncated = (
-            len(visible_children)
+            total_entries
             > self._max_directory_entries
         )
 
@@ -261,6 +265,7 @@ class ReadOnlyWorkspace:
         return DirectoryListing(
             entries=entries,
             truncated=truncated,
+            total_entries=total_entries,
         )
 
     def read_text_file(

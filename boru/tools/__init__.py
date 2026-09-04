@@ -7,8 +7,14 @@ from boru.tools.builtins import (
 from boru.tools.coordinator import (
     ToolCoordinator,
 )
+from boru.tools.deterministic_synthesis import (
+    DirectoryCountSynthesisResolver,
+)
 from boru.tools.executor import (
     ToolExecutor,
+)
+from boru.tools.grounded_synthesizer import (
+    GroundedLLMToolResultSynthesizer,
 )
 from boru.tools.models import (
     ToolCall,
@@ -27,6 +33,19 @@ from boru.tools.policy import (
 from boru.tools.registry import (
     ToolRegistry,
 )
+from boru.tools.synthesis_grounding import (
+    AssignmentRequiredEvidenceExtractor,
+    GroundedSynthesisPayload,
+    GroundedSynthesisValidator,
+    JsonGroundedSynthesisParser,
+    RequiredEvidenceFact,
+)
+from boru.tools.synthesis_output import (
+    InternalLabelSynthesisOutputSanitizer,
+)
+from boru.tools.synthesis_pipeline import (
+    CompositeToolResultSynthesizer,
+)
 from boru.tools.synthesizer import (
     LLMToolResultSynthesizer,
 )
@@ -40,13 +59,22 @@ from boru.tools.workspace import (
 
 
 __all__ = [
+    "AssignmentRequiredEvidenceExtractor",
     "CalculatorTool",
+    "CompositeToolResultSynthesizer",
     "CurrentTimeTool",
+    "DirectoryCountSynthesisResolver",
     "DirectoryListing",
+    "GroundedLLMToolResultSynthesizer",
+    "GroundedSynthesisPayload",
+    "GroundedSynthesisValidator",
+    "InternalLabelSynthesisOutputSanitizer",
+    "JsonGroundedSynthesisParser",
     "LLMToolResultSynthesizer",
     "ListDirectoryTool",
     "ReadFileTool",
     "ReadOnlyWorkspace",
+    "RequiredEvidenceFact",
     "RiskBasedToolPolicy",
     "RuleBasedToolPlanner",
     "ToolCall",

@@ -62,8 +62,15 @@ class ListDirectoryTool:
             else relative_path
         )
 
+        entry_count = (
+            listing.total_entries
+            if listing.total_entries is not None
+            else len(listing.entries)
+        )
+
         lines = [
-            f"Klasör: {display_path}"
+            f"Klasör: {display_path}",
+            f"Toplam öğe: {entry_count}",
         ]
 
         if not listing.entries:
@@ -88,4 +95,10 @@ class ListDirectoryTool:
             tool_name=self.name,
             success=True,
             content="\n".join(lines),
+            metadata={
+                "path": relative_path,
+                "display_path": display_path,
+                "entry_count": entry_count,
+                "truncated": listing.truncated,
+            },
         )

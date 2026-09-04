@@ -57,6 +57,9 @@ class ToolResult:
     success: bool
     content: str = ""
     error: str | None = None
+    metadata: Mapping[str, object] = field(
+        default_factory=dict
+    )
 
     def __post_init__(self) -> None:
         if self.success and self.error:
@@ -68,6 +71,14 @@ class ToolResult:
             raise ValueError(
                 "Başarısız tool sonucu hata açıklaması içermelidir."
             )
+
+        object.__setattr__(
+            self,
+            "metadata",
+            MappingProxyType(
+                dict(self.metadata)
+            ),
+        )
 
 
 @dataclass(frozen=True, slots=True)

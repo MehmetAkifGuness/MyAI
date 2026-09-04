@@ -82,6 +82,18 @@ class ToolResultSynthesizer(Protocol):
         ...
 
 
+class ToolResultSynthesisResolver(Protocol):
+    def resolve(
+        self,
+        *,
+        user_message: str,
+        instruction: str,
+        tool_call: ToolCall,
+        tool_result: ToolResult,
+    ) -> str | None:
+        ...
+
+
 class WorkspaceReader(Protocol):
     def list_directory(
         self,

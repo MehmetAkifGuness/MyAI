@@ -71,4 +71,8 @@ class ReadFileTool:
                 f"Dosya: {relative_path}\n"
                 f"{rendered_content}"
             ),
+            metadata={
+                "path": relative_path,
+                "character_count": len(content),
+            },
         )
