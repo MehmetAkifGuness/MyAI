@@ -31,6 +31,21 @@ class ConservativeMemoryDecisionGate:
         re.compile(r"\bbu\s+sabah\b", re.IGNORECASE),
     )
 
+    _MEMORY_META_PATTERNS = (
+        re.compile(
+            r"\b(?:unuttum|sildim|hatırladım)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\bhafıza\s+kayd(?:ı|ını|ınım|ımız|ınız|ları|larını)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\buzun\s+süreli\s+hafıza\b",
+            re.IGNORECASE,
+        ),
+    )
+
     _PROFILE_PATTERNS = (
         re.compile(r"\b(?:benim\s+)?adım\b", re.IGNORECASE),
         re.compile(r"\bismim\b", re.IGNORECASE),
@@ -126,6 +141,12 @@ class ConservativeMemoryDecisionGate:
         if self._matches_any(
             text,
             self._TRANSIENT_PATTERNS,
+        ):
+            return False
+
+        if self._matches_any(
+            text,
+            self._MEMORY_META_PATTERNS,
         ):
             return False
 

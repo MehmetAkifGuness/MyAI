@@ -3,6 +3,7 @@ from threading import RLock
 
 from boru.memory.contracts import (
     EmbeddingProvider,
+    MemorySubjectMatcher,
 )
 from boru.memory.similarity import (
     cosine_similarity,
@@ -311,6 +312,150 @@ class SemanticSubjectMatcher:
         return " ".join(
             value.strip().split()
         )
+
+    @staticmethod
+    def _normalize(
+        value: str,
+    ) -> str:
+        return " ".join(
+            value
+            .casefold()
+            .strip()
+            .split()
+        )
+
+
+class AliasAwareSubjectMatcher:
+    """
+    Güvenilir subject alias gruplarını deterministik olarak
+    eşleştirir; eşleşmeyen durumları başka bir matcher'a devreder.
+
+    Bu katman özellikle dil çevirisi gibi embedding modelinin
+    kararsız kalabileceği bilinen alias'lar için kullanılır.
+    """
+
+    _TOKEN_PATTERN = re.compile(
+        r"[\w#+.-]+",
+        re.UNICODE,
+    )
+
+    _GENERIC_TRAILING_TOKENS = {
+        "api",
+        "app",
+        "application",
+        "uygulama",
+        "service",
+        "servis",
+        "project",
+        "proje",
+        "system",
+        "sistem",
+        "backend",
+        "frontend",
+    }
+
+    def __init__(
+        self,
+        delegate: MemorySubjectMatcher,
+        alias_groups: tuple[tuple[str, ...], ...],
+    ):
+        self._delegate = delegate
+        self._alias_index = self._build_alias_index(
+            alias_groups
+        )
+
+    def is_same_subject(
+        self,
+        left: str,
+        right: str,
+    ) -> bool:
+        left_core = self._identity_core(
+            left
+        )
+
+        right_core = self._identity_core(
+            right
+        )
+
+        if not left_core or not right_core:
+            return False
+
+        left_key = self._normalize(
+            left_core
+        )
+
+        right_key = self._normalize(
+            right_core
+        )
+
+        if left_key == right_key:
+            return True
+
+        left_alias = self._alias_index.get(
+            left_key
+        )
+
+        right_alias = self._alias_index.get(
+            right_key
+        )
+
+        if (
+            left_alias is not None
+            and right_alias is not None
+        ):
+            return left_alias == right_alias
+
+        return self._delegate.is_same_subject(
+            left,
+            right,
+        )
+
+    @classmethod
+    def _build_alias_index(
+        cls,
+        alias_groups: tuple[tuple[str, ...], ...],
+    ) -> dict[str, int]:
+        index: dict[str, int] = {}
+
+        for group_id, aliases in enumerate(
+            alias_groups
+        ):
+            for alias in aliases:
+                key = cls._normalize(
+                    alias
+                )
+
+                if not key:
+                    continue
+
+                if key in index:
+                    raise ValueError(
+                        f"Tekrarlanan subject alias: {alias}"
+                    )
+
+                index[key] = group_id
+
+        return index
+
+    @classmethod
+    def _identity_core(
+        cls,
+        subject: str,
+    ) -> str:
+        tokens = cls._TOKEN_PATTERN.findall(
+            subject
+        )
+
+        while (
+            len(tokens) > 1
+            and tokens[-1].casefold()
+            in cls._GENERIC_TRAILING_TOKENS
+        ):
+            tokens.pop()
+
+        return " ".join(
+            tokens
+        ).strip()
 
     @staticmethod
     def _normalize(

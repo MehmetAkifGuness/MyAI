@@ -14,6 +14,9 @@ from boru.memory.forget import (
     RuleBasedMemoryForgetParser,
     RuleBasedMemoryForgetResolver,
 )
+from boru.memory.grounded_decision import (
+    GroundedMemoryDecisionEngine,
+)
 from boru.memory.hybrid_retriever import (
     HybridMemoryRetriever,
 )
@@ -48,16 +51,23 @@ from boru.memory.service import (
 from boru.memory.structurer import (
     RuleBasedMemoryStructurer,
 )
+from boru.memory.subject_alias import (
+    DEFAULT_SUBJECT_ALIAS_GROUPS,
+)
 from boru.memory.subject_matcher import (
+    AliasAwareSubjectMatcher,
     ExactSubjectMatcher,
     SemanticSubjectMatcher,
 )
 
 
 __all__ = [
+    "AliasAwareSubjectMatcher",
     "ConservativeMemoryDecisionGate",
+    "DEFAULT_SUBJECT_ALIAS_GROUPS",
     "ExactSubjectMatcher",
     "ExplicitMemoryExtractor",
+    "GroundedMemoryDecisionEngine",
     "HybridMemoryRetriever",
     "JsonMemoryRepository",
     "KeywordMemoryRetriever",
