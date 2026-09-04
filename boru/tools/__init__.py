@@ -16,8 +16,16 @@ from boru.tools.builtins import (
 from boru.tools.coordinator import (
     ToolCoordinator,
 )
+from boru.tools.deterministic_edit import (
+    FallbackSmartEditProposalPreparer,
+    RuleBasedAssignmentEditProposalPreparer,
+    SmartEditNotApplicable,
+)
 from boru.tools.deterministic_synthesis import (
     DirectoryCountSynthesisResolver,
+)
+from boru.tools.diff_renderer import (
+    UnifiedDiffRenderer,
 )
 from boru.tools.edit_contracts import (
     EditProposalPreparer,
@@ -142,6 +150,7 @@ __all__ = [
     "EditRequest",
     "EditRequestParser",
     "EditSource",
+    "FallbackSmartEditProposalPreparer",
     "FallbackToolPlanner",
     "GroundedLLMToolResultSynthesizer",
     "GroundedSynthesisPayload",
@@ -160,6 +169,7 @@ __all__ = [
     "ReadOnlyWorkspace",
     "RequiredEvidenceFact",
     "RiskBasedToolPolicy",
+    "RuleBasedAssignmentEditProposalPreparer",
     "RuleBasedEditRequestParser",
     "RuleBasedSmartEditRequestParser",
     "RuleBasedToolCandidateDetector",
@@ -167,6 +177,7 @@ __all__ = [
     "RuleBasedWriteIntentDetector",
     "RuleBasedWriteRequestParser",
     "SafeEditWorkspace",
+    "SmartEditNotApplicable",
     "SmartEditPayload",
     "SmartEditProposalPreparer",
     "SmartEditRequest",
@@ -187,6 +198,7 @@ __all__ = [
     "ToolResponseMode",
     "ToolResult",
     "ToolRisk",
+    "UnifiedDiffRenderer",
     "WorkspaceAccessError",
     "WorkspaceEditError",
     "WorkspaceEditor",

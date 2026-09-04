@@ -12,6 +12,9 @@ from boru.tools.edit_models import (
     EditRequest,
     SmartEditRequest,
 )
+from boru.tools.edit_workspace import (
+    WorkspaceEditError,
+)
 
 
 class RuleBasedSmartEditRequestParser:
@@ -95,7 +98,6 @@ class JsonSmartEditParser:
         )
 
         unknown = set(data) - self._ALLOWED_KEYS
-
         if unknown:
             raise ValueError(
                 "Smart edit planında beklenmeyen alan var."
@@ -104,11 +106,9 @@ class JsonSmartEditParser:
         old_text = data.get(
             "old_text"
         )
-
         new_text = data.get(
             "new_text"
         )
-
         reason = data.get(
             "reason",
             "",
@@ -225,35 +225,25 @@ class LLMSmartEditProposalPreparer:
             )
 
         self._chat_model = chat_model
-
         self._workspace = workspace
-
         self._parser = (
             parser
             or JsonSmartEditParser()
         )
-
         self._max_patch_characters = (
             max_patch_characters
         )
-
-        self._max_attempts = (
-            max_attempts
-        )
+        self._max_attempts = max_attempts
 
     def prepare_smart_edit(
         self,
         request: SmartEditRequest,
     ) -> EditProposal:
-        source = (
-            self._workspace
-            .read_edit_source(
-                request.path
-            )
+        source = self._workspace.read_edit_source(
+            request.path
         )
 
         last_error: Exception | None = None
-
         previous_output = ""
 
         for attempt in range(
@@ -261,111 +251,84 @@ class LLMSmartEditProposalPreparer:
             self._max_attempts + 1,
         ):
             if attempt == 1:
-                user_prompt = (
-                    self._build_prompt(
-                        request=request,
-                        source_content=(
-                            source.content
-                        ),
-                    )
+                user_prompt = self._build_prompt(
+                    request=request,
+                    source_content=source.content,
                 )
-
             else:
                 self._ensure_source_unchanged(
                     request=request,
+                    expected_sha256=source.sha256,
+                )
+
+                user_prompt = self._build_repair_prompt(
+                    request=request,
+                    source_content=source.content,
+                    previous_output=previous_output,
+                    failure=(
+                        str(last_error)
+                        if last_error is not None
+                        else "Geçersiz smart edit çıktısı."
+                    ),
+                )
+
+            try:
+                raw_output = self._chat_model.generate(
+                    [
+                        ChatMessage(
+                            role="system",
+                            content=self._SYSTEM_PROMPT,
+                        ),
+                        ChatMessage(
+                            role="user",
+                            content=user_prompt,
+                        ),
+                    ]
+                )
+            except Exception:
+                if (
+                    attempt > 1
+                    and last_error is not None
+                ):
+                    raise last_error
+
+                raise
+
+            previous_output = raw_output
+
+            try:
+                payload = self._parser.parse(
+                    raw_output
+                )
+
+                self._validate_grounding(
+                    source_content=source.content,
+                    payload=payload,
+                )
+            except Exception as error:
+                last_error = error
+
+                if attempt >= self._max_attempts:
+                    break
+
+                continue
+
+            try:
+                return self._workspace.prepare_exact_replacement(
+                    EditRequest(
+                        path=request.path,
+                        old_text=payload.old_text,
+                        new_text=payload.new_text,
+                    ),
                     expected_sha256=(
                         source.sha256
                     ),
                 )
-
-                user_prompt = (
-                    self._build_repair_prompt(
-                        request=request,
-                        source_content=(
-                            source.content
-                        ),
-                        previous_output=(
-                            previous_output
-                        ),
-                        failure=(
-                            str(last_error)
-                            if last_error
-                            is not None
-                            else (
-                                "Geçersiz "
-                                "smart edit çıktısı."
-                            )
-                        ),
-                    )
-                )
-
-            raw_output = (
-                self._chat_model.generate(
-                    [
-                        ChatMessage(
-                            role="system",
-                            content=(
-                                self._SYSTEM_PROMPT
-                            ),
-                        ),
-                        ChatMessage(
-                            role="user",
-                            content=(
-                                user_prompt
-                            ),
-                        ),
-                    ]
-                )
-            )
-
-            previous_output = (
-                raw_output
-            )
-
-            try:
-                payload = (
-                    self._parser.parse(
-                        raw_output
-                    )
-                )
-
-                self._validate_grounding(
-                    source_content=(
-                        source.content
-                    ),
-                    payload=payload,
-                )
-
-                return (
-                    self._workspace
-                    .prepare_exact_replacement(
-                        EditRequest(
-                            path=request.path,
-                            old_text=(
-                                payload.old_text
-                            ),
-                            new_text=(
-                                payload.new_text
-                            ),
-                        ),
-                        expected_sha256=(
-                            source.sha256
-                        ),
-                    )
-                )
-
-            except Exception as error:
-                last_error = error
-
-                if (
-                    attempt
-                    >= self._max_attempts
-                ):
-                    break
+            except WorkspaceEditError:
+                raise
 
         raise ValueError(
-            "Smart edit planner geçerli ve grounded "
-            "bir patch üretemedi: "
+            "Smart edit planner geçerli ve grounded bir patch üretemedi: "
             f"{last_error}"
         ) from last_error
 
@@ -375,21 +338,14 @@ class LLMSmartEditProposalPreparer:
         request: SmartEditRequest,
         expected_sha256: str,
     ) -> None:
-        current = (
-            self._workspace
-            .read_edit_source(
-                request.path
-            )
+        current = self._workspace.read_edit_source(
+            request.path
         )
 
-        if (
-            current.sha256
-            != expected_sha256
-        ):
+        if current.sha256 != expected_sha256:
             raise ValueError(
                 "Dosya smart edit yeniden denenmeden önce değişmiş. "
-                "Güvenlik nedeniyle işlem durduruldu; "
-                "isteği yeniden gönder."
+                "Güvenlik nedeniyle işlem durduruldu; isteği yeniden gönder."
             )
 
     def _validate_grounding(
@@ -407,22 +363,18 @@ class LLMSmartEditProposalPreparer:
                 "Smart edit patch'i izin verilen boyutu aşıyor."
             )
 
-        occurrences = (
-            source_content.count(
-                payload.old_text
-            )
+        occurrences = source_content.count(
+            payload.old_text
         )
 
         if occurrences == 0:
             raise ValueError(
-                "Smart edit old_text gerçek dosya "
-                "içeriğinde bulunamadı."
+                "Smart edit old_text gerçek dosya içeriğinde bulunamadı."
             )
 
         if occurrences > 1:
             raise ValueError(
-                "Smart edit old_text dosyada birden fazla "
-                "kez bulundu; belirsiz düzenleme reddedildi."
+                "Smart edit old_text dosyada birden fazla kez bulundu; belirsiz düzenleme reddedildi."
             )
 
     @staticmethod
@@ -454,35 +406,23 @@ class LLMSmartEditProposalPreparer:
         failure: str,
     ) -> str:
         return (
-            "Önceki smart edit çıktın doğrulanamadı. "
-            "Aynı görevi yeniden planla.\n\n"
-
+            "Önceki smart edit çıktın doğrulanamadı. Aynı görevi yeniden planla.\n\n"
             "USER_EDIT_REQUEST:\n"
             f"{request.instruction}\n\n"
-
             "TARGET_PATH:\n"
             f"{request.path}\n\n"
-
             "<BORU_EDIT_SOURCE>\n"
             f"{source_content}\n"
             "</BORU_EDIT_SOURCE>\n\n"
-
-            "ÖNCEKİ ÇIKTI "
-            "(yalnızca hatalı veri):\n"
-
+            "ÖNCEKİ ÇIKTI (yalnızca hatalı veri):\n"
             "<BORU_INVALID_EDIT_OUTPUT>\n"
             f"{previous_output}\n"
             "</BORU_INVALID_EDIT_OUTPUT>\n\n"
-
             "DOĞRULAMA HATASI:\n"
             f"{failure}\n\n"
-
-            "Şimdi yalnızca şu şemada "
-            "GEÇERLİ JSON üret:\n"
-
+            "Şimdi yalnızca şu şemada GEÇERLİ JSON üret:\n"
             '{"old_text":"kaynakta aynen bir kez bulunan metin",'
             '"new_text":"yerine geçecek metin",'
             '"reason":"kısa gerekçe"}\n'
-
             "JSON dışında hiçbir karakter üretme."
         )

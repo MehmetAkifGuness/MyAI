@@ -1,10 +1,12 @@
-import difflib
 import hashlib
 import os
 import stat
 import tempfile
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
+from boru.tools.diff_renderer import (
+    UnifiedDiffRenderer,
+)
 from boru.tools.edit_models import (
     EditOutcome,
     EditProposal,
@@ -43,6 +45,7 @@ class SafeEditWorkspace:
         root: str | Path,
         *,
         max_bytes: int = 128 * 1024,
+        diff_renderer: UnifiedDiffRenderer | None = None,
     ):
         root_path = Path(root)
 
@@ -63,6 +66,10 @@ class SafeEditWorkspace:
 
         self._root = root_path.resolve()
         self._max_bytes = max_bytes
+        self._diff_renderer = (
+            diff_renderer
+            or UnifiedDiffRenderer()
+        )
 
     @property
     def root(self) -> Path:
@@ -151,22 +158,15 @@ class SafeEditWorkspace:
             target
         )
 
-        diff = "".join(
-            difflib.unified_diff(
-                original.splitlines(
-                    keepends=True
-                ),
-                updated.splitlines(
-                    keepends=True
-                ),
-                fromfile=(
-                    f"{display_path} (mevcut)"
-                ),
-                tofile=(
-                    f"{display_path} (önerilen)"
-                ),
-                lineterm="\n",
-            )
+        diff = self._diff_renderer.render(
+            original=original,
+            updated=updated,
+            fromfile=(
+                f"{display_path} (mevcut)"
+            ),
+            tofile=(
+                f"{display_path} (önerilen)"
+            ),
         )
 
         return EditProposal(
