@@ -26,6 +26,7 @@ class RuleBasedProjectEditRequestParser:
     _ACTION_PATTERN = re.compile(
         r"\b(?:ekle|değiştir|degistir|düzenle|duzenle|"
         r"güncelle|guncelle|ayarla|uyarla|kullan|bağla|bagla|"
+        r"oluştur|olustur|yaz|"
         r"uygula|düzelt|duzelt|yap)\b",
         re.IGNORECASE,
     )

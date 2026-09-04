@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from typing import Any, Sequence
 
 import ollama
@@ -23,10 +24,36 @@ class OllamaChatModel:
         return getattr(value, name, default)
 
     def generate(self, messages: Sequence[ChatMessage]) -> str:
+        return self._generate(
+            messages,
+        )
+
+    def generate_structured(
+        self,
+        messages: Sequence[ChatMessage],
+        schema: Mapping[str, Any],
+    ) -> str:
+        return self._generate(
+            messages,
+            response_format=dict(schema),
+        )
+
+    def _generate(
+        self,
+        messages: Sequence[ChatMessage],
+        response_format: dict[str, Any] | None = None,
+    ) -> str:
+        options: dict[str, Any] = {
+            "model": self._model_name,
+            "messages": [message.to_dict() for message in messages],
+            "stream": False,
+        }
+
+        if response_format is not None:
+            options["format"] = response_format
+
         response = self._chat_client(
-            model=self._model_name,
-            messages=[message.to_dict() for message in messages],
-            stream=False,
+            **options,
         )
         response_message = self._field(response, "message")
         if response_message is None:

@@ -1,3 +1,4 @@
+import hashlib
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -9,6 +10,7 @@ from boru.tools.project_edit_models import (
     ProjectEditOutcome,
     ProjectEditProposal,
 )
+from boru.tools.write_models import WriteOutcome
 
 
 class ProjectTransactionWorkspace(Protocol):
@@ -28,10 +30,40 @@ class ProjectTransactionWorkspace(Protocol):
         ...
 
 
+class ProjectCreationWorkspace(Protocol):
+    def validate_new_text_file(
+        self,
+        relative_path: str,
+        content: str,
+    ) -> None:
+        ...
+
+    def write_text_file(
+        self,
+        relative_path: str,
+        content: str,
+    ) -> WriteOutcome:
+        ...
+
+    def remove_created_text_file(
+        self,
+        relative_path: str,
+        *,
+        expected_sha256: str,
+    ) -> None:
+        ...
+
+
 @dataclass(frozen=True, slots=True)
 class _CommittedEdit:
     path: str
     original_content: str
+    committed_sha256: str
+
+
+@dataclass(frozen=True, slots=True)
+class _CommittedCreation:
+    path: str
     committed_sha256: str
 
 
@@ -42,8 +74,10 @@ class BatchProjectEditApplier:
         self,
         *,
         workspace: ProjectTransactionWorkspace,
+        creation_workspace: ProjectCreationWorkspace | None = None,
     ):
         self._workspace = workspace
+        self._creation_workspace = creation_workspace
 
     def apply_project_edit(
         self,
@@ -53,8 +87,12 @@ class BatchProjectEditApplier:
             proposal
         )
 
-        committed: list[_CommittedEdit] = []
-        outcomes: list[EditOutcome] = []
+        committed: list[
+            _CommittedEdit | _CommittedCreation
+        ] = []
+        outcomes: list[
+            EditOutcome | WriteOutcome
+        ] = []
 
         try:
             for edit in proposal.edits:
@@ -92,6 +130,27 @@ class BatchProjectEditApplier:
                     )
                 )
 
+                outcomes.append(
+                    outcome
+                )
+
+            for creation in proposal.creations:
+                creation_workspace = self._require_creation_workspace()
+                outcome = creation_workspace.write_text_file(
+                    creation.path,
+                    creation.content,
+                )
+
+                committed.append(
+                    _CommittedCreation(
+                        path=creation.path,
+                        committed_sha256=hashlib.sha256(
+                            creation.content.encode(
+                                "utf-8"
+                            )
+                        ).hexdigest(),
+                    )
+                )
                 outcomes.append(
                     outcome
                 )
@@ -147,11 +206,29 @@ class BatchProjectEditApplier:
                 edit.path
             ] = current
 
+        for creation in proposal.creations:
+            self._require_creation_workspace().validate_new_text_file(
+                creation.path,
+                creation.content,
+            )
+
         return originals
+
+    def _require_creation_workspace(
+        self,
+    ) -> ProjectCreationWorkspace:
+        if self._creation_workspace is None:
+            raise ValueError(
+                "Project transaction yeni dosya oluşturma workspace'i içermiyor."
+            )
+
+        return self._creation_workspace
 
     def _rollback(
         self,
-        committed: list[_CommittedEdit],
+        committed: list[
+            _CommittedEdit | _CommittedCreation
+        ],
     ) -> Exception | None:
         first_error: Exception | None = None
 
@@ -159,6 +236,18 @@ class BatchProjectEditApplier:
             committed
         ):
             try:
+                if isinstance(
+                    item,
+                    _CommittedCreation,
+                ):
+                    self._require_creation_workspace().remove_created_text_file(
+                        item.path,
+                        expected_sha256=(
+                            item.committed_sha256
+                        ),
+                    )
+                    continue
+
                 current = (
                     self._workspace
                     .read_edit_source(

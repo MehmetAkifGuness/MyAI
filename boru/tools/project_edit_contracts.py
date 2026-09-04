@@ -34,6 +34,15 @@ class ProjectFileSelector(Protocol):
         ...
 
 
+class ProjectCreationValidator(Protocol):
+    def validate_new_text_file(
+        self,
+        relative_path: str,
+        content: str,
+    ) -> None:
+        ...
+
+
 class ProjectEditProposalPreparer(Protocol):
     def prepare_project_edit(
         self,

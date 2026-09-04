@@ -13,6 +13,11 @@ from boru.tools.project_edit_models import (
 class RuleFirstProjectFileSelector:
     """Açıkça adı verilen manifest dosyalarını deterministik seçer; gerekirse fallback kullanır."""
 
+    _CREATE_ACTION_PATTERN = re.compile(
+        r"\b(?:oluştur|olustur|yarat|ekle)\b",
+        re.IGNORECASE,
+    )
+
     def __init__(
         self,
         *,
@@ -64,6 +69,12 @@ class RuleFirstProjectFileSelector:
         if (
             len(explicit_paths)
             >= self._deterministic_min_paths
+            or (
+                explicit_paths
+                and self._CREATE_ACTION_PATTERN.search(
+                    request.instruction
+                )
+            )
         ):
             return ProjectFileSelection(
                 paths=explicit_paths

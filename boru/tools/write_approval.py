@@ -512,12 +512,24 @@ class ControlledWriteCoordinator:
         self,
         proposal: ProjectEditProposal,
     ) -> str:
-        combined_diff = "\n".join(
+        sections = [
             (
                 f"===== {edit.path} =====\n"
                 f"{edit.diff.rstrip()}"
             )
             for edit in proposal.edits
+        ]
+
+        sections.extend(
+            (
+                f"===== CREATE {creation.path} =====\n"
+                f"{creation.content}"
+            )
+            for creation in proposal.creations
+        )
+
+        combined_diff = "\n".join(
+            sections
         )
 
         diff_preview = combined_diff[
@@ -536,16 +548,29 @@ class ControlledWriteCoordinator:
         )
 
         paths = ", ".join(
-            edit.path
-            for edit in proposal.edits
+            [
+                edit.path
+                for edit in proposal.edits
+            ]
+            + [
+                creation.path
+                for creation in proposal.creations
+            ]
+        )
+
+        file_count = (
+            len(proposal.edits)
+            + len(proposal.creations)
         )
 
         return (
             "Proje düzenlemesi hazırlandı ancak henüz uygulanmadı.\n"
-            f"Dosya sayısı: {len(proposal.edits)}\n"
+            f"Dosya sayısı: {file_count}\n"
+            f"Düzenleme: {len(proposal.edits)}, "
+            f"yeni dosya: {len(proposal.creations)}\n"
             f"Hedefler: {paths}\n"
-            "Mod: mevcut dosyalarda grounded exact patch; tek onayla toplu uygulama.\n"
-            "Herhangi bir hedef dosya onaydan önce değişirse hiçbir toplu değişiklik uygulanmaz.\n"
+            "Mod: grounded edit + güvenli create; tek onayla transaction.\n"
+            "Mevcut hedef değişirse veya yeni hedef oluşturulursa hiçbir işlem uygulanmaz.\n"
             "Toplu diff:\n"
             f"{diff_preview}"
             f"{suffix}\n\n"

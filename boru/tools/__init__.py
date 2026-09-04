@@ -85,9 +85,12 @@ from boru.tools.project_edit import (
     JsonProjectPatchParser,
     LLMProjectEditProposalPreparer,
     LLMProjectFileSelector,
-    ProjectPatchSpec,
+)
+from boru.tools.project_dependency import (
+    DependencyAwareProjectFileSelector,
 )
 from boru.tools.project_edit_contracts import (
+    ProjectCreationValidator,
     ProjectEditApplier,
     ProjectEditProposalPreparer,
     ProjectEditRequestParser,
@@ -95,10 +98,16 @@ from boru.tools.project_edit_contracts import (
     ProjectFileSelector,
 )
 from boru.tools.project_edit_models import (
+    ProjectChangePlan,
+    ProjectCreateSpec,
     ProjectEditOutcome,
     ProjectEditProposal,
     ProjectEditRequest,
     ProjectFileSelection,
+    ProjectPatchSpec,
+)
+from boru.tools.project_patch_composer import (
+    GroundedMultiPatchComposer,
 )
 from boru.tools.project_edit_parser import (
     RuleBasedProjectEditRequestParser,
@@ -108,6 +117,7 @@ from boru.tools.project_index import (
 )
 from boru.tools.project_transaction import (
     BatchProjectEditApplier,
+    ProjectCreationWorkspace,
     ProjectTransactionWorkspace,
 )
 from boru.tools.registry import (
@@ -183,6 +193,7 @@ __all__ = [
     "FallbackSmartEditProposalPreparer",
     "FallbackToolPlanner",
     "GroundedLLMToolResultSynthesizer",
+    "GroundedMultiPatchComposer",
     "GroundedSynthesisPayload",
     "GroundedSynthesisValidator",
     "InternalLabelSynthesisOutputSanitizer",
@@ -198,11 +209,16 @@ __all__ = [
     "ReadFileTool",
     "ReadOnlyWorkspace",
     "BatchProjectEditApplier",
+    "DependencyAwareProjectFileSelector",
     "JsonProjectFileSelectionParser",
     "JsonProjectPatchParser",
     "LLMProjectEditProposalPreparer",
     "LLMProjectFileSelector",
     "ProjectEditApplier",
+    "ProjectChangePlan",
+    "ProjectCreateSpec",
+    "ProjectCreationValidator",
+    "ProjectCreationWorkspace",
     "ProjectEditOutcome",
     "ProjectEditProposal",
     "ProjectEditProposalPreparer",

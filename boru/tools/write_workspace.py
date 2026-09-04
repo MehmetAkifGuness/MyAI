@@ -1,3 +1,4 @@
+import hashlib
 import os
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
@@ -70,44 +71,9 @@ class SafeWriteWorkspace:
         relative_path: str,
         content: str,
     ) -> WriteOutcome:
-        target = self._resolve_target(
-            relative_path
-        )
-
-        if "\x00" in content:
-            raise WorkspaceWriteError(
-                "NUL karakteri içeren metin yazılamaz."
-            )
-
-        encoded = content.encode(
-            "utf-8"
-        )
-
-        if len(encoded) > self._max_bytes:
-            raise WorkspaceWriteError(
-                "Dosya içeriği izin verilen yazma sınırını aşıyor."
-            )
-
-        if target.exists():
-            raise WorkspaceWriteError(
-                "Hedef dosya zaten mevcut. "
-                "Bu sürüm mevcut dosyanın üzerine yazmaz."
-            )
-
-        parent = target.parent
-
-        if not parent.exists():
-            raise WorkspaceWriteError(
-                "Hedef klasör mevcut değil."
-            )
-
-        if not parent.is_dir():
-            raise WorkspaceWriteError(
-                "Hedef üst yol bir klasör değil."
-            )
-
-        self._reject_symlink_components(
-            target
+        target, encoded = self._validate_new_text_file(
+            relative_path,
+            content,
         )
 
         descriptor: int | None = None
@@ -164,6 +130,93 @@ class SafeWriteWorkspace:
             character_count=len(content),
             byte_count=len(encoded),
         )
+
+    def validate_new_text_file(
+        self,
+        relative_path: str,
+        content: str,
+    ) -> None:
+        self._validate_new_text_file(
+            relative_path,
+            content,
+        )
+
+    def remove_created_text_file(
+        self,
+        relative_path: str,
+        *,
+        expected_sha256: str,
+    ) -> None:
+        target = self._resolve_target(
+            relative_path
+        )
+        self._reject_symlink_components(
+            target
+        )
+
+        if not target.is_file():
+            raise WorkspaceWriteError(
+                "Rollback hedefi normal bir dosya değil."
+            )
+
+        current_hash = hashlib.sha256(
+            target.read_bytes()
+        ).hexdigest()
+
+        if current_hash != expected_sha256:
+            raise WorkspaceWriteError(
+                "Rollback hedefi transaction sonrasında dışarıdan değişmiş; "
+                "harici değişiklik korunmak için dosya silinmedi."
+            )
+
+        target.unlink()
+
+    def _validate_new_text_file(
+        self,
+        relative_path: str,
+        content: str,
+    ) -> tuple[Path, bytes]:
+        target = self._resolve_target(
+            relative_path
+        )
+
+        if "\x00" in content:
+            raise WorkspaceWriteError(
+                "NUL karakteri içeren metin yazılamaz."
+            )
+
+        encoded = content.encode(
+            "utf-8"
+        )
+
+        if len(encoded) > self._max_bytes:
+            raise WorkspaceWriteError(
+                "Dosya içeriği izin verilen yazma sınırını aşıyor."
+            )
+
+        if target.exists():
+            raise WorkspaceWriteError(
+                "Hedef dosya zaten mevcut. "
+                "Bu sürüm mevcut dosyanın üzerine yazmaz."
+            )
+
+        parent = target.parent
+
+        if not parent.exists():
+            raise WorkspaceWriteError(
+                "Hedef klasör mevcut değil."
+            )
+
+        if not parent.is_dir():
+            raise WorkspaceWriteError(
+                "Hedef üst yol bir klasör değil."
+            )
+
+        self._reject_symlink_components(
+            target
+        )
+
+        return target, encoded
 
     def _resolve_target(
         self,
