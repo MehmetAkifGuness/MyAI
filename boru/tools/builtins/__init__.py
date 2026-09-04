@@ -10,6 +10,9 @@ from boru.tools.builtins.list_directory import (
 from boru.tools.builtins.read_file import (
     ReadFileTool,
 )
+from boru.tools.builtins.write_file import (
+    WriteFileTool,
+)
 
 
 __all__ = [
@@ -17,4 +20,5 @@ __all__ = [
     "CurrentTimeTool",
     "ListDirectoryTool",
     "ReadFileTool",
+    "WriteFileTool",
 ]

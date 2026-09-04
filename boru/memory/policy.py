@@ -77,6 +77,17 @@ class ConservativeMemoryDecisionGate:
             r"\b(?:proje|project|tests?)\b.*\b(?:altında|içinde|neler\s+var)\b",
             re.IGNORECASE,
         ),
+        re.compile(
+            r"\b(?:dosya|dosyayı|dosyası|dosyasını|dosyasına)\b"
+            r".*\b(?:oluştur|yaz|değiştir|düzenle|güncelle)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
+            r"(?:^|\s)[\w./\\-]+\."
+            r"(?:py|json|txt|md|yaml|yml|toml|ini|cfg|csv|xml|html|css|js|ts|dart|java|cs|sql)"
+            r".*\b(?:oluştur|yaz|değiştir|düzenle|güncelle)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
     )
 
     _PROFILE_PATTERNS = (
