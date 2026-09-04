@@ -11,6 +11,11 @@ from boru.tools.models import (
 class ToolCoordinator:
     """Tek-tool planlama, çalıştırma ve isteğe bağlı sentezi yönetir."""
 
+    _PLANNING_FAILURE_MESSAGE = (
+        "Bu isteği güvenli bir araç çağrısına dönüştüremedim. "
+        "Gerçek dosya veya proje verisini görmeden tahminde bulunmayacağım."
+    )
+
     def __init__(
         self,
         planner: ToolPlanner,
@@ -28,6 +33,9 @@ class ToolCoordinator:
         decision = self._planner.plan(
             user_message
         )
+
+        if decision.planning_failed:
+            return self._PLANNING_FAILURE_MESSAGE
 
         if not decision.should_use_tool:
             return None

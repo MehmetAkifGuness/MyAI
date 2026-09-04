@@ -1,3 +1,8 @@
+from boru.tools.arguments import (
+    ToolArgumentSchema,
+    ToolArgumentSpec,
+    ToolArgumentType,
+)
 from boru.tools.models import (
     ToolResult,
     ToolRisk,
@@ -14,48 +19,101 @@ class ReadFileTool:
         self,
         workspace: WorkspaceReader,
     ):
-        self._workspace = workspace
+        self._workspace = (
+            workspace
+        )
 
     @property
     def name(self) -> str:
         return "read_file"
 
     @property
-    def description(self) -> str:
+    def description(
+        self,
+    ) -> str:
         return (
-            "İzin verilen proje workspace'i içindeki "
-            "küçük bir UTF-8 metin dosyasını okur."
+            "İzin verilen proje "
+            "workspace'i içindeki "
+            "küçük bir UTF-8 metin "
+            "dosyasını okur. "
+            "Argüman: path "
+            "(workspace-relative metin)."
         )
 
     @property
-    def risk(self) -> ToolRisk:
-        return ToolRisk.READ_ONLY
+    def risk(
+        self,
+    ) -> ToolRisk:
+        return (
+            ToolRisk.READ_ONLY
+        )
+
+    @property
+    def argument_schema(
+        self,
+    ) -> ToolArgumentSchema:
+        return ToolArgumentSchema(
+            arguments=(
+                ToolArgumentSpec(
+                    name="path",
+                    value_type=(
+                        ToolArgumentType.STRING
+                    ),
+                    required=True,
+                    strip=True,
+                    allow_empty=False,
+                    max_length=1024,
+                ),
+            )
+        )
 
     def execute(
         self,
-        arguments: dict[str, object],
+        arguments: dict[
+            str,
+            object,
+        ],
     ) -> ToolResult:
-        unexpected = set(arguments) - {"path"}
+        unexpected = (
+            set(arguments)
+            - {"path"}
+        )
+
         if unexpected:
             raise ValueError(
-                "read_file yalnızca 'path' argümanını kabul eder."
+                "read_file yalnızca "
+                "'path' argümanını kabul eder."
             )
 
-        raw_path = arguments.get("path")
+        raw_path = arguments.get(
+            "path"
+        )
 
-        if not isinstance(raw_path, str):
+        if not isinstance(
+            raw_path,
+            str,
+        ):
             raise ValueError(
-                "read_file için 'path' metin olmalıdır."
+                "read_file için "
+                "'path' metin olmalıdır."
             )
 
-        relative_path = raw_path.strip()
+        relative_path = (
+            raw_path.strip()
+        )
+
         if not relative_path:
             raise ValueError(
-                "Okunacak dosya yolu boş olamaz."
+                "Okunacak dosya yolu "
+                "boş olamaz."
             )
 
-        content = self._workspace.read_text_file(
-            relative_path
+        content = (
+            self
+            ._workspace
+            .read_text_file(
+                relative_path
+            )
         )
 
         rendered_content = (
@@ -73,6 +131,8 @@ class ReadFileTool:
             ),
             metadata={
                 "path": relative_path,
-                "character_count": len(content),
+                "character_count": (
+                    len(content)
+                ),
             },
         )

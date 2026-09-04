@@ -1,6 +1,11 @@
-from collections.abc import Callable
+from collections.abc import (
+    Callable,
+)
 from datetime import datetime
 
+from boru.tools.arguments import (
+    ToolArgumentSchema,
+)
 from boru.tools.models import (
     ToolResult,
     ToolRisk,
@@ -12,10 +17,22 @@ class CurrentTimeTool:
 
     def __init__(
         self,
-        clock: Callable[[], datetime] | None = None,
+        clock: (
+            Callable[
+                [],
+                datetime,
+            ]
+            | None
+        ) = None,
     ):
-        self._clock = clock or (
-            lambda: datetime.now().astimezone()
+        self._clock = (
+            clock
+            or (
+                lambda:
+                datetime
+                .now()
+                .astimezone()
+            )
         )
 
     @property
@@ -23,30 +40,53 @@ class CurrentTimeTool:
         return "get_current_time"
 
     @property
-    def description(self) -> str:
+    def description(
+        self,
+    ) -> str:
         return (
-            "Sistemin geçerli yerel tarih ve saatini döndürür."
+            "Sistemin geçerli yerel "
+            "tarih ve saatini döndürür. "
+            "Argüman almaz."
         )
 
     @property
-    def risk(self) -> ToolRisk:
+    def risk(
+        self,
+    ) -> ToolRisk:
         return ToolRisk.SAFE
+
+    @property
+    def argument_schema(
+        self,
+    ) -> ToolArgumentSchema:
+        return ToolArgumentSchema()
 
     def execute(
         self,
-        arguments: dict[str, object],
+        arguments: dict[
+            str,
+            object,
+        ],
     ) -> ToolResult:
         if arguments:
             raise ValueError(
-                "get_current_time argüman kabul etmez."
+                "get_current_time "
+                "argüman kabul etmez."
             )
 
         current = self._clock()
 
         if current.tzinfo is None:
-            current = current.astimezone()
+            current = (
+                current.astimezone()
+            )
 
-        offset = current.strftime("%z")
+        offset = (
+            current.strftime(
+                "%z"
+            )
+        )
+
         formatted_offset = (
             f"{offset[:3]}:{offset[3:]}"
             if offset

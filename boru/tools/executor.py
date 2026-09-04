@@ -1,4 +1,9 @@
+from boru.tools.arguments import (
+    ToolArgumentSchema,
+    ToolArgumentValidator,
+)
 from boru.tools.contracts import (
+    Tool,
     ToolPolicy,
     ToolRegistryPort,
 )
@@ -9,15 +14,23 @@ from boru.tools.models import (
 
 
 class ToolExecutor:
-    """Tool çağrılarının registry ve policy sınırından geçmesini sağlar."""
+    """Registry, policy ve merkezi argüman doğrulaması üzerinden tool çalıştırır."""
 
     def __init__(
         self,
         registry: ToolRegistryPort,
         policy: ToolPolicy,
+        argument_validator: (
+            ToolArgumentValidator
+            | None
+        ) = None,
     ):
         self._registry = registry
         self._policy = policy
+        self._argument_validator = (
+            argument_validator
+            or ToolArgumentValidator()
+        )
 
     def execute(
         self,
@@ -29,44 +42,108 @@ class ToolExecutor:
 
         if tool is None:
             return ToolResult(
-                tool_name=call.tool_name,
+                tool_name=(
+                    call.tool_name
+                ),
                 success=False,
                 error=(
                     "İstenen tool kayıtlı değil."
                 ),
             )
 
-        if not self._policy.is_allowed(tool):
+        if not self._policy.is_allowed(
+            tool
+        ):
             return ToolResult(
-                tool_name=call.tool_name,
+                tool_name=(
+                    call.tool_name
+                ),
                 success=False,
                 error=(
-                    "Bu tool mevcut güvenlik politikası "
-                    "tarafından engellendi."
+                    "Bu tool mevcut güvenlik "
+                    "politikası tarafından engellendi."
+                ),
+            )
+
+        try:
+            validated_arguments = (
+                self
+                ._argument_validator
+                .validate(
+                    self._argument_schema_for(
+                        tool
+                    ),
+                    call.arguments,
+                )
+            )
+
+        except Exception as error:
+            return ToolResult(
+                tool_name=(
+                    call.tool_name
+                ),
+                success=False,
+                error=(
+                    "Tool argümanları geçersiz: "
+                    f"{error}"
                 ),
             )
 
         try:
             result = tool.execute(
-                dict(call.arguments)
+                validated_arguments
             )
+
         except Exception as error:
             return ToolResult(
-                tool_name=call.tool_name,
+                tool_name=(
+                    call.tool_name
+                ),
                 success=False,
                 error=(
-                    "Tool güvenli biçimde çalıştırılamadı: "
+                    "Tool güvenli biçimde "
+                    "çalıştırılamadı: "
                     f"{error}"
                 ),
             )
 
-        if result.tool_name != tool.name:
+        if (
+            result.tool_name
+            != tool.name
+        ):
             return ToolResult(
-                tool_name=call.tool_name,
+                tool_name=(
+                    call.tool_name
+                ),
                 success=False,
                 error=(
-                    "Tool sonucu beklenen tool adıyla eşleşmiyor."
+                    "Tool sonucu beklenen tool "
+                    "adıyla eşleşmiyor."
                 ),
             )
 
         return result
+
+    @staticmethod
+    def _argument_schema_for(
+        tool: Tool,
+    ) -> ToolArgumentSchema:
+        schema = getattr(
+            tool,
+            "argument_schema",
+            None,
+        )
+
+        if schema is None:
+            return ToolArgumentSchema()
+
+        if not isinstance(
+            schema,
+            ToolArgumentSchema,
+        ):
+            raise TypeError(
+                f"{tool.name} geçerli bir "
+                "ToolArgumentSchema sağlamıyor."
+            )
+
+        return schema

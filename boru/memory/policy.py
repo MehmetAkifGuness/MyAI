@@ -63,6 +63,20 @@ class ConservativeMemoryDecisionGate:
             r"\bdosyaları\s+(?:listele|göster)\b",
             re.IGNORECASE,
         ),
+        re.compile(
+            r"\b(?:dosya|klasör|dizin|config|ayar|settings|tests?|testler)\b"
+            r".*\b(?:bak|incele|göster|listele|oku|kontrol)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:bak|incele|göster|listele|oku|kontrol)\b"
+            r".*\b(?:dosya|klasör|dizin|config|ayar|settings|tests?|testler)\b",
+            re.IGNORECASE,
+        ),
+        re.compile(
+            r"\b(?:proje|project|tests?)\b.*\b(?:altında|içinde|neler\s+var)\b",
+            re.IGNORECASE,
+        ),
     )
 
     _PROFILE_PATTERNS = (

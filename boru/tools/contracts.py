@@ -1,6 +1,9 @@
 from collections.abc import Sequence
 from typing import Protocol
 
+from boru.tools.arguments import (
+    ToolArgumentSchema,
+)
 from boru.tools.models import (
     ToolCall,
     ToolDecision,
@@ -26,9 +29,18 @@ class Tool(Protocol):
     def risk(self) -> ToolRisk:
         ...
 
+    @property
+    def argument_schema(
+        self,
+    ) -> ToolArgumentSchema:
+        ...
+
     def execute(
         self,
-        arguments: dict[str, object],
+        arguments: dict[
+            str,
+            object,
+        ],
     ) -> ToolResult:
         ...
 
@@ -41,7 +53,19 @@ class ToolPlanner(Protocol):
         ...
 
 
-class ToolRegistryPort(Protocol):
+class ToolCandidateDetector(
+    Protocol
+):
+    def is_candidate(
+        self,
+        user_message: str,
+    ) -> bool:
+        ...
+
+
+class ToolRegistryPort(
+    Protocol
+):
     def get(
         self,
         name: str,
@@ -50,7 +74,9 @@ class ToolRegistryPort(Protocol):
 
     def definitions(
         self,
-    ) -> Sequence[ToolDefinition]:
+    ) -> Sequence[
+        ToolDefinition
+    ]:
         ...
 
 
@@ -62,7 +88,9 @@ class ToolPolicy(Protocol):
         ...
 
 
-class ToolExecutorPort(Protocol):
+class ToolExecutorPort(
+    Protocol
+):
     def execute(
         self,
         call: ToolCall,
@@ -70,7 +98,9 @@ class ToolExecutorPort(Protocol):
         ...
 
 
-class ToolResultSynthesizer(Protocol):
+class ToolResultSynthesizer(
+    Protocol
+):
     def synthesize(
         self,
         *,
@@ -82,7 +112,9 @@ class ToolResultSynthesizer(Protocol):
         ...
 
 
-class ToolResultSynthesisResolver(Protocol):
+class ToolResultSynthesisResolver(
+    Protocol
+):
     def resolve(
         self,
         *,
@@ -94,7 +126,9 @@ class ToolResultSynthesisResolver(Protocol):
         ...
 
 
-class WorkspaceReader(Protocol):
+class WorkspaceReader(
+    Protocol
+):
     def list_directory(
         self,
         relative_path: str = ".",

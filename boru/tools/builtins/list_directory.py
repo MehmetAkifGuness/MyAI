@@ -1,3 +1,8 @@
+from boru.tools.arguments import (
+    ToolArgumentSchema,
+    ToolArgumentSpec,
+    ToolArgumentType,
+)
 from boru.tools.models import (
     ToolResult,
     ToolRisk,
@@ -14,31 +19,73 @@ class ListDirectoryTool:
         self,
         workspace: WorkspaceReader,
     ):
-        self._workspace = workspace
+        self._workspace = (
+            workspace
+        )
 
     @property
     def name(self) -> str:
         return "list_directory"
 
     @property
-    def description(self) -> str:
+    def description(
+        self,
+    ) -> str:
         return (
-            "İzin verilen proje workspace'i içindeki "
-            "bir klasörün dosya ve alt klasörlerini listeler."
+            "İzin verilen proje "
+            "workspace'i içindeki "
+            "bir klasörün dosya ve "
+            "alt klasörlerini listeler. "
+            "Argüman: path "
+            "(workspace-relative metin; "
+            "proje kökü için .)."
         )
 
     @property
-    def risk(self) -> ToolRisk:
-        return ToolRisk.READ_ONLY
+    def risk(
+        self,
+    ) -> ToolRisk:
+        return (
+            ToolRisk.READ_ONLY
+        )
+
+    @property
+    def argument_schema(
+        self,
+    ) -> ToolArgumentSchema:
+        return ToolArgumentSchema(
+            arguments=(
+                ToolArgumentSpec(
+                    name="path",
+                    value_type=(
+                        ToolArgumentType.STRING
+                    ),
+                    required=False,
+                    strip=True,
+                    allow_empty=True,
+                    max_length=1024,
+                    has_default=True,
+                    default=".",
+                ),
+            )
+        )
 
     def execute(
         self,
-        arguments: dict[str, object],
+        arguments: dict[
+            str,
+            object,
+        ],
     ) -> ToolResult:
-        unexpected = set(arguments) - {"path"}
+        unexpected = (
+            set(arguments)
+            - {"path"}
+        )
+
         if unexpected:
             raise ValueError(
-                "list_directory yalnızca 'path' argümanını kabul eder."
+                "list_directory yalnızca "
+                "'path' argümanını kabul eder."
             )
 
         raw_path = arguments.get(
@@ -46,14 +93,25 @@ class ListDirectoryTool:
             ".",
         )
 
-        if not isinstance(raw_path, str):
+        if not isinstance(
+            raw_path,
+            str,
+        ):
             raise ValueError(
                 "'path' metin olmalıdır."
             )
 
-        relative_path = raw_path.strip() or "."
-        listing = self._workspace.list_directory(
-            relative_path
+        relative_path = (
+            raw_path.strip()
+            or "."
+        )
+
+        listing = (
+            self
+            ._workspace
+            .list_directory(
+                relative_path
+            )
         )
 
         display_path = (
@@ -64,8 +122,13 @@ class ListDirectoryTool:
 
         entry_count = (
             listing.total_entries
-            if listing.total_entries is not None
-            else len(listing.entries)
+            if (
+                listing.total_entries
+                is not None
+            )
+            else len(
+                listing.entries
+            )
         )
 
         lines = [
@@ -74,31 +137,50 @@ class ListDirectoryTool:
         ]
 
         if not listing.entries:
-            lines.append("(boş klasör)")
+            lines.append(
+                "(boş klasör)"
+            )
+
         else:
-            for entry in listing.entries:
+            for entry in (
+                listing.entries
+            ):
                 kind = (
                     "DIR"
-                    if entry.is_directory
+                    if (
+                        entry
+                        .is_directory
+                    )
                     else "FILE"
                 )
+
                 lines.append(
-                    f"[{kind}] {entry.relative_path}"
+                    f"[{kind}] "
+                    f"{entry.relative_path}"
                 )
 
         if listing.truncated:
             lines.append(
-                "(liste güvenlik limiti nedeniyle kısaltıldı)"
+                "(liste güvenlik limiti "
+                "nedeniyle kısaltıldı)"
             )
 
         return ToolResult(
             tool_name=self.name,
             success=True,
-            content="\n".join(lines),
+            content="\n".join(
+                lines
+            ),
             metadata={
                 "path": relative_path,
-                "display_path": display_path,
-                "entry_count": entry_count,
-                "truncated": listing.truncated,
+                "display_path": (
+                    display_path
+                ),
+                "entry_count": (
+                    entry_count
+                ),
+                "truncated": (
+                    listing.truncated
+                ),
             },
         )

@@ -1,3 +1,10 @@
+from boru.tools.arguments import (
+    ToolArgumentSchema,
+    ToolArgumentSpec,
+    ToolArgumentType,
+    ToolArgumentValidationError,
+    ToolArgumentValidator,
+)
 from boru.tools.builtins import (
     CalculatorTool,
     CurrentTimeTool,
@@ -16,6 +23,11 @@ from boru.tools.executor import (
 from boru.tools.grounded_synthesizer import (
     GroundedLLMToolResultSynthesizer,
 )
+from boru.tools.llm_planner import (
+    JsonLLMToolPlanningParser,
+    LLMToolPlanner,
+    LLMToolPlanningPayload,
+)
 from boru.tools.models import (
     ToolCall,
     ToolDecision,
@@ -32,6 +44,12 @@ from boru.tools.policy import (
 )
 from boru.tools.registry import (
     ToolRegistry,
+)
+from boru.tools.smart_planner import (
+    ChainedToolPlanner,
+    FallbackToolPlanner,
+    NaturalLanguageToolPlanner,
+    RuleBasedToolCandidateDetector,
 )
 from boru.tools.synthesis_grounding import (
     AssignmentRequiredEvidenceExtractor,
@@ -60,22 +78,34 @@ from boru.tools.workspace import (
 
 __all__ = [
     "AssignmentRequiredEvidenceExtractor",
+    "ToolArgumentSchema",
+    "ToolArgumentSpec",
+    "ToolArgumentType",
+    "ToolArgumentValidationError",
+    "ToolArgumentValidator",
     "CalculatorTool",
     "CompositeToolResultSynthesizer",
     "CurrentTimeTool",
     "DirectoryCountSynthesisResolver",
     "DirectoryListing",
+    "ChainedToolPlanner",
+    "FallbackToolPlanner",
     "GroundedLLMToolResultSynthesizer",
     "GroundedSynthesisPayload",
     "GroundedSynthesisValidator",
     "InternalLabelSynthesisOutputSanitizer",
     "JsonGroundedSynthesisParser",
+    "JsonLLMToolPlanningParser",
+    "LLMToolPlanner",
+    "LLMToolPlanningPayload",
     "LLMToolResultSynthesizer",
     "ListDirectoryTool",
+    "NaturalLanguageToolPlanner",
     "ReadFileTool",
     "ReadOnlyWorkspace",
     "RequiredEvidenceFact",
     "RiskBasedToolPolicy",
+    "RuleBasedToolCandidateDetector",
     "RuleBasedToolPlanner",
     "ToolCall",
     "ToolCoordinator",
