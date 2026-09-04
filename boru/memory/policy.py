@@ -88,6 +88,12 @@ class ConservativeMemoryDecisionGate:
             r".*\b(?:oluştur|yaz|değiştir|düzenle|güncelle)\b",
             re.IGNORECASE | re.DOTALL,
         ),
+        re.compile(
+            r"(?:^|\s)[\w./\\-]+"
+            r"(?:['’](?:deki|daki|teki|taki)|\s+(?:dosyasındaki|dosyasında|içindeki|içerisindeki))"
+            r".*\b(?:yap|değiştir|düzenle|güncelle|ayarla|çevir)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
     )
 
     _PROFILE_PATTERNS = (

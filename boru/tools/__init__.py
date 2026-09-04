@@ -22,15 +22,26 @@ from boru.tools.deterministic_synthesis import (
 from boru.tools.edit_contracts import (
     EditProposalPreparer,
     EditRequestParser,
+    SmartEditProposalPreparer,
+    SmartEditRequestParser,
+    SmartEditWorkspace,
     WorkspaceEditor,
 )
 from boru.tools.edit_models import (
     EditOutcome,
     EditProposal,
     EditRequest,
+    EditSource,
+    SmartEditRequest,
 )
 from boru.tools.edit_parser import (
     RuleBasedEditRequestParser,
+)
+from boru.tools.smart_edit import (
+    JsonSmartEditParser,
+    LLMSmartEditProposalPreparer,
+    RuleBasedSmartEditRequestParser,
+    SmartEditPayload,
 )
 from boru.tools.edit_workspace import (
     SafeEditWorkspace,
@@ -130,6 +141,7 @@ __all__ = [
     "EditProposalPreparer",
     "EditRequest",
     "EditRequestParser",
+    "EditSource",
     "FallbackToolPlanner",
     "GroundedLLMToolResultSynthesizer",
     "GroundedSynthesisPayload",
@@ -140,6 +152,8 @@ __all__ = [
     "LLMToolPlanner",
     "LLMToolPlanningPayload",
     "LLMToolResultSynthesizer",
+    "JsonSmartEditParser",
+    "LLMSmartEditProposalPreparer",
     "ListDirectoryTool",
     "NaturalLanguageToolPlanner",
     "ReadFileTool",
@@ -147,11 +161,17 @@ __all__ = [
     "RequiredEvidenceFact",
     "RiskBasedToolPolicy",
     "RuleBasedEditRequestParser",
+    "RuleBasedSmartEditRequestParser",
     "RuleBasedToolCandidateDetector",
     "RuleBasedToolPlanner",
     "RuleBasedWriteIntentDetector",
     "RuleBasedWriteRequestParser",
     "SafeEditWorkspace",
+    "SmartEditPayload",
+    "SmartEditProposalPreparer",
+    "SmartEditRequest",
+    "SmartEditRequestParser",
+    "SmartEditWorkspace",
     "SafeWriteWorkspace",
     "ToolArgumentSchema",
     "ToolArgumentSpec",

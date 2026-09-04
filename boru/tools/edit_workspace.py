@@ -9,6 +9,7 @@ from boru.tools.edit_models import (
     EditOutcome,
     EditProposal,
     EditRequest,
+    EditSource,
 )
 
 
@@ -67,9 +68,33 @@ class SafeEditWorkspace:
     def root(self) -> Path:
         return self._root
 
+    def read_edit_source(
+        self,
+        relative_path: str,
+    ) -> EditSource:
+        target = self._resolve_existing_file(
+            relative_path
+        )
+
+        raw, content, _ = self._read_utf8(
+            target
+        )
+
+        return EditSource(
+            path=self._display_path(
+                target
+            ),
+            content=content,
+            sha256=(
+                hashlib.sha256(raw).hexdigest()
+            ),
+        )
+
     def prepare_exact_replacement(
         self,
         request: EditRequest,
+        *,
+        expected_sha256: str | None = None,
     ) -> EditProposal:
         target = self._resolve_existing_file(
             request.path
@@ -78,6 +103,19 @@ class SafeEditWorkspace:
         raw, original, had_bom = self._read_utf8(
             target
         )
+
+        current_sha256 = (
+            hashlib.sha256(raw).hexdigest()
+        )
+
+        if (
+            expected_sha256 is not None
+            and current_sha256 != expected_sha256
+        ):
+            raise WorkspaceEditError(
+                "Dosya akıllı düzenleme planlanırken değişmiş. "
+                "Güvenlik nedeniyle öneri hazırlanmadı; isteği yeniden gönder."
+            )
 
         occurrences = original.count(
             request.old_text
@@ -134,9 +172,7 @@ class SafeEditWorkspace:
         return EditProposal(
             path=display_path,
             updated_content=updated,
-            expected_sha256=(
-                hashlib.sha256(raw).hexdigest()
-            ),
+            expected_sha256=current_sha256,
             diff=diff,
             original_character_count=len(
                 original

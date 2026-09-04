@@ -6,6 +6,8 @@ from boru.tools.contracts import (
 from boru.tools.edit_contracts import (
     EditProposalPreparer,
     EditRequestParser,
+    SmartEditProposalPreparer,
+    SmartEditRequestParser,
 )
 from boru.tools.edit_models import (
     EditProposal,
@@ -49,6 +51,8 @@ class ControlledWriteCoordinator:
         executor: ToolExecutorPort,
         edit_parser: EditRequestParser | None = None,
         edit_preparer: EditProposalPreparer | None = None,
+        smart_edit_parser: SmartEditRequestParser | None = None,
+        smart_edit_preparer: SmartEditProposalPreparer | None = None,
         preview_characters: int = 3000,
     ):
         if preview_characters < 1:
@@ -64,11 +68,21 @@ class ControlledWriteCoordinator:
                 "edit_parser ve edit_preparer birlikte verilmelidir."
             )
 
+        if (
+            (smart_edit_parser is None)
+            != (smart_edit_preparer is None)
+        ):
+            raise ValueError(
+                "smart_edit_parser ve smart_edit_preparer birlikte verilmelidir."
+            )
+
         self._parser = parser
         self._intent_detector = intent_detector
         self._executor = executor
         self._edit_parser = edit_parser
         self._edit_preparer = edit_preparer
+        self._smart_edit_parser = smart_edit_parser
+        self._smart_edit_preparer = smart_edit_preparer
         self._preview_characters = preview_characters
         self._pending: WriteRequest | EditProposal | None = None
         self._lock = RLock()
@@ -109,6 +123,13 @@ class ControlledWriteCoordinator:
 
             if edit_response is not None:
                 return edit_response
+
+            smart_edit_response = self._try_stage_smart_edit(
+                user_message
+            )
+
+            if smart_edit_response is not None:
+                return smart_edit_response
 
             request = self._parser.parse(
                 user_message
@@ -170,6 +191,51 @@ class ControlledWriteCoordinator:
         except Exception as error:
             return (
                 "Düzenleme hazırlanamadı: "
+                f"{error}"
+            )
+
+        self._pending = proposal
+
+        return self._render_edit_preview(
+            proposal
+        )
+
+    def _try_stage_smart_edit(
+        self,
+        user_message: str,
+    ) -> str | None:
+        if (
+            self._smart_edit_parser is None
+            or self._smart_edit_preparer is None
+        ):
+            return None
+
+        try:
+            request = self._smart_edit_parser.parse(
+                user_message
+            )
+        except Exception as error:
+            return (
+                "Akıllı düzenleme isteği geçersiz: "
+                f"{error}"
+            )
+
+        if request is None:
+            return None
+
+        if self._pending is not None:
+            return self._pending_message()
+
+        try:
+            proposal = (
+                self._smart_edit_preparer
+                .prepare_smart_edit(
+                    request
+                )
+            )
+        except Exception as error:
+            return (
+                "Akıllı düzenleme hazırlanamadı: "
                 f"{error}"
             )
 
@@ -317,13 +383,26 @@ class ControlledWriteCoordinator:
                 "Merhaba Börü"
             )
 
+        if self._smart_edit_parser is None:
+            return (
+                "Kontrollü dosya oluşturma ve exact-replace düzenleme destekleniyor.\n"
+                "Yeni dosya örneği:\n"
+                "dosya oluştur: notes/ornek.txt\n"
+                "İçerik:\n"
+                "Merhaba Börü\n\n"
+                "Mevcut dosya düzenleme örneği:\n"
+                "dosya düzenle: boru/config.py\n"
+                "Eski:\n"
+                "model_name: str = \"llama3.1\"\n"
+                "Yeni:\n"
+                "model_name: str = \"llama3.2\""
+            )
+
         return (
-            "Kontrollü dosya oluşturma ve exact-replace düzenleme destekleniyor.\n"
-            "Yeni dosya örneği:\n"
-            "dosya oluştur: notes/ornek.txt\n"
-            "İçerik:\n"
-            "Merhaba Börü\n\n"
-            "Mevcut dosya düzenleme örneği:\n"
+            "Kontrollü dosya oluşturma, exact-replace ve doğal dil akıllı düzenleme destekleniyor.\n"
+            "Doğal düzenleme örneği:\n"
+            "boru/config.py'deki model_name değerini llama3.2 yap\n\n"
+            "Exact-replace örneği:\n"
             "dosya düzenle: boru/config.py\n"
             "Eski:\n"
             "model_name: str = \"llama3.1\"\n"

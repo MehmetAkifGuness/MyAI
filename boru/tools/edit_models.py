@@ -33,6 +33,44 @@ class EditRequest:
 
 
 @dataclass(frozen=True, slots=True)
+class SmartEditRequest:
+    path: str
+    instruction: str
+
+    def __post_init__(self) -> None:
+        cleaned_path = self.path.strip().strip("\"'")
+        cleaned_instruction = self.instruction.strip()
+
+        if not cleaned_path:
+            raise ValueError(
+                "Akıllı düzenleme hedefi boş olamaz."
+            )
+
+        if not cleaned_instruction:
+            raise ValueError(
+                "Akıllı düzenleme talimatı boş olamaz."
+            )
+
+        object.__setattr__(
+            self,
+            "path",
+            cleaned_path,
+        )
+        object.__setattr__(
+            self,
+            "instruction",
+            cleaned_instruction,
+        )
+
+
+@dataclass(frozen=True, slots=True)
+class EditSource:
+    path: str
+    content: str
+    sha256: str
+
+
+@dataclass(frozen=True, slots=True)
 class EditProposal:
     path: str
     updated_content: str
