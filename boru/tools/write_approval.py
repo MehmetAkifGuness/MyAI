@@ -12,6 +12,14 @@ from boru.tools.edit_contracts import (
 from boru.tools.edit_models import (
     EditProposal,
 )
+from boru.tools.filesystem_contracts import (
+    FilesystemOperationRequestParser,
+    FilesystemOperationWorkspace,
+)
+from boru.tools.filesystem_models import (
+    FilesystemOperation,
+    FilesystemOperationProposal,
+)
 from boru.tools.models import (
     ToolCall,
 )
@@ -42,6 +50,10 @@ class ControlledWriteCoordinator:
         "değişikliği onayla",
         "düzenlemeyi onayla",
         "proje değişikliğini onayla",
+        "silmeyi onayla",
+    }
+    _DELETE_APPROVE_COMMANDS = {
+        "silmeyi onayla",
     }
 
     _CANCEL_COMMANDS = {
@@ -66,6 +78,8 @@ class ControlledWriteCoordinator:
         project_edit_parser: ProjectEditRequestParser | None = None,
         project_edit_preparer: ProjectEditProposalPreparer | None = None,
         project_edit_applier: ProjectEditApplier | None = None,
+        filesystem_parser: FilesystemOperationRequestParser | None = None,
+        filesystem_workspace: FilesystemOperationWorkspace | None = None,
         preview_characters: int = 6000,
     ):
         if preview_characters < 1:
@@ -106,6 +120,14 @@ class ControlledWriteCoordinator:
                 "project_edit_parser, project_edit_preparer ve project_edit_applier birlikte verilmelidir."
             )
 
+        if (
+            (filesystem_parser is None)
+            != (filesystem_workspace is None)
+        ):
+            raise ValueError(
+                "filesystem_parser ve filesystem_workspace birlikte verilmelidir."
+            )
+
         self._parser = parser
         self._intent_detector = intent_detector
         self._executor = executor
@@ -116,11 +138,14 @@ class ControlledWriteCoordinator:
         self._project_edit_parser = project_edit_parser
         self._project_edit_preparer = project_edit_preparer
         self._project_edit_applier = project_edit_applier
+        self._filesystem_parser = filesystem_parser
+        self._filesystem_workspace = filesystem_workspace
         self._preview_characters = preview_characters
         self._pending: (
             WriteRequest
             | EditProposal
             | ProjectEditProposal
+            | FilesystemOperationProposal
             | None
         ) = None
         self._lock = RLock()
@@ -138,6 +163,21 @@ class ControlledWriteCoordinator:
                 self._pending is not None
                 and normalized in self._APPROVE_COMMANDS
             ):
+                if (
+                    isinstance(
+                        self._pending,
+                        FilesystemOperationProposal,
+                    )
+                    and self._pending.request.operation
+                    is FilesystemOperation.DELETE_FILE
+                    and normalized
+                    not in self._DELETE_APPROVE_COMMANDS
+                ):
+                    return (
+                        "Dosya silme yüksek risklidir. Uygulamak için yalnızca "
+                        "'silmeyi onayla' yaz."
+                    )
+
                 pending = self._pending
                 self._pending = None
 
@@ -157,6 +197,21 @@ class ControlledWriteCoordinator:
 
             if self._pending is not None:
                 return self._pending_message()
+
+            filesystem_response = self._try_stage_filesystem_operation(
+                user_message
+            )
+
+            if filesystem_response is not None:
+                return filesystem_response
+
+            if (
+                self._filesystem_parser is not None
+                and self._filesystem_parser.is_operation_intent(
+                    user_message
+                )
+            ):
+                return self._render_filesystem_usage_guidance()
 
             edit_response = self._try_stage_edit(
                 user_message
@@ -202,6 +257,38 @@ class ControlledWriteCoordinator:
                 return self._render_usage_guidance()
 
         return None
+
+    def _try_stage_filesystem_operation(
+        self,
+        user_message: str,
+    ) -> str | None:
+        if (
+            self._filesystem_parser is None
+            or self._filesystem_workspace is None
+        ):
+            return None
+
+        try:
+            request = self._filesystem_parser.parse(
+                user_message
+            )
+        except Exception as error:
+            return f"Dosya sistemi isteği geçersiz: {error}"
+
+        if request is None:
+            return None
+
+        try:
+            proposal = self._filesystem_workspace.prepare(
+                request
+            )
+        except Exception as error:
+            return f"Dosya sistemi işlemi hazırlanamadı: {error}"
+
+        self._pending = proposal
+        return self._render_filesystem_preview(
+            proposal
+        )
 
     def _try_stage_edit(
         self,
@@ -344,6 +431,7 @@ class ControlledWriteCoordinator:
             WriteRequest
             | EditProposal
             | ProjectEditProposal
+            | FilesystemOperationProposal
         ),
     ) -> str:
         if isinstance(
@@ -362,9 +450,44 @@ class ControlledWriteCoordinator:
                 pending
             )
 
+        if isinstance(
+            pending,
+            FilesystemOperationProposal,
+        ):
+            return self._execute_filesystem_operation(
+                pending
+            )
+
         return self._execute_edit(
             pending
         )
+
+    def _execute_filesystem_operation(
+        self,
+        proposal: FilesystemOperationProposal,
+    ) -> str:
+        if self._filesystem_workspace is None:
+            return "Dosya sistemi workspace'i yapılandırılmamış."
+
+        try:
+            outcome = self._filesystem_workspace.apply(
+                proposal
+            )
+        except Exception as error:
+            return f"Dosya sistemi işlemi uygulanamadı: {error}"
+
+        labels = {
+            FilesystemOperation.DELETE_FILE: "Dosya silindi",
+            FilesystemOperation.MOVE_FILE: "Dosya taşındı",
+            FilesystemOperation.RENAME_FILE: "Dosya yeniden adlandırıldı",
+            FilesystemOperation.MAKE_DIRECTORY: "Klasör oluşturuldu",
+        }
+        destination = (
+            f" -> {outcome.destination_path}"
+            if outcome.destination_path
+            else ""
+        )
+        return f"{labels[outcome.operation]}: {outcome.source_path}{destination}"
 
     def _execute_create(
         self,
@@ -444,6 +567,56 @@ class ControlledWriteCoordinator:
             "Proje düzenlemesi uygulandı: "
             f"{len(outcome.outcomes)} dosya\n"
             f"{paths}"
+        )
+
+    def _render_filesystem_preview(
+        self,
+        proposal: FilesystemOperationProposal,
+    ) -> str:
+        request = proposal.request
+        labels = {
+            FilesystemOperation.DELETE_FILE: "DELETE",
+            FilesystemOperation.MOVE_FILE: "MOVE",
+            FilesystemOperation.RENAME_FILE: "RENAME",
+            FilesystemOperation.MAKE_DIRECTORY: "MKDIR",
+        }
+        destination = (
+            f"\nHedef: {request.destination_path}"
+            if request.destination_path
+            else ""
+        )
+        risk = (
+            "DESTRUCTIVE"
+            if request.operation
+            is FilesystemOperation.DELETE_FILE
+            else "WRITE"
+        )
+        approval = (
+            "silmeyi onayla"
+            if request.operation
+            is FilesystemOperation.DELETE_FILE
+            else "onayla"
+        )
+
+        return (
+            "Dosya sistemi işlemi hazırlandı ancak henüz uygulanmadı.\n"
+            f"İşlem: {labels[request.operation]}\n"
+            f"Kaynak: {request.source_path}"
+            f"{destination}\n"
+            f"Risk: {risk}\n"
+            f"Kaynak boyutu: {proposal.source_byte_count} byte\n"
+            "Kaynak değişirse veya hedef oluşursa işlem otomatik reddedilir.\n\n"
+            f"Uygulamak için yalnızca '{approval}', vazgeçmek için 'iptal' yaz."
+        )
+
+    @staticmethod
+    def _render_filesystem_usage_guidance() -> str:
+        return (
+            "Desteklenen kontrollü dosya sistemi biçimleri:\n"
+            "dosya sil: path/to/file.txt\n"
+            "dosya taşı: old/path.txt -> new/path.txt\n"
+            "dosya yeniden adlandır: old.txt -> new.txt\n"
+            "klasör oluştur: path/to/folder"
         )
 
     def _render_create_preview(

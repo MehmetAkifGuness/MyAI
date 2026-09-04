@@ -98,6 +98,23 @@ class ConservativeMemoryDecisionGate:
             r"^\s*(?:proje\s+düzenle\s*:|projede\s+|projedeki\s+).+",
             re.IGNORECASE | re.DOTALL,
         ),
+        re.compile(
+            r"\b(?:dosya|dosyayı|dosyası|dosyasını)\b"
+            r".*\b(?:sil|taşı|yeniden\s+adlandır)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
+            r"\b(?:klasör|klasörünü)\b.*\boluştur\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
+            r"\b(?:testleri|unittest|pytest|ruff|mypy)\b.*\bçalıştır\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
+            r"\b(?:komut|terminal|powershell|cmd)\b.*\bçalıştır\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
     )
 
     _PROFILE_PATTERNS = (

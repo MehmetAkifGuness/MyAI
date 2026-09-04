@@ -16,6 +16,32 @@ from boru.tools.builtins import (
 from boru.tools.coordinator import (
     ToolCoordinator,
 )
+from boru.tools.command_contracts import (
+    CommandExecutor,
+    CommandPolicy,
+    CommandRequestParser,
+    TestResultParser,
+)
+from boru.tools.command_coordinator import (
+    SafeCommandCoordinator,
+)
+from boru.tools.command_executor import (
+    BoundedCommandExecutor,
+)
+from boru.tools.command_models import (
+    CommandExecutionResult,
+    CommandKind,
+    CommandRequest,
+    CommandRisk,
+    CommandSpec,
+    TestSummary,
+)
+from boru.tools.command_parser import (
+    RuleBasedCommandRequestParser,
+)
+from boru.tools.command_policy import (
+    SafeCommandPolicy,
+)
 from boru.tools.deterministic_edit import (
     FallbackSmartEditProposalPreparer,
     RuleBasedAssignmentEditProposalPreparer,
@@ -57,6 +83,23 @@ from boru.tools.edit_workspace import (
 )
 from boru.tools.executor import (
     ToolExecutor,
+)
+from boru.tools.filesystem_contracts import (
+    FilesystemOperationRequestParser,
+    FilesystemOperationWorkspace,
+)
+from boru.tools.filesystem_models import (
+    FilesystemOperation,
+    FilesystemOperationOutcome,
+    FilesystemOperationProposal,
+    FilesystemOperationRequest,
+)
+from boru.tools.filesystem_parser import (
+    RuleBasedFilesystemOperationParser,
+)
+from boru.tools.filesystem_workspace import (
+    FilesystemOperationError,
+    SafeFilesystemOperationWorkspace,
 )
 from boru.tools.grounded_synthesizer import (
     GroundedLLMToolResultSynthesizer,
@@ -145,6 +188,9 @@ from boru.tools.synthesis_pipeline import (
 from boru.tools.synthesizer import (
     LLMToolResultSynthesizer,
 )
+from boru.tools.test_results import (
+    TestOutputParser,
+)
 from boru.tools.workspace import (
     DirectoryListing,
     ReadOnlyWorkspace,
@@ -179,6 +225,14 @@ __all__ = [
     "CalculatorTool",
     "ChainedToolPlanner",
     "CompositeToolResultSynthesizer",
+    "CommandExecutionResult",
+    "CommandExecutor",
+    "CommandKind",
+    "CommandPolicy",
+    "CommandRequest",
+    "CommandRequestParser",
+    "CommandRisk",
+    "CommandSpec",
     "ControlledWriteCoordinator",
     "CurrentTimeTool",
     "DirectoryCountSynthesisResolver",
@@ -192,6 +246,13 @@ __all__ = [
     "EditSource",
     "FallbackSmartEditProposalPreparer",
     "FallbackToolPlanner",
+    "FilesystemOperation",
+    "FilesystemOperationError",
+    "FilesystemOperationOutcome",
+    "FilesystemOperationProposal",
+    "FilesystemOperationRequest",
+    "FilesystemOperationRequestParser",
+    "FilesystemOperationWorkspace",
     "GroundedLLMToolResultSynthesizer",
     "GroundedMultiPatchComposer",
     "GroundedSynthesisPayload",
@@ -209,6 +270,7 @@ __all__ = [
     "ReadFileTool",
     "ReadOnlyWorkspace",
     "BatchProjectEditApplier",
+    "BoundedCommandExecutor",
     "DependencyAwareProjectFileSelector",
     "JsonProjectFileSelectionParser",
     "JsonProjectPatchParser",
@@ -230,17 +292,22 @@ __all__ = [
     "ProjectPatchSpec",
     "ProjectTransactionWorkspace",
     "RuleBasedProjectEditRequestParser",
+    "RuleBasedCommandRequestParser",
     "SafeProjectFileIndex",
     "RequiredEvidenceFact",
     "RiskBasedToolPolicy",
     "RuleBasedAssignmentEditProposalPreparer",
     "RuleBasedEditRequestParser",
+    "RuleBasedFilesystemOperationParser",
     "RuleBasedSmartEditRequestParser",
     "RuleBasedToolCandidateDetector",
     "RuleBasedToolPlanner",
     "RuleBasedWriteIntentDetector",
     "RuleBasedWriteRequestParser",
     "SafeEditWorkspace",
+    "SafeCommandCoordinator",
+    "SafeCommandPolicy",
+    "SafeFilesystemOperationWorkspace",
     "SmartEditNotApplicable",
     "SmartEditPayload",
     "SmartEditProposalPreparer",
@@ -262,6 +329,9 @@ __all__ = [
     "ToolResponseMode",
     "ToolResult",
     "ToolRisk",
+    "TestOutputParser",
+    "TestResultParser",
+    "TestSummary",
     "UnifiedDiffRenderer",
     "WorkspaceAccessError",
     "WorkspaceEditError",
