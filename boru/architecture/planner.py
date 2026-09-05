@@ -200,14 +200,17 @@ class LLMArchitectAgent:
         request: ArchitectureRequest,
         available: tuple[str, ...],
     ) -> ArchitecturePlan:
-        selection = self._file_selector.select_files(
-            request=ProjectEditRequest(request.task),
-            available_paths=available,
-        )
-        if len(selection.paths) > self._max_files:
+        if self._fast_scoped_plans and request.file_scope:
+            selected_paths = available
+        else:
+            selected_paths = self._file_selector.select_files(
+                request=ProjectEditRequest(request.task),
+                available_paths=available,
+            ).paths
+        if len(selected_paths) > self._max_files:
             raise ValueError("Architect Agent dosya seçim sınırını aştı.")
-        selected = set(selection.paths)
-        sources = [self._workspace.read_edit_source(path) for path in selection.paths]
+        selected = set(selected_paths)
+        sources = [self._workspace.read_edit_source(path) for path in selected_paths]
         if self._fast_scoped_plans and self._can_use_fast_scoped_plan(request, sources):
             self._increment("architect.fast_scoped_plan")
             return self._build_grounded_fallback(

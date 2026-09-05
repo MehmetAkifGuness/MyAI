@@ -23,7 +23,8 @@ class RuleBasedSmartEditRequestParser:
     _PATTERNS = (
         re.compile(
             r"^\s*(?P<path>[\w./\\-]+?)"
-            r"(?:['’](?:deki|daki|teki|taki)|\s+(?:dosyasındaki|dosyasinda|dosyasında|içindeki|icerisindeki|içerisindeki))"
+            r"(?:['’](?:deki|daki|teki|taki)|\s+(?:dosyasındaki|dosyasinda|dosyasında|"
+            r"içindeki|içinde|icerisindeki|içerisindeki|icerisinde|içerisinde))"
             r"\s+(?P<instruction>.+?)\s*[?!.]*\s*$",
             re.IGNORECASE | re.DOTALL,
         ),

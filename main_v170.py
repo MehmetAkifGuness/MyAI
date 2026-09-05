@@ -11,6 +11,10 @@ from boru.architecture import (
 from boru.assistant import (
     AssistantService,
 )
+from boru.coding import (
+    ControlledCodingCoordinator,
+    RuleBasedCodingRequestParser,
+)
 from boru.config import (
     AppSettings,
 )
@@ -119,6 +123,11 @@ from boru.tools import (
 )
 from boru.tools.project_selection import (
     RuleFirstProjectFileSelector,
+)
+from boru.testing import (
+    RelatedTestDiscovery,
+    RuleBasedTestAgentRequestParser,
+    SafeTestAgent,
 )
 from boru.ui import (
     ChatAppUI,
@@ -245,6 +254,9 @@ def build_application(
     structured_num_predict: int = 384,
     architect_max_attempts: int = 3,
     architect_fast_scoped_plans: bool = False,
+    coding_agent_enabled: bool = False,
+    test_agent_enabled: bool = False,
+    project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
         AppSettings.from_env()
@@ -515,14 +527,13 @@ def build_application(
         ),
     )
 
+    deterministic_assignment_preparer = RuleBasedAssignmentEditProposalPreparer(
+        workspace=edit_workspace
+    )
     smart_edit_preparer = (
         FallbackSmartEditProposalPreparer(
             primary=(
-                RuleBasedAssignmentEditProposalPreparer(
-                    workspace=(
-                        edit_workspace
-                    )
-                )
+                deterministic_assignment_preparer
             ),
             fallback=(
                 LLMSmartEditProposalPreparer(
@@ -622,7 +633,7 @@ def build_application(
             max_files=4,
             max_patches_per_file=4,
             max_total_patches=12,
-            max_attempts=2,
+            max_attempts=project_edit_max_attempts,
         )
     )
 
@@ -678,28 +689,33 @@ def build_application(
         )
     )
 
+    command_policy = SafeCommandPolicy()
+    command_executor = BoundedCommandExecutor(
+        project_root,
+        timeout_seconds=120,
+        max_output_bytes=1024 * 1024,
+    )
+    test_output_parser = TestOutputParser()
     command_coordinator = (
         SafeCommandCoordinator(
             parser=(
                 RuleBasedCommandRequestParser()
             ),
-            policy=(
-                SafeCommandPolicy()
-            ),
-            executor=(
-                BoundedCommandExecutor(
-                    project_root,
-                    timeout_seconds=120,
-                    max_output_bytes=(
-                        1024 * 1024
-                    ),
-                )
-            ),
-            result_parser=(
-                TestOutputParser()
-            ),
+            policy=command_policy,
+            executor=command_executor,
+            result_parser=test_output_parser,
         )
     )
+
+    test_agent = None
+    if test_agent_enabled:
+        test_agent = SafeTestAgent(
+            parser=RuleBasedTestAgentRequestParser(),
+            discovery=RelatedTestDiscovery(project_root),
+            policy=command_policy,
+            executor=command_executor,
+            result_parser=test_output_parser,
+        )
 
     git_coordinator = (
         ControlledGitCoordinator(
@@ -757,64 +773,76 @@ def build_application(
         )
     )
 
-    operation_coordinator = (
-        ExclusiveOperationCoordinator(
-            (
-                auto_fix_coordinator,
-                controlled_write,
-                git_coordinator,
-            )
+    architecture_request_parser = RuleBasedArchitectureRequestParser()
+    architect_agent = (
+        LLMArchitectAgent(
+            chat_model=(
+                chat_model
+            ),
+            file_index=(
+                architect_file_index
+            ),
+            file_selector=(
+                architect_file_selector
+            ),
+            workspace=(
+                architect_workspace
+            ),
+            creation_validator=(
+                write_workspace
+            ),
+            max_files=8,
+            max_new_files=4,
+            max_steps=12,
+            max_source_characters=40000,
+            max_attempts=architect_max_attempts,
+            plan_cache=(
+                ArchitecturePlanCache(
+                    max_entries=32,
+                    monitor=(
+                        performance_monitor
+                    ),
+                )
+            ),
+            fingerprint_provider=(
+                ProjectStatFingerprint(
+                    project_root
+                )
+            ),
+            performance_monitor=(
+                performance_monitor
+            ),
+            fast_scoped_plans=architect_fast_scoped_plans,
+        )
+    )
+    architect_coordinator = (
+        ArchitectCoordinator(
+            parser=architecture_request_parser,
+            planner=architect_agent,
         )
     )
 
-    architect_coordinator = (
-        ArchitectCoordinator(
-            parser=(
-                RuleBasedArchitectureRequestParser()
-            ),
-            planner=(
-                LLMArchitectAgent(
-                    chat_model=(
-                        chat_model
-                    ),
-                    file_index=(
-                        architect_file_index
-                    ),
-                    file_selector=(
-                        architect_file_selector
-                    ),
-                    workspace=(
-                        architect_workspace
-                    ),
-                    creation_validator=(
-                        write_workspace
-                    ),
-                    max_files=8,
-                    max_new_files=4,
-                    max_steps=12,
-                    max_source_characters=40000,
-                    max_attempts=architect_max_attempts,
-                    plan_cache=(
-                        ArchitecturePlanCache(
-                            max_entries=32,
-                            monitor=(
-                                performance_monitor
-                            ),
-                        )
-                    ),
-                    fingerprint_provider=(
-                        ProjectStatFingerprint(
-                            project_root
-                        )
-                    ),
-                    performance_monitor=(
-                        performance_monitor
-                    ),
-                    fast_scoped_plans=architect_fast_scoped_plans,
-                )
+    operation_resolvers = [
+        auto_fix_coordinator,
+        controlled_write,
+        git_coordinator,
+    ]
+    if coding_agent_enabled:
+        operation_resolvers.insert(
+            0,
+            ControlledCodingCoordinator(
+                parser=RuleBasedCodingRequestParser(
+                    architecture_request_parser
+                ),
+                architect=architect_agent,
+                proposal_preparer=project_edit_preparer,
+                proposal_applier=project_edit_applier,
+                deterministic_edit_parser=RuleBasedSmartEditRequestParser(),
+                deterministic_edit_preparer=deterministic_assignment_preparer,
+                regression_runner=test_agent,
             ),
         )
-    )
+    operation_coordinator = ExclusiveOperationCoordinator(operation_resolvers)
 
     performance_coordinator = (
         PerformanceStatusCoordinator(
@@ -857,6 +885,7 @@ def build_application(
                 performance_coordinator,
                 architect_coordinator,
                 operation_coordinator,
+                *([test_agent] if test_agent is not None else []),
                 command_coordinator,
                 read_tool_coordinator,
                 RelevantMemoryQueryResolver(

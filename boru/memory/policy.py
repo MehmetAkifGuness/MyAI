@@ -124,6 +124,14 @@ class ConservativeMemoryDecisionGate:
             re.IGNORECASE | re.DOTALL,
         ),
         re.compile(
+            r"^\s*(?:kodla|coding|kod\s+değişikliği\s+hazırla)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
+            r"^\s*(?:test\s+ajanı|test\s+agent|tester)\s*:",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
             r"^\s*performans\s+(?:durumu|raporu)\b",
             re.IGNORECASE,
         ),

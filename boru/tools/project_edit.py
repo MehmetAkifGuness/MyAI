@@ -656,6 +656,8 @@ class LLMProjectEditProposalPreparer:
         "kaynağında HARFİ HARFİNE ve TAM BİR KEZ bulunmalıdır. Aynı dosyadaki patch alanları "
         "birbiriyle çakışmamalıdır. Gereksiz dosyayı değiştirme. "
         "Patch yolları yalnızca SELECTED_FILES içinden gelmelidir. "
+        "ALLOWED_NEW_FILES verildiyse creates yalnızca bu yolları kullanmalıdır; "
+        "liste boşsa yeni dosya oluşturma. "
         "Yeni dosya gerekiyorsa creates listesine göreli, güvenli ve henüz var olmayan "
         "bir yol ile tam UTF-8 içeriğini yaz; en fazla 4 yeni dosya oluştur. "
         "Yeni klasör oluşturma veya tool çağırma. "
@@ -800,18 +802,28 @@ class LLMProjectEditProposalPreparer:
             .list_editable_files()
         )
 
-        selection = (
-            self._file_selector
-            .select_files(
-                request=request,
-                available_paths=(
-                    available
-                ),
-            )
-        )
+        if request.existing_file_scope is not None:
+            available_set = set(available)
+            unknown = set(request.existing_file_scope) - available_set
+            if unknown:
+                raise ValueError(
+                    "Project edit Architect kapsamındaki mevcut dosyaları bulamadı: "
+                    + ", ".join(sorted(unknown))
+                )
+            selected_paths = request.existing_file_scope
+        else:
+            selected_paths = (
+                self._file_selector
+                .select_files(
+                    request=request,
+                    available_paths=(
+                        available
+                    ),
+                )
+            ).paths
 
         if (
-            len(selection.paths)
+            len(selected_paths)
             > self._max_files
         ):
             raise ValueError(
@@ -824,8 +836,7 @@ class LLMProjectEditProposalPreparer:
             .read_edit_source(
                 path
             )
-            for path
-            in selection.paths
+            for path in selected_paths
         )
 
         source_by_path = {
@@ -913,7 +924,8 @@ class LLMProjectEditProposalPreparer:
 
                 creations = (
                     self._validate_creations(
-                        plan.creations
+                        plan.creations,
+                        allowed_paths=request.new_file_scope,
                     )
                 )
 
@@ -955,6 +967,8 @@ class LLMProjectEditProposalPreparer:
         creations: Sequence[
             ProjectCreateSpec
         ],
+        *,
+        allowed_paths: tuple[str, ...] | None = None,
     ) -> tuple[ProjectCreateSpec, ...]:
         result = tuple(
             creations
@@ -962,6 +976,21 @@ class LLMProjectEditProposalPreparer:
 
         if not result:
             return result
+
+        if allowed_paths is not None:
+            allowed = {
+                path.replace("\\", "/").casefold()
+                for path in allowed_paths
+            }
+            outside_scope = {
+                creation.path.replace("\\", "/").casefold()
+                for creation in result
+            } - allowed
+            if outside_scope:
+                raise ValueError(
+                    "Project create Architect dosya kapsamı dışına çıktı: "
+                    + ", ".join(sorted(outside_scope))
+                )
 
         if self._creation_validator is None:
             raise ValueError(
@@ -1049,6 +1078,11 @@ class LLMProjectEditProposalPreparer:
             for source
             in sources
         )
+        allowed_new_files = (
+            "\n".join(f"- {path}" for path in request.new_file_scope)
+            if request.new_file_scope
+            else "- yok"
+        )
 
         rendered_sources = (
             "\n\n".join(
@@ -1067,6 +1101,8 @@ class LLMProjectEditProposalPreparer:
             f"{request.instruction}\n\n"
             "SELECTED_FILES:\n"
             f"{selected}\n\n"
+            "ALLOWED_NEW_FILES:\n"
+            f"{allowed_new_files}\n\n"
             "<BORU_PROJECT_SOURCES>\n"
             f"{rendered_sources}\n"
             "</BORU_PROJECT_SOURCES>\n\n"

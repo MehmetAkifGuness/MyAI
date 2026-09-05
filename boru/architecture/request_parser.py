@@ -25,7 +25,9 @@ class RuleBasedArchitectureRequestParser:
         match = self._REQUEST.fullmatch(user_message)
         if match is None:
             return None
-        task = match.group("task")
+        return self.parse_task(match.group("task"))
+
+    def parse_task(self, task: str) -> ArchitectureRequest:
         file_scope = ()
         if self._EXPLICIT_SCOPE.search(task) is not None:
             file_scope = tuple(

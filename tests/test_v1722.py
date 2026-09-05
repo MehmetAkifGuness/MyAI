@@ -16,7 +16,11 @@ class Index:
 
 
 class Selector:
+    def __init__(self):
+        self.calls = 0
+
     def select_files(self, *, request, available_paths):
+        self.calls += 1
         del request
         return ProjectFileSelection(available_paths)
 
@@ -53,10 +57,11 @@ class Parser:
 class V1722FastScopedPlanTests(unittest.TestCase):
     def test_explicit_existing_scope_skips_model_and_builds_clean_plan(self):
         monitor = PerformanceMonitor()
+        selector = Selector()
         agent = LLMArchitectAgent(
             chat_model=UnexpectedModel(),
             file_index=Index(),
-            file_selector=Selector(),
+            file_selector=selector,
             workspace=Workspace(),
             creation_validator=Validator(),
             performance_monitor=monitor,
@@ -70,6 +75,7 @@ class V1722FastScopedPlanTests(unittest.TestCase):
             "Kaynak-temelli güvenli değişiklik planı: Yeni güvenli komut türü.",
         )
         self.assertIn("RequestParser", plan.steps[0].title)
+        self.assertEqual(selector.calls, 0)
         counters = dict(monitor.snapshot().counters)
         self.assertEqual(counters["architect.fast_scoped_plan"], 1)
 

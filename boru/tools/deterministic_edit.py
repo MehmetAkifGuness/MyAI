@@ -25,6 +25,10 @@ class RuleBasedAssignmentEditProposalPreparer:
         r"değiştir|güncelle|ayarla)\s*$",
         re.IGNORECASE | re.DOTALL,
     )
+    _FILE_SCOPE_QUALIFIER = re.compile(
+        r"^(?:yalnızca|sadece)\s+bu\s+dosyada\s+",
+        re.IGNORECASE,
+    )
 
     def __init__(
         self,
@@ -57,6 +61,11 @@ class RuleBasedAssignmentEditProposalPreparer:
                 "value"
             ).strip()
         )
+        requested_value = self._FILE_SCOPE_QUALIFIER.sub(
+            "",
+            requested_value,
+            count=1,
+        ).strip()
 
         source = self._workspace.read_edit_source(
             request.path

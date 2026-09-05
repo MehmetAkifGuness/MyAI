@@ -7,12 +7,36 @@ from boru.tools.write_models import WriteOutcome
 @dataclass(frozen=True, slots=True)
 class ProjectEditRequest:
     instruction: str
+    existing_file_scope: tuple[str, ...] | None = None
+    new_file_scope: tuple[str, ...] | None = None
 
     def __post_init__(self) -> None:
         cleaned = self.instruction.strip()
         if not cleaned:
             raise ValueError("Proje düzenleme talimatı boş olamaz.")
         object.__setattr__(self, "instruction", cleaned)
+        existing_scope = self._normalize_scope(self.existing_file_scope)
+        new_scope = self._normalize_scope(self.new_file_scope)
+        if existing_scope is not None and new_scope is not None:
+            overlap = set(existing_scope) & set(new_scope)
+            if overlap:
+                raise ValueError("Mevcut ve yeni dosya kapsamları çakışamaz.")
+        object.__setattr__(self, "existing_file_scope", existing_scope)
+        object.__setattr__(self, "new_file_scope", new_scope)
+
+    @staticmethod
+    def _normalize_scope(scope: tuple[str, ...] | None) -> tuple[str, ...] | None:
+        if scope is None:
+            return None
+        if not all(isinstance(path, str) for path in scope):
+            raise ValueError("Proje dosya kapsamındaki tüm yollar metin olmalıdır.")
+        return tuple(
+            dict.fromkeys(
+                path.strip().replace("\\", "/")
+                for path in scope
+                if path.strip()
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
