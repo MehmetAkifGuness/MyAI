@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "entries": {
+    "framework": "FastAPI",
+    "mimari": "Clean Architecture",
+    "python": "3.13",
+    "test aracı": "pytest",
+    "veritabanı": "PostgreSQL"
+  }
+}

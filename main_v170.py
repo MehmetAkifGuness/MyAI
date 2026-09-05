@@ -69,6 +69,13 @@ from boru.profile import (
     RuleBasedProfileQueryResolver,
     UserProfileService,
 )
+from boru.project_memory import (
+    JsonProjectMemoryRepository,
+    ProjectMemoryContextProvider,
+    ProjectMemoryCoordinator,
+    ProjectMemoryService,
+    RuleBasedProjectMemoryParser,
+)
 from boru.prompts import (
     SystemPromptFactory,
 )
@@ -279,6 +286,7 @@ def build_application(
     code_review_agent_enabled: bool = False,
     orchestrator_enabled: bool = False,
     task_system_enabled: bool = False,
+    project_memory_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -918,6 +926,23 @@ def build_application(
         )
     )
 
+    project_memory_coordinator = None
+    project_memory_context_provider = None
+    if project_memory_enabled:
+        project_memory_service = ProjectMemoryService(
+            repository=JsonProjectMemoryRepository(
+                _resolve_project_path(settings.project_memory_path)
+            ),
+            project_name=project_root.name,
+        )
+        project_memory_coordinator = ProjectMemoryCoordinator(
+            service=project_memory_service,
+            parser=RuleBasedProjectMemoryParser(),
+        )
+        project_memory_context_provider = ProjectMemoryContextProvider(
+            project_memory_service
+        )
+
     assistant = (
         AssistantService(
             chat_model=(
@@ -943,6 +968,11 @@ def build_application(
                 ),
             ],
             direct_response_resolvers=[
+                *(
+                    [project_memory_coordinator]
+                    if project_memory_coordinator is not None
+                    else []
+                ),
                 RuleBasedProfileQueryResolver(
                     profile_service
                 ),
@@ -966,6 +996,11 @@ def build_application(
                 ),
             ],
             context_providers=[
+                *(
+                    [project_memory_context_provider]
+                    if project_memory_context_provider is not None
+                    else []
+                ),
                 ProfileContextProvider(
                     profile_service
                 ),

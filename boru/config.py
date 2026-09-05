@@ -11,6 +11,7 @@ class AppSettings:
     context_max_characters: int = 12_000
     profile_path: str = "data/user_profile.json"
     memory_path: str = "data/long_term_memory.json"
+    project_memory_path: str = "data/project_memory.json"
     memory_context_limit: int = 5
     memory_auto_capture: bool = True
     memory_semantic_enabled: bool = True
@@ -40,6 +41,11 @@ class AppSettings:
         memory_path = os.getenv(
             "BORU_MEMORY_PATH",
             defaults.memory_path,
+        ).strip()
+
+        project_memory_path = os.getenv(
+            "BORU_PROJECT_MEMORY_PATH",
+            defaults.project_memory_path,
         ).strip()
 
         memory_embedding_model = os.getenv(
@@ -109,6 +115,11 @@ class AppSettings:
                 "BORU_MEMORY_PATH boş olamaz."
             )
 
+        if not project_memory_path:
+            raise ValueError(
+                "BORU_PROJECT_MEMORY_PATH boş olamaz."
+            )
+
         if (
             memory_semantic_enabled
             and not memory_embedding_model
@@ -139,6 +150,7 @@ class AppSettings:
             ),
             profile_path=profile_path,
             memory_path=memory_path,
+            project_memory_path=project_memory_path,
             memory_context_limit=(
                 memory_context_limit
             ),

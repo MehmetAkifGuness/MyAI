@@ -149,6 +149,10 @@ class ConservativeMemoryDecisionGate:
             re.IGNORECASE | re.DOTALL,
         ),
         re.compile(
+            r"^\s*proje\s+(?:bilgisi|bilgileri|hafızası|hafızasına|hafızasından|hafızasını)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
             r"^\s*performans\s+(?:durumu|raporu)\b",
             re.IGNORECASE,
         ),
