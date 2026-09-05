@@ -49,6 +49,15 @@ from boru.memory import (
     SemanticSubjectMatcher,
     SubjectRelationConflictResolver,
 )
+from boru.knowledge import (
+    HybridKnowledgeRetriever,
+    JsonKnowledgeRepository,
+    KnowledgeCoordinator,
+    KnowledgeService,
+    RuleBasedKnowledgeRequestParser,
+    SafeKnowledgeDocumentLoader,
+    TextKnowledgeChunker,
+)
 from boru.ollama_model import (
     OllamaChatModel,
 )
@@ -287,6 +296,7 @@ def build_application(
     orchestrator_enabled: bool = False,
     task_system_enabled: bool = False,
     project_memory_enabled: bool = False,
+    knowledge_rag_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -943,6 +953,31 @@ def build_application(
             project_memory_service
         )
 
+    knowledge_coordinator = None
+    if knowledge_rag_enabled:
+        knowledge_embedding_provider = None
+        if settings.memory_semantic_enabled:
+            knowledge_embedding_provider = OllamaEmbeddingProvider(
+                settings.memory_embedding_model
+            )
+        knowledge_service = KnowledgeService(
+            repository=JsonKnowledgeRepository(
+                _resolve_project_path(settings.knowledge_path)
+            ),
+            loader=SafeKnowledgeDocumentLoader(
+                ReadOnlyWorkspace(project_root, max_file_bytes=512 * 1024)
+            ),
+            chunker=TextKnowledgeChunker(),
+            retriever=HybridKnowledgeRetriever(
+                embedding_provider=knowledge_embedding_provider
+            ),
+        )
+        knowledge_coordinator = KnowledgeCoordinator(
+            service=knowledge_service,
+            parser=RuleBasedKnowledgeRequestParser(),
+            chat_model=chat_model,
+        )
+
     assistant = (
         AssistantService(
             chat_model=(
@@ -968,6 +1003,11 @@ def build_application(
                 ),
             ],
             direct_response_resolvers=[
+                *(
+                    [knowledge_coordinator]
+                    if knowledge_coordinator is not None
+                    else []
+                ),
                 *(
                     [project_memory_coordinator]
                     if project_memory_coordinator is not None

@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "documents": [
+    {
+      "source_path": "rag_manual_test.md",
+      "content_sha256": "9833b30902f30d91a02169893416d80651ce8089342e2652bee507591da66a38",
+      "chunks": [
+        {
+          "chunk_id": "d759f2d53d857691ff3f62795bc9415258fb70a1c63234b8256cdb7d7861ca12",
+          "text": "# Proje Teknik Bilgileri\n\nBackend FastAPI kullanır.\nVeritabanı PostgreSQL'dir.\nKimlik doğrulama JWT ile yapılır.\nTestler pytest ile çalıştırılır.",
+          "line_start": 1,
+          "line_end": 6
+        }
+      ]
+    }
+  ]
+}
