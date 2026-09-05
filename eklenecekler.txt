@@ -1,0 +1,7 @@
+- yazılan kelimeler yanlış olsa bile onları algılaması gerekecek 
+
+- codex nasıl düzenleme yapıyorsa ondan daha iyi yapabilecek hale gelmesi gerekecek 
+
+- yaptığımız ai modeli kendini sürekli gelişecek formata gelmesi gerekecek .
+
+- 

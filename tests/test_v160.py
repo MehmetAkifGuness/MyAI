@@ -180,6 +180,34 @@ class ArchitectAgentTests(unittest.TestCase):
         self.assertEqual(plan.existing_files, ("a.py",))
         self.assertEqual(plan.new_files, ())
 
+    def test_normalizes_python_package_module_alias(self) -> None:
+        output = valid_plan(
+            existing_files=["package.py"],
+            new_files=[],
+            steps=[{
+                "title": "Paketi güncelle",
+                "description": "Dış API'yi koru",
+                "files": ["package.py"],
+            }],
+        )
+
+        class PackageIndex:
+            def list_editable_files(self):
+                return ("package/__init__.py",)
+
+        model = StructuredModel([output])
+        agent = LLMArchitectAgent(
+            chat_model=model,
+            file_index=PackageIndex(),
+            file_selector=StaticSelector(("package/__init__.py",)),
+            workspace=RecordingWorkspace(),
+            creation_validator=RecordingCreationValidator(),
+            max_attempts=1,
+        )
+        plan = agent.plan(ArchitectureRequest("görev"))
+        self.assertEqual(plan.existing_files, ("package/__init__.py",))
+        self.assertEqual(plan.steps[0].files, ("package/__init__.py",))
+
     def test_rejects_unsafe_new_file(self) -> None:
         validator = RecordingCreationValidator({"tests/test_a.py"})
         agent, _ = build_agent(

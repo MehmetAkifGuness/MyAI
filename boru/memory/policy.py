@@ -123,6 +123,10 @@ class ConservativeMemoryDecisionGate:
             r"^\s*(?:mimari\s+(?:planla|analiz)|architect)\b",
             re.IGNORECASE | re.DOTALL,
         ),
+        re.compile(
+            r"^\s*performans\s+(?:durumu|raporu)\b",
+            re.IGNORECASE,
+        ),
     )
 
     _PROFILE_PATTERNS = (

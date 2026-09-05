@@ -1,5 +1,6 @@
 import queue
 import threading
+import time
 
 import customtkinter as ctk
 
@@ -37,6 +38,8 @@ class ChatAppUI(
         self._ui_events: queue.Queue[
             tuple[str, tuple]
         ] = queue.Queue()
+        self._busy_started_at: float | None = None
+        self._status_after_id: str | None = None
 
         self.title(
             title
@@ -126,6 +129,18 @@ class ChatAppUI(
 
         self.send_button.pack(
             side="left"
+        )
+
+        self.status_label = (
+            ctk.CTkLabel(
+                self,
+                text="Hazır",
+                text_color="gray70",
+            )
+        )
+
+        self.status_label.pack(
+            pady=(0, 5)
         )
 
         self.reset_button = (
@@ -239,8 +254,30 @@ class ChatAppUI(
             state=state
         )
 
+        if busy:
+            self._busy_started_at = time.monotonic()
+            self._update_busy_status()
+        else:
+            self._busy_started_at = None
+            if self._status_after_id is not None:
+                self.after_cancel(self._status_after_id)
+                self._status_after_id = None
+            self.status_label.configure(text="Hazır")
+
         if not busy:
             self.input_box.focus_set()
+
+    def _update_busy_status(self) -> None:
+        if self._busy_started_at is None:
+            return
+        elapsed = time.monotonic() - self._busy_started_at
+        self.status_label.configure(
+            text=f"İşleniyor... {elapsed:.1f} sn"
+        )
+        self._status_after_id = self.after(
+            250,
+            self._update_busy_status,
+        )
 
     def _queue_busy(
         self,
