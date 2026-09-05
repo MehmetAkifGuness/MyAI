@@ -143,6 +143,11 @@ from boru.testing import (
     RuleBasedTestAgentRequestParser,
     SafeTestAgent,
 )
+from boru.tasks import (
+    ArchitectureTaskPlanner,
+    RuleBasedTaskCommandParser,
+    TaskPlanCoordinator,
+)
 from boru.ui import (
     ChatAppUI,
 )
@@ -273,6 +278,7 @@ def build_application(
     security_agent_enabled: bool = False,
     code_review_agent_enabled: bool = False,
     orchestrator_enabled: bool = False,
+    task_system_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -870,6 +876,7 @@ def build_application(
         )
 
     coding_operation = coding_coordinator
+    agent_orchestrator = None
     if orchestrator_enabled:
         if coding_coordinator is None:
             raise ValueError("Agent Orchestrator için Coding Agent etkin olmalıdır.")
@@ -878,9 +885,22 @@ def build_application(
                 "Agent Orchestrator için Test, Security ve Code Review ajanları "
                 "etkin olmalıdır."
             )
-        coding_operation = AgentOrchestrator(
+        agent_orchestrator = AgentOrchestrator(
             parser=RuleBasedOrchestrationRequestParser(),
             coding_workflow=coding_coordinator,
+        )
+        coding_operation = agent_orchestrator
+
+    if task_system_enabled:
+        if agent_orchestrator is None:
+            raise ValueError("Task sistemi için Agent Orchestrator etkin olmalıdır.")
+        coding_operation = TaskPlanCoordinator(
+            parser=RuleBasedTaskCommandParser(),
+            planner=ArchitectureTaskPlanner(
+                architect_agent,
+                architecture_request_parser,
+            ),
+            workflow=agent_orchestrator,
         )
 
     operation_resolvers = [
