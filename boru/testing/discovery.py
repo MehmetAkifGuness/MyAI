@@ -69,6 +69,8 @@ class RelatedTestDiscovery:
             content = self._read(candidate)
         except (OSError, UnicodeDecodeError, WorkspaceAccessError):
             return 0
+        if not self._contains_tests(content):
+            return 0
 
         score = 0
         for source_path, symbols in sources:
@@ -95,6 +97,18 @@ class RelatedTestDiscovery:
             ) * 3
         return score
 
+    @staticmethod
+    def _contains_tests(content: str) -> bool:
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            return False
+        return any(
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and (node.name.startswith("test_") or node.name == "load_tests")
+            for node in ast.walk(tree)
+        )
+
     def _symbols(self, path: Path) -> frozenset[str]:
         try:
             tree = ast.parse(self._read(path))
@@ -112,4 +126,3 @@ class RelatedTestDiscovery:
         if path.stat().st_size > self._max_file_bytes:
             raise WorkspaceAccessError("Dosya test keşif okuma sınırını aşıyor.")
         return path.read_text(encoding="utf-8-sig")
-

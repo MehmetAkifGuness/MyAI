@@ -86,6 +86,10 @@ class LLMArchitectAgent:
         r"^\s*(?:class|(?:async\s+)?def)\s+([A-Za-z_]\w*)",
         re.MULTILINE,
     )
+    _CREATION_INTENT = re.compile(
+        r"\b(?:oluştur|yarat|ekle|create|add|new\s+file|yeni\s+dosya)\w*\b",
+        re.IGNORECASE,
+    )
     _SCHEMA = {
         "type": "object",
         "properties": {
@@ -173,6 +177,7 @@ class LLMArchitectAgent:
         succeeded = False
         try:
             available = self._file_index.list_editable_files()
+            self._validate_explicit_scope_availability(request, available)
             scoped_available = self._apply_explicit_scope(request, available)
             fingerprint = None
             if self._fingerprint_provider is not None:
@@ -336,6 +341,30 @@ class LLMArchitectAgent:
             for path in available
             if path.replace("\\", "/").casefold() in scope
         )
+
+    @classmethod
+    def _validate_explicit_scope_availability(
+        cls,
+        request: ArchitectureRequest,
+        available: tuple[str, ...],
+    ) -> None:
+        if not request.file_scope or cls._CREATION_INTENT.search(request.task):
+            return
+        manifest = {
+            path.replace("\\", "/").casefold()
+            for path in available
+        }
+        missing = tuple(
+            path
+            for path in request.file_scope
+            if path.replace("\\", "/").casefold() not in manifest
+        )
+        if missing:
+            raise ValueError(
+                "Açık kapsamda belirtilen dosya bulunamadı: "
+                + ", ".join(missing)
+                + ". Önce dosyayı oluşturun veya mevcut yolunu kontrol edin."
+            )
 
     @staticmethod
     def _normalize_grounded_paths(

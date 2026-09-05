@@ -2,7 +2,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from boru.architecture import ArchitecturePlan, ArchitectureStep
+from boru.architecture import (
+    ArchitecturePlan,
+    ArchitectureRequest,
+    ArchitectureStep,
+    LLMArchitectAgent,
+)
 from boru.coding import ControlledCodingCoordinator, RuleBasedCodingRequestParser
 from boru.memory import ConservativeMemoryDecisionGate
 from boru.testing import (
@@ -46,6 +51,74 @@ class TestAgentParserTests(unittest.TestCase):
         )
 
 
+class MissingScopedFileTests(unittest.TestCase):
+    def test_architect_rejects_missing_edit_target_before_model_call(self):
+        class UnexpectedModel:
+            def generate_structured(self, messages, schema):
+                raise AssertionError((messages, schema))
+
+        class EmptyIndex:
+            def list_editable_files(self):
+                return ()
+
+        agent = LLMArchitectAgent(
+            chat_model=UnexpectedModel(),
+            file_index=EmptyIndex(),
+            file_selector=object(),
+            workspace=object(),
+            creation_validator=object(),
+            fast_scoped_plans=True,
+        )
+
+        with self.assertRaisesRegex(ValueError, "dosya bulunamadı"):
+            agent.plan(
+                ArchitectureRequest(
+                    "missing.py içinde VALUE değerini yalnızca bu dosyada 3 yap",
+                    ("missing.py",),
+                )
+            )
+
+    def test_architect_allows_missing_scope_for_creation_request(self):
+        class Model:
+            def generate_structured(self, messages, schema):
+                del messages, schema
+                return (
+                    '{"summary":"Yeni dosya", "existing_files":[], '
+                    '"new_files":["new.py"], "steps":[{"title":"Oluştur", '
+                    '"description":"Dosyayı oluştur", "files":["new.py"]}], '
+                    '"risks":[], "tests":[], "notes":[]}'
+                )
+
+        class EmptyIndex:
+            def list_editable_files(self):
+                return ()
+
+        class Selector:
+            def select_files(self, *, request, available_paths):
+                del request, available_paths
+                return type("Selection", (), {"paths": ()})()
+
+        class Validator:
+            def validate_new_text_file(self, path, content):
+                self.value = (path, content)
+
+        plan = LLMArchitectAgent(
+            chat_model=Model(),
+            file_index=EmptyIndex(),
+            file_selector=Selector(),
+            workspace=object(),
+            creation_validator=Validator(),
+            max_attempts=1,
+        ).plan(
+            ArchitectureRequest(
+                "new.py dosyasını oluştur, yalnızca bu dosya",
+                ("new.py",),
+            )
+        )
+
+        self.assertEqual(plan.new_files, ("new.py",))
+
+
 class RelatedTestDiscoveryTests(unittest.TestCase):
     def test_discovers_test_by_source_symbol_and_ignores_unrelated_test(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -57,7 +130,9 @@ class RelatedTestDiscoveryTests(unittest.TestCase):
                 encoding="utf-8",
             )
             (root / "tests" / "test_service.py").write_text(
-                "from boru.service import OrderService\n",
+                "from boru.service import OrderService\n\n"
+                "def test_service_exists():\n"
+                "    assert OrderService\n",
                 encoding="utf-8",
             )
             (root / "tests" / "test_other.py").write_text(
@@ -75,13 +150,26 @@ class RelatedTestDiscoveryTests(unittest.TestCase):
             root = Path(directory)
             (root / "tests").mkdir()
             target = root / "tests" / "test_feature.py"
-            target.write_text("import unittest\n", encoding="utf-8")
+            target.write_text(
+                "def test_feature():\n    assert True\n",
+                encoding="utf-8",
+            )
 
             selection = RelatedTestDiscovery(root).discover(
                 ("tests/test_feature.py",)
             )
 
             self.assertEqual(selection.test_paths, ("tests/test_feature.py",))
+
+    def test_does_not_treat_test_suffix_as_executable_test(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            target = root / "manual_test.py"
+            target.write_text("VALUE = 3\n", encoding="utf-8")
+
+            selection = RelatedTestDiscovery(root).discover(("manual_test.py",))
+
+            self.assertEqual(selection.test_paths, ())
 
     def test_rejects_workspace_traversal(self):
         with tempfile.TemporaryDirectory() as directory:
