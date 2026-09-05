@@ -241,6 +241,10 @@ def build_application(
     *,
     application_version: str = "V0.17",
     startup_message: str | None = None,
+    structured_timeout_seconds: float = 180.0,
+    structured_num_predict: int = 384,
+    architect_max_attempts: int = 3,
+    architect_fast_scoped_plans: bool = False,
 ) -> ChatAppUI:
     settings = (
         AppSettings.from_env()
@@ -254,6 +258,8 @@ def build_application(
         OllamaChatModel(
             settings.model_name,
             request_timeout_seconds=180,
+            structured_timeout_seconds=structured_timeout_seconds,
+            structured_num_predict=structured_num_predict,
             keep_alive="10m",
             performance_monitor=(
                 performance_monitor
@@ -787,7 +793,7 @@ def build_application(
                     max_new_files=4,
                     max_steps=12,
                     max_source_characters=40000,
-                    max_attempts=3,
+                    max_attempts=architect_max_attempts,
                     plan_cache=(
                         ArchitecturePlanCache(
                             max_entries=32,
@@ -804,6 +810,7 @@ def build_application(
                     performance_monitor=(
                         performance_monitor
                     ),
+                    fast_scoped_plans=architect_fast_scoped_plans,
                 )
             ),
         )

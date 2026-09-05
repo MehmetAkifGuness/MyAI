@@ -1,4 +1,11 @@
+import re
 from dataclasses import dataclass
+
+
+_STEP_NUMBER_PREFIX = re.compile(
+    r"^(?:(?:adım\s*)?\d+\s*[.):\-]\s*)+",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +35,7 @@ class ArchitectureStep:
     files: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        title = self.title.strip()
+        title = _STEP_NUMBER_PREFIX.sub("", self.title.strip()).strip()
         description = self.description.strip()
         files = tuple(path.strip() for path in self.files if path.strip())
         if not title or not description:

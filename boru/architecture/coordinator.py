@@ -24,18 +24,22 @@ class ArchitectCoordinator:
 
     @staticmethod
     def _render(plan: ArchitecturePlan) -> str:
-        sections = ["MİMARİ PLAN", f"Özet: {plan.summary}"]
-        sections.append("Mevcut dosyalar: " + (", ".join(plan.existing_files) or "yok"))
-        sections.append("Yeni dosyalar: " + (", ".join(plan.new_files) or "yok"))
-        sections.append("Adımlar:")
+        sections = [
+            "MİMARİ PLAN",
+            f"Özet: {plan.summary}\n"
+            "Mevcut dosyalar: " + (", ".join(plan.existing_files) or "yok") + "\n"
+            "Yeni dosyalar: " + (", ".join(plan.new_files) or "yok"),
+        ]
+        steps = []
         for index, step in enumerate(plan.steps, start=1):
             files = f" [{', '.join(step.files)}]" if step.files else ""
-            sections.append(f"{index}. {step.title}{files}\n   {step.description}")
+            steps.append(f"{index}. {step.title}{files}\n   {step.description}")
+        sections.append("Adımlar:\n\n" + "\n\n".join(steps))
         sections.append("Riskler:\n" + ArchitectCoordinator._render_items(plan.risks))
         sections.append("Test stratejisi:\n" + ArchitectCoordinator._render_items(plan.tests))
         sections.append("Mimari notlar:\n" + ArchitectCoordinator._render_items(plan.notes))
         sections.append("Salt-okunur analiz tamamlandı; hiçbir dosya değiştirilmedi.")
-        return "\n".join(sections)
+        return "\n\n".join(sections)
 
     @staticmethod
     def _render_items(items: tuple[str, ...]) -> str:
