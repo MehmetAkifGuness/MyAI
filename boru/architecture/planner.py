@@ -208,7 +208,7 @@ class LLMArchitectAgent:
             raise ValueError("Architect Agent dosya seçim sınırını aştı.")
         selected = set(selection.paths)
         sources = [self._workspace.read_edit_source(path) for path in selection.paths]
-        if self._can_use_fast_scoped_plan(request, sources):
+        if self._fast_scoped_plans and self._can_use_fast_scoped_plan(request, sources):
             self._increment("architect.fast_scoped_plan")
             return self._build_grounded_fallback(
                 request,
