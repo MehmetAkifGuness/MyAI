@@ -4,6 +4,7 @@ from boru.architecture.contracts import ArchitecturePlanner
 from boru.architecture.models import ArchitecturePlan
 from boru.coding.models import CodingRequest, CodingSession
 from boru.coding.parser import RuleBasedCodingRequestParser
+from boru.reviewing.contracts import CodeReviewer
 from boru.security.contracts import SecurityReviewer
 from boru.testing.contracts import RegressionTestRunner
 from boru.tools.deterministic_edit import SmartEditNotApplicable
@@ -31,6 +32,7 @@ class ControlledCodingCoordinator:
         deterministic_edit_preparer: SmartEditProposalPreparer | None = None,
         regression_runner: RegressionTestRunner | None = None,
         security_reviewer: SecurityReviewer | None = None,
+        code_reviewer: CodeReviewer | None = None,
         preview_characters: int = 8000,
     ) -> None:
         if preview_characters < 1:
@@ -47,6 +49,7 @@ class ControlledCodingCoordinator:
         self._deterministic_edit_preparer = deterministic_edit_preparer
         self._regression_runner = regression_runner
         self._security_reviewer = security_reviewer
+        self._code_reviewer = code_reviewer
         self._preview_characters = preview_characters
         self._pending: CodingSession | None = None
         self._lock = RLock()
@@ -190,6 +193,13 @@ class ControlledCodingCoordinator:
             except Exception as error:
                 reports.append(
                     f"SECURITY AGENT RAPORU\nDurum: BAŞLATILAMADI\nHata: {error}"
+                )
+        if self._code_reviewer is not None:
+            try:
+                reports.append(self._code_reviewer.review_paths(changed_paths))
+            except Exception as error:
+                reports.append(
+                    f"CODE REVIEW RAPORU\nDurum: BAŞLATILAMADI\nHata: {error}"
                 )
         return "\n\n".join((response, *reports))
 

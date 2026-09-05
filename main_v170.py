@@ -68,6 +68,11 @@ from boru.profile import (
 from boru.prompts import (
     SystemPromptFactory,
 )
+from boru.reviewing import (
+    CodeReviewAgent,
+    PythonCodeReviewScanner,
+    RuleBasedCodeReviewRequestParser,
+)
 from boru.security import (
     PythonSecurityScanner,
     RuleBasedSecurityRequestParser,
@@ -262,6 +267,7 @@ def build_application(
     coding_agent_enabled: bool = False,
     test_agent_enabled: bool = False,
     security_agent_enabled: bool = False,
+    code_review_agent_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -730,6 +736,13 @@ def build_application(
             scanner=PythonSecurityScanner(project_root),
         )
 
+    code_review_agent = None
+    if code_review_agent_enabled:
+        code_review_agent = CodeReviewAgent(
+            parser=RuleBasedCodeReviewRequestParser(),
+            scanner=PythonCodeReviewScanner(project_root),
+        )
+
     git_coordinator = (
         ControlledGitCoordinator(
             parser=(
@@ -854,6 +867,7 @@ def build_application(
                 deterministic_edit_preparer=deterministic_assignment_preparer,
                 regression_runner=test_agent,
                 security_reviewer=security_agent,
+                code_reviewer=code_review_agent,
             ),
         )
     operation_coordinator = ExclusiveOperationCoordinator(operation_resolvers)
@@ -901,6 +915,7 @@ def build_application(
                 operation_coordinator,
                 *([test_agent] if test_agent is not None else []),
                 *([security_agent] if security_agent is not None else []),
+                *([code_review_agent] if code_review_agent is not None else []),
                 command_coordinator,
                 read_tool_coordinator,
                 RelevantMemoryQueryResolver(
