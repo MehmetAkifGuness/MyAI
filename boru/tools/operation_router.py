@@ -14,6 +14,22 @@ class PendingAwareResolver(Protocol):
 class ExclusiveOperationCoordinator:
     """Aynı anda yalnızca bir onay gerektiren işlem akışını etkin tutar."""
 
+    _ORPHAN_CONTROL_COMMANDS = {
+        "onayla",
+        "yazmayı onayla",
+        "dosya yazımını onayla",
+        "değişikliği onayla",
+        "düzenlemeyi onayla",
+        "proje değişikliğini onayla",
+        "silmeyi onayla",
+        "git işlemini onayla",
+        "git geri almayı onayla",
+        "otomatik düzeltmeyi onayla",
+        "kod değişikliğini onayla",
+        "iptal",
+        "vazgeç",
+    }
+
     def __init__(self, resolvers: Sequence[PendingAwareResolver]) -> None:
         if not resolvers:
             raise ValueError("En az bir işlem resolver'ı gereklidir.")
@@ -28,6 +44,10 @@ class ExclusiveOperationCoordinator:
             )
         if active:
             return active[0].resolve(user_message)
+
+        normalized = " ".join(user_message.casefold().strip().split()).rstrip(".!?")
+        if normalized in self._ORPHAN_CONTROL_COMMANDS:
+            return "Onay veya iptal bekleyen etkin bir işlem yok."
 
         for resolver in self._resolvers:
             response = resolver.resolve(user_message)

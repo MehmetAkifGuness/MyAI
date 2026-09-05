@@ -29,11 +29,16 @@ class ArchitectureTaskPlanner:
         for index, step in enumerate(architecture.steps, start=1):
             task_id = f"TASK-{index}"
             dependencies = (f"TASK-{index - 1}",) if index > 1 else ()
+            description = (
+                objective
+                if len(architecture.steps) == 1
+                else step.description
+            )
             tasks.append(
                 TaskItem(
                     task_id=task_id,
                     title=step.title,
-                    description=step.description,
+                    description=description,
                     files=step.files,
                     dependencies=dependencies,
                 )

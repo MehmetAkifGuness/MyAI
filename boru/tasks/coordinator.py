@@ -1,3 +1,4 @@
+import re
 from threading import RLock
 
 from boru.tasks.contracts import AgentWorkflow, TaskPlanner
@@ -11,6 +12,10 @@ class TaskPlanCoordinator:
         "Task sistemi biçimleri: 'görev planla: hedef', 'görev durumu', "
         "'task çalıştır: TASK-1', 'task sıfırla: TASK-1' veya "
         "'task tamamla: TASK-1'."
+    )
+    _EXPLICIT_SCOPE = re.compile(
+        r"\b(?:yalnızca|sadece)\b.*\bdosya\w*\b",
+        re.IGNORECASE | re.DOTALL,
     )
 
     def __init__(
@@ -74,7 +79,9 @@ class TaskPlanCoordinator:
         except ValueError as error:
             return f"Task başlatılamadı: {error}"
 
-        response = self._workflow.resolve(f"ajan görevi: {self._task_prompt(item)}")
+        response = self._workflow.resolve(
+            f"ajan görevi: {self._task_prompt(item)}"
+        )
         if self._workflow.has_pending:
             self._active_task_id = item.task_id
             return f"TASK DURUMU\n{item.task_id}: running\n\n{response}"
@@ -160,10 +167,10 @@ class TaskPlanCoordinator:
                 lines.append(f"  Not: {item.note}")
         return "\n".join(lines)
 
-    @staticmethod
-    def _task_prompt(item: TaskItem) -> str:
-        prompt = f"{item.title}. {item.description}"
-        if item.files:
+    @classmethod
+    def _task_prompt(cls, item: TaskItem) -> str:
+        prompt = item.description
+        if item.files and cls._EXPLICIT_SCOPE.search(prompt) is None:
             prompt += (
                 " Yalnızca şu dosyaları kapsa: "
                 + ", ".join(item.files)

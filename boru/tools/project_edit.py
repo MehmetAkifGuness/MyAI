@@ -797,21 +797,13 @@ class LLMProjectEditProposalPreparer:
         self,
         request: ProjectEditRequest,
     ) -> ProjectEditProposal:
-        available = (
-            self._file_index
-            .list_editable_files()
-        )
-
         if request.existing_file_scope is not None:
-            available_set = set(available)
-            unknown = set(request.existing_file_scope) - available_set
-            if unknown:
-                raise ValueError(
-                    "Project edit Architect kapsamındaki mevcut dosyaları bulamadı: "
-                    + ", ".join(sorted(unknown))
-                )
             selected_paths = request.existing_file_scope
         else:
+            available = (
+                self._file_index
+                .list_editable_files()
+            )
             selected_paths = (
                 self._file_selector
                 .select_files(

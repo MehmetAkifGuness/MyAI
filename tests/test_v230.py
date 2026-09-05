@@ -11,14 +11,25 @@ from boru.tasks import (
     TaskPlanCoordinator,
     TaskStatus,
 )
+from boru.tools import (
+    EditSource,
+    ExclusiveOperationCoordinator,
+    LLMProjectEditProposalPreparer,
+    ProjectEditRequest,
+)
 
 
 def task_plan():
     return TaskPlan(
-        objective="Özelliği geliştir",
+        objective="a.py içinde VALUE değerini 2 yap",
         summary="İki adımlı güvenli plan",
         tasks=(
-            TaskItem("TASK-1", "Modeli güncelle", "Veri modelini genişlet.", ("a.py",)),
+            TaskItem(
+                "TASK-1",
+                "Modeli güncelle",
+                "a.py içinde VALUE değerini yalnızca bu dosyada 2 yap",
+                ("a.py",),
+            ),
             TaskItem(
                 "TASK-2",
                 "Servisi güncelle",
@@ -129,6 +140,31 @@ class ArchitectureTaskPlannerTests(unittest.TestCase):
             ("a.py", "b.py"),
         )
 
+    def test_single_step_preserves_exact_user_objective_for_execution(self):
+        class SingleStepArchitect:
+            def plan(self, request):
+                return ArchitecturePlan(
+                    summary="VALUE değerini güncelle.",
+                    existing_files=("a.py",),
+                    new_files=(),
+                    steps=(
+                        ArchitectureStep(
+                            "Ayarı güncelle",
+                            "Genel kaynak-temelli adım.",
+                            ("a.py",),
+                        ),
+                    ),
+                    risks=(),
+                    tests=(),
+                    notes=(),
+                )
+
+        objective = "a.py içinde VALUE değerini yalnızca bu dosyada 2 yap"
+
+        plan = ArchitectureTaskPlanner(SingleStepArchitect()).plan(objective)
+
+        self.assertEqual(plan.tasks[0].description, objective)
+
 
 class TaskPlanStateTests(unittest.TestCase):
     def test_blocks_start_until_dependencies_are_completed(self):
@@ -180,7 +216,10 @@ class TaskPlanCoordinatorTests(unittest.TestCase):
         self.assertIn("TASK-1: running", started or "")
         self.assertIn("TASK-1: completed", finished or "")
         self.assertEqual(state.get_task("TASK-1").status, TaskStatus.COMPLETED)
-        self.assertIn("Yalnızca şu dosyaları kapsa: a.py", workflow.calls[0])
+        self.assertEqual(
+            workflow.calls[0],
+            "ajan görevi: a.py içinde VALUE değerini yalnızca bu dosyada 2 yap",
+        )
 
     def test_review_required_marks_task_blocked(self):
         state = InMemoryTaskPlanState()
@@ -240,6 +279,55 @@ class TaskPlanCoordinatorTests(unittest.TestCase):
 
         self.assertEqual(response, "delegated")
         self.assertEqual(workflow.calls, ["kodla: a.py değiştir"])
+
+
+class ExplicitScopeManifestRegressionTests(unittest.TestCase):
+    def test_project_edit_reads_architect_scope_even_when_index_is_truncated(self):
+        class Model:
+            def generate_structured(self, messages, schema):
+                del messages, schema
+                return (
+                    '{"patches":[{"path":"late.py","old_text":"VALUE = 1",'
+                    '"new_text":"VALUE = 2","reason":"Güncelle"}],"creates":[]}'
+                )
+
+        class TruncatedIndex:
+            def list_editable_files(self):
+                raise AssertionError("Açık Architect kapsamında manifest okunmamalı.")
+
+        class Selector:
+            def select_files(self, *, request, available_paths):
+                raise AssertionError((request, available_paths))
+
+        class Workspace:
+            def read_edit_source(self, path):
+                self.path = path
+                return EditSource(path, "VALUE = 1\n", "hash")
+
+        proposal = LLMProjectEditProposalPreparer(
+            chat_model=Model(),
+            file_index=TruncatedIndex(),
+            file_selector=Selector(),
+            workspace=Workspace(),
+            max_attempts=1,
+        ).prepare_project_edit(
+            ProjectEditRequest("VALUE değerini 2 yap", ("late.py",), ())
+        )
+
+        self.assertEqual(proposal.edits[0].path, "late.py")
+
+    def test_orphan_approval_is_stopped_before_other_resolvers(self):
+        class Resolver:
+            has_pending = False
+
+            def resolve(self, message):
+                raise AssertionError(message)
+
+        response = ExclusiveOperationCoordinator((Resolver(),)).resolve(
+            "kod değişikliğini onayla"
+        )
+
+        self.assertEqual(response, "Onay veya iptal bekleyen etkin bir işlem yok.")
 
 
 if __name__ == "__main__":
