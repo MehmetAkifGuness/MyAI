@@ -140,6 +140,10 @@ class ConservativeMemoryDecisionGate:
             re.IGNORECASE | re.DOTALL,
         ),
         re.compile(
+            r"^\s*(?:ajan\s+görevi|ajan\s+akışı|görev\s+başlat|orchestrate)\s*:",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
             r"^\s*performans\s+(?:durumu|raporu)\b",
             re.IGNORECASE,
         ),

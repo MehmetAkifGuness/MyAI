@@ -52,6 +52,10 @@ from boru.memory import (
 from boru.ollama_model import (
     OllamaChatModel,
 )
+from boru.orchestration import (
+    AgentOrchestrator,
+    RuleBasedOrchestrationRequestParser,
+)
 from boru.performance import (
     ModelWarmupService,
     PerformanceMonitor,
@@ -268,6 +272,7 @@ def build_application(
     test_agent_enabled: bool = False,
     security_agent_enabled: bool = False,
     code_review_agent_enabled: bool = False,
+    orchestrator_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -848,28 +853,43 @@ def build_application(
         )
     )
 
+    coding_coordinator = None
+    if coding_agent_enabled:
+        coding_coordinator = ControlledCodingCoordinator(
+            parser=RuleBasedCodingRequestParser(
+                architecture_request_parser
+            ),
+            architect=architect_agent,
+            proposal_preparer=project_edit_preparer,
+            proposal_applier=project_edit_applier,
+            deterministic_edit_parser=RuleBasedSmartEditRequestParser(),
+            deterministic_edit_preparer=deterministic_assignment_preparer,
+            regression_runner=test_agent,
+            security_reviewer=security_agent,
+            code_reviewer=code_review_agent,
+        )
+
+    coding_operation = coding_coordinator
+    if orchestrator_enabled:
+        if coding_coordinator is None:
+            raise ValueError("Agent Orchestrator için Coding Agent etkin olmalıdır.")
+        if test_agent is None or security_agent is None or code_review_agent is None:
+            raise ValueError(
+                "Agent Orchestrator için Test, Security ve Code Review ajanları "
+                "etkin olmalıdır."
+            )
+        coding_operation = AgentOrchestrator(
+            parser=RuleBasedOrchestrationRequestParser(),
+            coding_workflow=coding_coordinator,
+        )
+
     operation_resolvers = [
         auto_fix_coordinator,
         controlled_write,
         git_coordinator,
     ]
-    if coding_agent_enabled:
-        operation_resolvers.insert(
-            0,
-            ControlledCodingCoordinator(
-                parser=RuleBasedCodingRequestParser(
-                    architecture_request_parser
-                ),
-                architect=architect_agent,
-                proposal_preparer=project_edit_preparer,
-                proposal_applier=project_edit_applier,
-                deterministic_edit_parser=RuleBasedSmartEditRequestParser(),
-                deterministic_edit_preparer=deterministic_assignment_preparer,
-                regression_runner=test_agent,
-                security_reviewer=security_agent,
-                code_reviewer=code_review_agent,
-            ),
-        )
+    if coding_operation is not None:
+        operation_resolvers.insert(0, coding_operation)
     operation_coordinator = ExclusiveOperationCoordinator(operation_resolvers)
 
     performance_coordinator = (
