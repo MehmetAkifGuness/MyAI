@@ -119,6 +119,10 @@ class ConservativeMemoryDecisionGate:
             r"^\s*git\b",
             re.IGNORECASE | re.DOTALL,
         ),
+        re.compile(
+            r"^\s*(?:mimari\s+(?:planla|analiz)|architect)\b",
+            re.IGNORECASE | re.DOTALL,
+        ),
     )
 
     _PROFILE_PATTERNS = (
