@@ -12,12 +12,27 @@ class RuleBasedArchitectureRequestParser:
         r"^\s*(?:mimari\s+(?:planla|analiz)|architect)\b",
         re.IGNORECASE,
     )
+    _EXPLICIT_SCOPE = re.compile(
+        r"\b(?:yalnızca|sadece)\b.*\bdosya\w*\b",
+        re.IGNORECASE | re.DOTALL,
+    )
+    _FILE_PATH = re.compile(
+        r"(?<![\w.-])(?:[\w.-]+[/\\])*[\w.-]+\.[A-Za-z0-9]+",
+        re.UNICODE,
+    )
 
     def parse(self, user_message: str) -> ArchitectureRequest | None:
         match = self._REQUEST.fullmatch(user_message)
         if match is None:
             return None
-        return ArchitectureRequest(match.group("task"))
+        task = match.group("task")
+        file_scope = ()
+        if self._EXPLICIT_SCOPE.search(task) is not None:
+            file_scope = tuple(
+                path.replace("\\", "/")
+                for path in self._FILE_PATH.findall(task)
+            )
+        return ArchitectureRequest(task, file_scope)
 
     def is_architecture_intent(self, user_message: str) -> bool:
         return self._INTENT.search(user_message) is not None

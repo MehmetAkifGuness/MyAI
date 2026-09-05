@@ -4,12 +4,21 @@ from dataclasses import dataclass
 @dataclass(frozen=True, slots=True)
 class ArchitectureRequest:
     task: str
+    file_scope: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         cleaned = self.task.strip()
         if not cleaned:
             raise ValueError("Mimari görev boş olamaz.")
+        normalized_scope = tuple(
+            dict.fromkeys(
+                path.strip().replace("\\", "/")
+                for path in self.file_scope
+                if path.strip()
+            )
+        )
         object.__setattr__(self, "task", cleaned)
+        object.__setattr__(self, "file_scope", normalized_scope)
 
 
 @dataclass(frozen=True, slots=True)

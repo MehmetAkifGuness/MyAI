@@ -238,6 +238,9 @@ def _build_memory_components(
 
 
 def build_application(
+    *,
+    application_version: str = "V0.17",
+    startup_message: str | None = None,
 ) -> ChatAppUI:
     settings = (
         AppSettings.from_env()
@@ -872,11 +875,14 @@ def build_application(
 
     application = ChatAppUI(
         assistant=assistant,
-        title="Börü V0.17",
+        title=f"Börü {application_version}",
         startup_message=(
-            "Börü V0.17 hazır. "
-            "Canlı işlem süresi, model warmup/keep-alive, performans metrikleri ve "
-            "değişiklik-duyarlı Architect önbelleği aktif."
+            startup_message
+            or (
+                f"Börü {application_version} hazır. "
+                "Canlı işlem süresi, model warmup/keep-alive, performans metrikleri ve "
+                "değişiklik-duyarlı Architect önbelleği aktif."
+            )
         ),
     )
 

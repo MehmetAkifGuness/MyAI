@@ -41,6 +41,12 @@ class RuleBasedToolPlanner:
 
     _LIST_DIRECTORY_PATTERNS = (
         re.compile(
+            r"^\s*projedeki\s+dosyaları\s+"
+            r"(?:listele|göster)"
+            r"(?P<instruction>.*?)\s*$",
+            re.IGNORECASE,
+        ),
+        re.compile(
             r"^\s*(?P<path>.+?)\s+klasöründeki\s+dosyaları\s+"
             r"(?:listele|göster)"
             r"(?P<instruction>.*?)\s*$",
