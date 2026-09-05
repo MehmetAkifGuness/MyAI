@@ -68,6 +68,11 @@ from boru.profile import (
 from boru.prompts import (
     SystemPromptFactory,
 )
+from boru.security import (
+    PythonSecurityScanner,
+    RuleBasedSecurityRequestParser,
+    SecurityAgent,
+)
 from boru.tools import (
     BoundedCommandExecutor,
     CalculatorTool,
@@ -256,6 +261,7 @@ def build_application(
     architect_fast_scoped_plans: bool = False,
     coding_agent_enabled: bool = False,
     test_agent_enabled: bool = False,
+    security_agent_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -717,6 +723,13 @@ def build_application(
             result_parser=test_output_parser,
         )
 
+    security_agent = None
+    if security_agent_enabled:
+        security_agent = SecurityAgent(
+            parser=RuleBasedSecurityRequestParser(),
+            scanner=PythonSecurityScanner(project_root),
+        )
+
     git_coordinator = (
         ControlledGitCoordinator(
             parser=(
@@ -840,6 +853,7 @@ def build_application(
                 deterministic_edit_parser=RuleBasedSmartEditRequestParser(),
                 deterministic_edit_preparer=deterministic_assignment_preparer,
                 regression_runner=test_agent,
+                security_reviewer=security_agent,
             ),
         )
     operation_coordinator = ExclusiveOperationCoordinator(operation_resolvers)
@@ -886,6 +900,7 @@ def build_application(
                 architect_coordinator,
                 operation_coordinator,
                 *([test_agent] if test_agent is not None else []),
+                *([security_agent] if security_agent is not None else []),
                 command_coordinator,
                 read_tool_coordinator,
                 RelevantMemoryQueryResolver(

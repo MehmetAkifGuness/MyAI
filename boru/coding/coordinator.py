@@ -4,6 +4,7 @@ from boru.architecture.contracts import ArchitecturePlanner
 from boru.architecture.models import ArchitecturePlan
 from boru.coding.models import CodingRequest, CodingSession
 from boru.coding.parser import RuleBasedCodingRequestParser
+from boru.security.contracts import SecurityReviewer
 from boru.testing.contracts import RegressionTestRunner
 from boru.tools.deterministic_edit import SmartEditNotApplicable
 from boru.tools.edit_contracts import SmartEditProposalPreparer, SmartEditRequestParser
@@ -29,6 +30,7 @@ class ControlledCodingCoordinator:
         deterministic_edit_parser: SmartEditRequestParser | None = None,
         deterministic_edit_preparer: SmartEditProposalPreparer | None = None,
         regression_runner: RegressionTestRunner | None = None,
+        security_reviewer: SecurityReviewer | None = None,
         preview_characters: int = 8000,
     ) -> None:
         if preview_characters < 1:
@@ -44,6 +46,7 @@ class ControlledCodingCoordinator:
         self._deterministic_edit_parser = deterministic_edit_parser
         self._deterministic_edit_preparer = deterministic_edit_preparer
         self._regression_runner = regression_runner
+        self._security_reviewer = security_reviewer
         self._preview_characters = preview_characters
         self._pending: CodingSession | None = None
         self._lock = RLock()
@@ -172,15 +175,23 @@ class ControlledCodingCoordinator:
         response = (
             f"Coding Agent değişikliği uygulandı: {len(outcome.outcomes)} dosya\n{paths}"
         )
-        if self._regression_runner is None:
-            return response
-
         changed_paths = tuple(item.relative_path for item in outcome.outcomes)
-        try:
-            regression_report = self._regression_runner.run_for_paths(changed_paths)
-        except Exception as error:
-            regression_report = f"TEST AGENT RAPORU\nDurum: BAŞLATILAMADI\nHata: {error}"
-        return f"{response}\n\n{regression_report}"
+        reports: list[str] = []
+        if self._regression_runner is not None:
+            try:
+                reports.append(self._regression_runner.run_for_paths(changed_paths))
+            except Exception as error:
+                reports.append(
+                    f"TEST AGENT RAPORU\nDurum: BAŞLATILAMADI\nHata: {error}"
+                )
+        if self._security_reviewer is not None:
+            try:
+                reports.append(self._security_reviewer.review_paths(changed_paths))
+            except Exception as error:
+                reports.append(
+                    f"SECURITY AGENT RAPORU\nDurum: BAŞLATILAMADI\nHata: {error}"
+                )
+        return "\n\n".join((response, *reports))
 
     def _render_preview(self, session: CodingSession) -> str:
         proposal = session.proposal

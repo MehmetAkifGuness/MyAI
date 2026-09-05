@@ -132,6 +132,10 @@ class ConservativeMemoryDecisionGate:
             re.IGNORECASE | re.DOTALL,
         ),
         re.compile(
+            r"^\s*(?:güvenlik\s+tara|security\s+agent|security)\s*:",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
             r"^\s*performans\s+(?:durumu|raporu)\b",
             re.IGNORECASE,
         ),
