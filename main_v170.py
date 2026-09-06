@@ -8,6 +8,12 @@ from boru.architecture import (
     ProjectStatFingerprint,
     RuleBasedArchitectureRequestParser,
 )
+from boru.api_tools import (
+    BoundedHttpApiClient,
+    ControlledApiCoordinator,
+    RuleBasedApiRequestParser,
+    SafeApiPolicy,
+)
 from boru.assistant import (
     AssistantService,
 )
@@ -20,6 +26,11 @@ from boru.config import (
 )
 from boru.context import (
     ConversationContextBuilder,
+)
+from boru.database_tools import (
+    DatabaseReadCoordinator,
+    ReadOnlySqliteService,
+    RuleBasedDatabaseRequestParser,
 )
 from boru.conversation import (
     ConversationHistory,
@@ -297,6 +308,7 @@ def build_application(
     task_system_enabled: bool = False,
     project_memory_enabled: bool = False,
     knowledge_rag_enabled: bool = False,
+    external_tools_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -926,6 +938,22 @@ def build_application(
         controlled_write,
         git_coordinator,
     ]
+    if external_tools_enabled:
+        operation_resolvers.insert(
+            0,
+            DatabaseReadCoordinator(
+                parser=RuleBasedDatabaseRequestParser(),
+                service=ReadOnlySqliteService(project_root),
+            ),
+        )
+        operation_resolvers.insert(
+            0,
+            ControlledApiCoordinator(
+                parser=RuleBasedApiRequestParser(),
+                policy=SafeApiPolicy(settings.api_allowed_hosts),
+                client=BoundedHttpApiClient(),
+            ),
+        )
     if coding_operation is not None:
         operation_resolvers.insert(0, coding_operation)
     operation_coordinator = ExclusiveOperationCoordinator(operation_resolvers)

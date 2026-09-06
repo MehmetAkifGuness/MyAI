@@ -26,6 +26,7 @@ class ExclusiveOperationCoordinator:
         "git geri almayı onayla",
         "otomatik düzeltmeyi onayla",
         "kod değişikliğini onayla",
+        "api isteğini onayla",
         "iptal",
         "vazgeç",
     }

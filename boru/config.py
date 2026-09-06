@@ -13,6 +13,7 @@ class AppSettings:
     memory_path: str = "data/long_term_memory.json"
     project_memory_path: str = "data/project_memory.json"
     knowledge_path: str = "data/knowledge_index.json"
+    api_allowed_hosts: tuple[str, ...] = ()
     memory_context_limit: int = 5
     memory_auto_capture: bool = True
     memory_semantic_enabled: bool = True
@@ -53,6 +54,12 @@ class AppSettings:
             "BORU_KNOWLEDGE_PATH",
             defaults.knowledge_path,
         ).strip()
+
+        api_allowed_hosts = tuple(
+            host.strip()
+            for host in os.getenv("BORU_API_ALLOWED_HOSTS", "").split(",")
+            if host.strip()
+        )
 
         memory_embedding_model = os.getenv(
             "BORU_MEMORY_EMBEDDING_MODEL",
@@ -163,6 +170,7 @@ class AppSettings:
             memory_path=memory_path,
             project_memory_path=project_memory_path,
             knowledge_path=knowledge_path,
+            api_allowed_hosts=api_allowed_hosts,
             memory_context_limit=(
                 memory_context_limit
             ),
