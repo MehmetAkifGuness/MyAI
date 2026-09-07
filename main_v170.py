@@ -1,7 +1,7 @@
 from pathlib import Path
 import os
 
-from boru.sandbox import DockerSandboxExecutor
+from boru.sandbox import DockerSandboxExecutor, TargetedSandboxTestTool
 from boru.sandbox.coordinator import SandboxCoordinator
 from boru.evaluation import EvidenceEvaluator, EvaluationCoordinator
 from boru.improvement import (
@@ -340,6 +340,7 @@ def build_application(
     natural_change_enabled: bool = False,
     goal_driven_change_enabled: bool = False,
     impact_analysis_enabled: bool = False,
+    runtime_test_agent_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -354,6 +355,10 @@ def build_application(
         not general_agent_enabled or not deep_code_index_enabled
     ):
         raise ValueError("Etki analizi güvenli ilişki indeksi gerektirir.")
+    if runtime_test_agent_enabled and (
+        not general_agent_enabled or not sandbox_enabled
+    ):
+        raise ValueError("Çalışma zamanı test ajanı genel ajan ve Docker sandbox gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -542,6 +547,11 @@ def build_application(
             allowed_risks=(
                 ToolRisk.SAFE,
                 ToolRisk.READ_ONLY,
+                *(
+                    (ToolRisk.EXECUTION,)
+                    if runtime_test_agent_enabled
+                    else ()
+                ),
             )
         ),
     )
@@ -825,6 +835,12 @@ def build_application(
     if sandbox_enabled:
         sandbox_executor = DockerSandboxExecutor(project_root, sandbox_image)
         command_executor = sandbox_executor
+    if runtime_test_agent_enabled:
+        if sandbox_executor is None:
+            raise ValueError("Çalışma zamanı test aracı Docker sandbox gerektirir.")
+        read_registry.register(
+            TargetedSandboxTestTool(project_root, sandbox_executor)
+        )
     if evaluation_enabled:
         if sandbox_executor is None:
             raise ValueError("Öz değerlendirme sandbox gerektirir.")

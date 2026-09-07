@@ -1,4 +1,5 @@
 import re
+from pathlib import Path
 
 from boru.agent.models import AgentObservation
 from boru.tools.contracts import ToolExecutorPort, ToolRegistryPort
@@ -42,9 +43,39 @@ class DeterministicEvidenceBootstrapper:
                 ),
             )
         )
+        self._append_targeted_test_evidence(observations, source_path, objective)
         self._append_related_evidence(observations, source_path, objective)
         self._append_impact_evidence(observations, source_path, objective)
         return observations
+
+    def _append_targeted_test_evidence(
+        self,
+        observations: list[AgentObservation],
+        source_path: str,
+        objective: str,
+    ) -> None:
+        folded = objective.casefold()
+        if (
+            self._registry.get("run_targeted_test") is None
+            or "test" not in folded
+            or not any(cue in folded for cue in ("çalıştır", "calistir", "koş", "run", "sandbox"))
+        ):
+            return
+        target = self._test_path(objective) or source_path
+        arguments: dict[str, object] = {
+            "path": target,
+            "runner": "pytest" if "pytest" in folded else "unittest",
+        }
+        observations.append(
+            AgentObservation(
+                step=len(observations) + 1,
+                tool_name="run_targeted_test",
+                arguments=arguments,
+                result=self._executor.execute(
+                    ToolCall(tool_name="run_targeted_test", arguments=arguments)
+                ),
+            )
+        )
 
     def _append_impact_evidence(
         self,
@@ -139,6 +170,27 @@ class DeterministicEvidenceBootstrapper:
         words = [token for token in tokens if token.casefold() not in ignored]
         words.sort(key=len, reverse=True)
         return " ".join(words[:2])
+
+    @staticmethod
+    def _test_path(objective: str) -> str | None:
+        matches = re.findall(
+            r"\b[A-Za-z0-9_./\\-]+\.py\b",
+            objective,
+            re.IGNORECASE,
+        )
+        return next(
+            (
+                path.replace("\\", "/")
+                for path in matches
+                if Path(path.replace("\\", "/")).name.casefold().startswith("test_")
+                or Path(path.replace("\\", "/")).name.casefold().endswith("_test.py")
+                or "tests" in {
+                    part.casefold()
+                    for part in Path(path.replace("\\", "/")).parts[:-1]
+                }
+            ),
+            None,
+        )
 
     @staticmethod
     def _first_path(result: ToolResult) -> str | None:

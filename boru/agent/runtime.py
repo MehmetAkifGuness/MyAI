@@ -4,8 +4,8 @@ from time import monotonic
 from boru.agent.answer_safety import SafeAgentAnswerFilter
 from boru.agent.bootstrap import DeterministicEvidenceBootstrapper
 from boru.agent.contracts import StructuredChatModel
+from boru.agent.deterministic_reporting import DeterministicEvidenceReportResolver
 from boru.agent.final_synthesis import GroundedFinalSynthesizer
-from boru.agent.impact_synthesis import GroundedImpactSynthesizer
 from boru.agent.models import AgentAction, AgentActionKind, AgentObservation
 from boru.agent.parser import JsonAgentActionParser
 from boru.agent.reporting import AgentReportRenderer
@@ -39,6 +39,7 @@ class ReadOnlyToolAgent:
                 "properties": {
                     "path": {"type": "string"},
                     "query": {"type": "string"},
+                    "runner": {"type": "string"},
                     "max_depth": {"type": "integer"},
                     "max_results": {"type": "integer"},
                 },
@@ -79,7 +80,7 @@ class ReadOnlyToolAgent:
         self._reporter = AgentReportRenderer()
         self._answer_verifier = GroundedAnswerVerifier(model)
         self._answer_filter = SafeAgentAnswerFilter()
-        self._impact_synthesizer = GroundedImpactSynthesizer()
+        self._deterministic_reporter = DeterministicEvidenceReportResolver(self._reporter)
 
     def run(self, objective: str) -> str:
         cleaned = objective.strip()
@@ -97,7 +98,7 @@ class ReadOnlyToolAgent:
             for observation in observations
         }
         try:
-            deterministic_report = self._render_deterministic_impact(cleaned, observations)
+            deterministic_report = self._deterministic_reporter.render(cleaned, observations)
             if deterministic_report is not None:
                 succeeded = True
                 return deterministic_report
@@ -111,23 +112,6 @@ class ReadOnlyToolAgent:
         finally:
             if self._monitor is not None:
                 self._monitor.record("agent.total", monotonic() - started, succeeded)
-
-    def _render_deterministic_impact(
-        self,
-        objective: str,
-        observations: list[AgentObservation],
-    ) -> str | None:
-        answer = self._impact_synthesizer.synthesize(objective, observations)
-        if answer is None:
-            return None
-        action = AgentAction(
-            kind=AgentActionKind.FINAL,
-            answer=answer,
-            evidence=tuple(
-                item.step for item in observations if item.result.success
-            ),
-        )
-        return self._reporter.render_final(action, observations, objective)
 
     def _run_steps(
         self,

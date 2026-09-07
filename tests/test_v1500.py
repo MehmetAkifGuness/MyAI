@@ -288,13 +288,14 @@ class ReleaseV150Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ilişki indeksi"):
             main_v170.build_application(impact_analysis_enabled=True)
 
-    def test_default_release_enables_impact_analysis(self):
+    def test_v150_release_enables_impact_analysis(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.5"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V1.5")
             self.assertTrue(flags["goal_driven_change_enabled"])
             self.assertTrue(flags["impact_analysis_enabled"])
+            self.assertFalse(flags["runtime_test_agent_enabled"])
 
 
 if __name__ == "__main__":
