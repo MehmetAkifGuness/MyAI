@@ -249,9 +249,9 @@ class DeepEvidenceAgentTests(unittest.TestCase):
 
 
 class ReleaseV120Tests(unittest.TestCase):
-    def test_default_release_enables_deep_code_index(self):
+    def test_v120_release_enables_deep_code_index(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.2"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V1.2")
             self.assertTrue(flags["general_agent_enabled"])
@@ -284,7 +284,7 @@ class ReleaseV120Tests(unittest.TestCase):
                  patch.object(main_v170, "OllamaChatModel", WiringModel), \
                  patch.object(main_v170, "ModelWarmupService"), \
                  patch.object(main_v170, "DockerSandboxExecutor", UnusedSandbox):
-                app = build_release()
+                app = build_release("V1.2")
 
             report = app.assistant.reply(
                 "ReadOnlyToolAgent hangi dosyada ve final yanıtı nasıl doğruluyor?"

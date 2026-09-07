@@ -4,7 +4,12 @@ import os
 from boru.sandbox import DockerSandboxExecutor
 from boru.sandbox.coordinator import SandboxCoordinator
 from boru.evaluation import EvidenceEvaluator, EvaluationCoordinator
-from boru.improvement import ImprovementCoordinator, VerifiedImprovementApplier
+from boru.improvement import (
+    ImprovementCoordinator,
+    NaturalLanguageImprovementCoordinator,
+    SafeChangeScopeResolver,
+    VerifiedImprovementApplier,
+)
 from boru.agent import GeneralAgentCoordinator, ReadOnlyToolAgent
 from boru.code_index import (
     CodeSearchTool,
@@ -329,8 +334,12 @@ def build_application(
     improvement_enabled: bool = False,
     general_agent_enabled: bool = False,
     deep_code_index_enabled: bool = False,
+    natural_change_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
+    if natural_change_enabled and not improvement_enabled:
+        raise ValueError("Doğal dil değişiklik akışı kontrollü iyileştirme gerektirir.")
+
     settings = (
         AppSettings.from_env()
     )
@@ -483,6 +492,7 @@ def build_application(
         )
     )
 
+    code_index = None
     read_tools = [
         CalculatorTool(),
         CurrentTimeTool(),
@@ -997,7 +1007,19 @@ def build_application(
             deterministic_edit_parser=RuleBasedSmartEditRequestParser(),
             deterministic_edit_preparer=deterministic_assignment_preparer,
         )
-        operation_resolvers.insert(0, ImprovementCoordinator(improvement_coding, improvement_applier, evaluator))
+        improvement_coordinator = ImprovementCoordinator(
+            improvement_coding,
+            improvement_applier,
+            evaluator,
+        )
+        if natural_change_enabled:
+            if code_index is None:
+                raise ValueError("Doğal dil değişiklik akışı güvenli kod indeksi gerektirir.")
+            improvement_coordinator = NaturalLanguageImprovementCoordinator(
+                improvement_coordinator,
+                SafeChangeScopeResolver(project_root, code_index),
+            )
+        operation_resolvers.insert(0, improvement_coordinator)
     if external_tools_enabled:
         operation_resolvers.insert(
             0,

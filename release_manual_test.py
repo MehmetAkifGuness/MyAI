@@ -1,6 +1,6 @@
 import unittest
 
-VALUE = 1
+VALUE = 2
 
 class ValueTests(unittest.TestCase):
     def test_value(self):
