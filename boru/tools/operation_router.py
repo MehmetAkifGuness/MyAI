@@ -27,6 +27,8 @@ class ExclusiveOperationCoordinator:
         "otomatik düzeltmeyi onayla",
         "kod değişikliğini onayla",
         "api isteğini onayla",
+        "iyileştirmeyi onayla",
+        "iyileştirme geri almayı onayla",
         "iptal",
         "vazgeç",
     }

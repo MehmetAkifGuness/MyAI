@@ -34,6 +34,8 @@ class ControlledCodingCoordinator:
         security_reviewer: SecurityReviewer | None = None,
         code_reviewer: CodeReviewer | None = None,
         preview_characters: int = 8000,
+        quality_evaluator=None,
+        proposal_guard=None,
     ) -> None:
         if preview_characters < 1:
             raise ValueError("Coding Agent önizleme sınırı pozitif olmalıdır.")
@@ -51,6 +53,8 @@ class ControlledCodingCoordinator:
         self._security_reviewer = security_reviewer
         self._code_reviewer = code_reviewer
         self._preview_characters = preview_characters
+        self._quality_evaluator = quality_evaluator
+        self._proposal_guard = proposal_guard
         self._pending: CodingSession | None = None
         self._lock = RLock()
 
@@ -84,6 +88,8 @@ class ControlledCodingCoordinator:
                 project_request = self._project_request(request, architecture_plan)
                 proposal = self._prepare_proposal(request, architecture_plan, project_request)
                 self._validate_scope(architecture_plan, proposal)
+                if self._proposal_guard is not None:
+                    self._proposal_guard(proposal)
             except Exception as error:
                 return f"Coding Agent önerisi hazırlanamadı: {error}"
 
@@ -179,6 +185,8 @@ class ControlledCodingCoordinator:
             f"Coding Agent değişikliği uygulandı: {len(outcome.outcomes)} dosya\n{paths}"
         )
         changed_paths = tuple(item.relative_path for item in outcome.outcomes)
+        if self._quality_evaluator is not None:
+            return response + "\n\n" + self._quality_evaluator.validate_paths(changed_paths)
         reports: list[str] = []
         if self._regression_runner is not None:
             try:

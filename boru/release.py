@@ -1,0 +1,30 @@
+"""Single, shared feature configuration for the final release milestones."""
+
+
+def build_release(version: str = "V1.1"):
+    from main_v170 import build_application
+
+    if version not in {"V0.27", "V0.28", "V0.29", "V1.0", "V1.1"}:
+        raise ValueError("Desteklenmeyen sürüm.")
+    evaluation = version != "V0.27"
+    improvement = version in {"V0.29", "V1.0", "V1.1"}
+    general_agent = version == "V1.1"
+    features = "Docker sandbox"
+    if evaluation:
+        features += ", kanıta dayalı öz değerlendirme"
+    if improvement:
+        features += ", onaylı ve geri alınabilir iyileştirme"
+    if general_agent:
+        features += ", kanıtlı genel ajan ve güvenli kod indeksi"
+    return build_application(
+        application_version=version,
+        startup_message=f"Börü {version} hazır. {features} aktif. Testler için Docker Linux motoru gereklidir.",
+        structured_timeout_seconds=180, structured_num_predict=2048,
+        architect_max_attempts=1, architect_fast_scoped_plans=True,
+        coding_agent_enabled=True, test_agent_enabled=True, security_agent_enabled=True,
+        code_review_agent_enabled=True, orchestrator_enabled=True, task_system_enabled=True,
+        project_memory_enabled=True, knowledge_rag_enabled=True, external_tools_enabled=True,
+        sandbox_enabled=True, evaluation_enabled=evaluation, improvement_enabled=improvement,
+        general_agent_enabled=general_agent,
+        project_edit_max_attempts=1,
+    )

@@ -1,0 +1,141 @@
+from boru.code_index.index import SafeCodeIndex
+from boru.tools.arguments import ToolArgumentSchema, ToolArgumentSpec, ToolArgumentType
+from boru.tools.models import ToolResult, ToolRisk
+
+
+class ProjectOverviewTool:
+    def __init__(self, index: SafeCodeIndex) -> None:
+        self._index = index
+
+    @property
+    def name(self) -> str:
+        return "project_overview"
+
+    @property
+    def description(self) -> str:
+        return "Güvenli proje indeksinin dosya, sembol ve uzantı özetini verir. Argüman almaz."
+
+    @property
+    def risk(self) -> ToolRisk:
+        return ToolRisk.READ_ONLY
+
+    @property
+    def argument_schema(self) -> ToolArgumentSchema:
+        return ToolArgumentSchema()
+
+    def execute(self, arguments: dict[str, object]) -> ToolResult:
+        if arguments:
+            raise ValueError("project_overview argüman kabul etmez.")
+        summary = self._index.summary()
+        suffixes = ", ".join(f"{suffix}: {count}" for suffix, count in summary.suffix_counts)
+        return ToolResult(
+            tool_name=self.name,
+            success=True,
+            content=(
+                "PROJE İNDEKSİ\n"
+                f"Dosya: {summary.file_count}\n"
+                f"Python sembolü: {summary.symbol_count}\n"
+                f"Uzantılar: {suffixes or '(yok)'}"
+            ),
+            metadata={"file_count": summary.file_count, "symbol_count": summary.symbol_count},
+        )
+
+
+class CodeSearchTool:
+    def __init__(self, index: SafeCodeIndex) -> None:
+        self._index = index
+
+    @property
+    def name(self) -> str:
+        return "search_code"
+
+    @property
+    def description(self) -> str:
+        return "Proje yolları, Python sembolleri ve metin satırlarında terim arar. Argümanlar: query, max_results."
+
+    @property
+    def risk(self) -> ToolRisk:
+        return ToolRisk.READ_ONLY
+
+    @property
+    def argument_schema(self) -> ToolArgumentSchema:
+        return ToolArgumentSchema(
+            arguments=(
+                ToolArgumentSpec("query", ToolArgumentType.STRING, strip=True, allow_empty=False, max_length=200),
+                ToolArgumentSpec(
+                    "max_results",
+                    ToolArgumentType.INTEGER,
+                    required=False,
+                    has_default=True,
+                    default=12,
+                ),
+            )
+        )
+
+    def execute(self, arguments: dict[str, object]) -> ToolResult:
+        query = arguments["query"]
+        max_results = arguments["max_results"]
+        if not isinstance(query, str) or isinstance(max_results, bool) or not isinstance(max_results, int):
+            raise ValueError("search_code argümanları geçersiz.")
+        hits = self._index.search(query, max_results=max_results)
+        lines = [f"KOD ARAMA\nSorgu: {query}\nSonuç: {len(hits)}"]
+        lines.extend(
+            f"- {hit.path}:{hit.line} | {hit.preview}"
+            for hit in hits
+        )
+        if not hits:
+            lines.append("(eşleşme yok)")
+        return ToolResult(
+            tool_name=self.name,
+            success=True,
+            content="\n".join(lines),
+            metadata={
+                "query": query,
+                "result_count": len(hits),
+                "paths": tuple(dict.fromkeys(hit.path for hit in hits)),
+            },
+        )
+
+
+class FileSymbolsTool:
+    def __init__(self, index: SafeCodeIndex) -> None:
+        self._index = index
+
+    @property
+    def name(self) -> str:
+        return "file_symbols"
+
+    @property
+    def description(self) -> str:
+        return "Bir Python dosyasındaki sınıf, fonksiyon ve modül değişkenlerini listeler. Argüman: path."
+
+    @property
+    def risk(self) -> ToolRisk:
+        return ToolRisk.READ_ONLY
+
+    @property
+    def argument_schema(self) -> ToolArgumentSchema:
+        return ToolArgumentSchema(
+            arguments=(
+                ToolArgumentSpec("path", ToolArgumentType.STRING, strip=True, allow_empty=False, max_length=1024),
+            )
+        )
+
+    def execute(self, arguments: dict[str, object]) -> ToolResult:
+        path = arguments["path"]
+        if not isinstance(path, str):
+            raise ValueError("file_symbols path argümanı metin olmalıdır.")
+        symbols = self._index.symbols(path)
+        lines = [f"DOSYA SEMBOLLERİ\nDosya: {path}\nSembol: {len(symbols)}"]
+        lines.extend(
+            f"- {symbol.kind.value} {symbol.qualified_name} ({symbol.line}-{symbol.end_line})"
+            for symbol in symbols
+        )
+        if not symbols:
+            lines.append("(Python sembolü yok)")
+        return ToolResult(
+            tool_name=self.name,
+            success=True,
+            content="\n".join(lines),
+            metadata={"path": path, "symbol_count": len(symbols)},
+        )

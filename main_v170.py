@@ -1,4 +1,12 @@
 from pathlib import Path
+import os
+
+from boru.sandbox import DockerSandboxExecutor
+from boru.sandbox.coordinator import SandboxCoordinator
+from boru.evaluation import EvidenceEvaluator, EvaluationCoordinator
+from boru.improvement import ImprovementCoordinator, VerifiedImprovementApplier
+from boru.agent import GeneralAgentCoordinator, ReadOnlyToolAgent
+from boru.code_index import CodeSearchTool, FileSymbolsTool, ProjectOverviewTool, SafeCodeIndex
 
 from boru.architecture import (
     ArchitectCoordinator,
@@ -309,6 +317,10 @@ def build_application(
     project_memory_enabled: bool = False,
     knowledge_rag_enabled: bool = False,
     external_tools_enabled: bool = False,
+    sandbox_enabled: bool = False,
+    evaluation_enabled: bool = False,
+    improvement_enabled: bool = False,
+    general_agent_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -463,18 +475,23 @@ def build_application(
         )
     )
 
-    read_registry = ToolRegistry(
-        [
-            CalculatorTool(),
-            CurrentTimeTool(),
-            ListDirectoryTool(
-                read_workspace
-            ),
-            ReadFileTool(
-                read_workspace
-            ),
-        ]
-    )
+    read_tools = [
+        CalculatorTool(),
+        CurrentTimeTool(),
+        ListDirectoryTool(read_workspace),
+        ReadFileTool(read_workspace),
+    ]
+    if general_agent_enabled:
+        code_index = SafeCodeIndex(project_root)
+        read_tools.extend(
+            [
+                ProjectOverviewTool(code_index),
+                CodeSearchTool(code_index),
+                FileSymbolsTool(code_index),
+            ]
+        )
+
+    read_registry = ToolRegistry(read_tools)
 
     read_executor = ToolExecutor(
         registry=read_registry,
@@ -485,6 +502,17 @@ def build_application(
             )
         ),
     )
+
+    general_agent_coordinator = None
+    if general_agent_enabled:
+        general_agent_coordinator = GeneralAgentCoordinator(
+            ReadOnlyToolAgent(
+                model=chat_model,
+                registry=read_registry,
+                executor=read_executor,
+                performance_monitor=performance_monitor,
+            )
+        )
 
     read_planner = (
         FallbackToolPlanner(
@@ -748,6 +776,16 @@ def build_application(
         timeout_seconds=120,
         max_output_bytes=1024 * 1024,
     )
+    sandbox_executor = None
+    evaluator = None
+    sandbox_image = os.getenv("BORU_SANDBOX_IMAGE", "boru-sandbox:1.0")
+    if sandbox_enabled:
+        sandbox_executor = DockerSandboxExecutor(project_root, sandbox_image)
+        command_executor = sandbox_executor
+    if evaluation_enabled:
+        if sandbox_executor is None:
+            raise ValueError("Öz değerlendirme sandbox gerektirir.")
+        evaluator = EvidenceEvaluator(project_root, command_executor)
     test_output_parser = TestOutputParser()
     command_coordinator = (
         SafeCommandCoordinator(
@@ -818,15 +856,7 @@ def build_application(
             command_policy=(
                 SafeCommandPolicy()
             ),
-            command_executor=(
-                BoundedCommandExecutor(
-                    project_root,
-                    timeout_seconds=120,
-                    max_output_bytes=(
-                        1024 * 1024
-                    ),
-                )
-            ),
+            command_executor=command_executor,
             result_parser=(
                 TestOutputParser()
             ),
@@ -903,6 +933,7 @@ def build_application(
             regression_runner=test_agent,
             security_reviewer=security_agent,
             code_reviewer=code_review_agent,
+            quality_evaluator=evaluator,
         )
 
     coding_operation = coding_coordinator
@@ -938,6 +969,23 @@ def build_application(
         controlled_write,
         git_coordinator,
     ]
+    if improvement_enabled:
+        if evaluator is None or coding_coordinator is None:
+            raise ValueError("İyileştirme Coding, değerlendirme ve sandbox gerektirir.")
+        def staged_evaluator(root):
+            return EvidenceEvaluator(root, DockerSandboxExecutor(root, sandbox_image))
+
+        improvement_applier = VerifiedImprovementApplier(project_root, staged_evaluator)
+        improvement_coding = ControlledCodingCoordinator(
+            parser=RuleBasedCodingRequestParser(architecture_request_parser),
+            architect=architect_agent,
+            proposal_preparer=project_edit_preparer,
+            proposal_applier=improvement_applier,
+            proposal_guard=improvement_applier.validate_proposal,
+            deterministic_edit_parser=RuleBasedSmartEditRequestParser(),
+            deterministic_edit_preparer=deterministic_assignment_preparer,
+        )
+        operation_resolvers.insert(0, ImprovementCoordinator(improvement_coding, improvement_applier, evaluator))
     if external_tools_enabled:
         operation_resolvers.insert(
             0,
@@ -1031,6 +1079,9 @@ def build_application(
                 ),
             ],
             direct_response_resolvers=[
+                *([SandboxCoordinator(sandbox_executor)] if sandbox_executor is not None else []),
+                *([EvaluationCoordinator(evaluator)] if evaluator is not None else []),
+                *([general_agent_coordinator] if general_agent_coordinator is not None else []),
                 *(
                     [knowledge_coordinator]
                     if knowledge_coordinator is not None
