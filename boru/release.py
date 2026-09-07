@@ -1,14 +1,15 @@
 """Single, shared feature configuration for the final release milestones."""
 
 
-def build_release(version: str = "V1.1"):
+def build_release(version: str = "V1.2"):
     from main_v170 import build_application
 
-    if version not in {"V0.27", "V0.28", "V0.29", "V1.0", "V1.1"}:
+    if version not in {"V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2"}:
         raise ValueError("Desteklenmeyen sürüm.")
     evaluation = version != "V0.27"
-    improvement = version in {"V0.29", "V1.0", "V1.1"}
-    general_agent = version == "V1.1"
+    improvement = version in {"V0.29", "V1.0", "V1.1", "V1.2"}
+    general_agent = version in {"V1.1", "V1.2"}
+    deep_code_index = version == "V1.2"
     features = "Docker sandbox"
     if evaluation:
         features += ", kanıta dayalı öz değerlendirme"
@@ -16,6 +17,8 @@ def build_release(version: str = "V1.1"):
         features += ", onaylı ve geri alınabilir iyileştirme"
     if general_agent:
         features += ", kanıtlı genel ajan ve güvenli kod indeksi"
+    if deep_code_index:
+        features += ", import/çağrı ilişkileri ve çoklu dosya kanıtı"
     return build_application(
         application_version=version,
         startup_message=f"Börü {version} hazır. {features} aktif. Testler için Docker Linux motoru gereklidir.",
@@ -26,5 +29,6 @@ def build_release(version: str = "V1.1"):
         project_memory_enabled=True, knowledge_rag_enabled=True, external_tools_enabled=True,
         sandbox_enabled=True, evaluation_enabled=evaluation, improvement_enabled=improvement,
         general_agent_enabled=general_agent,
+        deep_code_index_enabled=deep_code_index,
         project_edit_max_attempts=1,
     )

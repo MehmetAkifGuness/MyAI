@@ -7,6 +7,7 @@ from boru.agent.final_synthesis import GroundedFinalSynthesizer
 from boru.agent.models import AgentAction, AgentActionKind, AgentObservation
 from boru.agent.parser import JsonAgentActionParser
 from boru.agent.reporting import AgentReportRenderer
+from boru.agent.verification import GroundedAnswerVerifier
 from boru.models import ChatMessage
 from boru.performance import PerformanceMonitor
 from boru.tools.contracts import ToolExecutorPort, ToolRegistryPort
@@ -73,6 +74,7 @@ class ReadOnlyToolAgent:
         self._bootstrapper = DeterministicEvidenceBootstrapper(registry, executor)
         self._final_synthesizer = GroundedFinalSynthesizer(model)
         self._reporter = AgentReportRenderer()
+        self._answer_verifier = GroundedAnswerVerifier(model)
 
     def run(self, objective: str) -> str:
         cleaned = objective.strip()
@@ -118,7 +120,7 @@ class ReadOnlyToolAgent:
             if action is None:
                 continue
             if action.kind is AgentActionKind.FINAL:
-                report = self._reporter.render_final(action, observations, objective)
+                report = self._render_verified_final(action, observations, objective)
                 if report is not None:
                     return report, True
                 grounded_report = self._synthesize_grounded_final(objective, observations)
@@ -190,7 +192,27 @@ class ReadOnlyToolAgent:
             answer=answer,
             evidence=tuple(item.step for item in usable),
         )
-        return self._reporter.render_final(fallback, observations, objective)
+        return self._render_verified_final(fallback, observations, objective)
+
+    def _render_verified_final(
+        self,
+        action: AgentAction,
+        observations: list[AgentObservation],
+        objective: str,
+    ) -> str | None:
+        usable = self._reporter.usable_observations(observations)
+        if not usable:
+            return None
+        evidence = self._trace(usable, [])
+        verified = self._answer_verifier.verify(objective, action.answer, evidence)
+        if verified is None:
+            return None
+        verified_action = AgentAction(
+            kind=AgentActionKind.FINAL,
+            answer=verified,
+            evidence=tuple(item.step for item in usable),
+        )
+        return self._reporter.render_final(verified_action, observations, objective)
 
     def _next_action(
         self,

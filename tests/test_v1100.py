@@ -350,11 +350,12 @@ class ReadOnlyToolAgentTests(unittest.TestCase):
 
 
 class ReleaseV110Tests(unittest.TestCase):
-    def test_default_release_enables_general_agent(self):
+    def test_v11_release_enables_general_agent(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.1"), "app")
             self.assertEqual(builder.call_args.kwargs["application_version"], "V1.1")
             self.assertTrue(builder.call_args.kwargs["general_agent_enabled"])
+            self.assertFalse(builder.call_args.kwargs["deep_code_index_enabled"])
 
     def test_release_wires_general_agent_into_assistant(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -367,7 +368,7 @@ class ReleaseV110Tests(unittest.TestCase):
                  patch.object(main_v170, "OllamaChatModel", WiringModel), \
                  patch.object(main_v170, "ModelWarmupService"), \
                  patch.object(main_v170, "DockerSandboxExecutor", UnusedSandbox):
-                app = build_release()
+                app = build_release("V1.1")
 
             report = app.assistant.reply("Handler hangi dosyada ve nasıl çalışıyor?")
             self.assertIn("Durum: TAMAMLANDI", report)

@@ -6,7 +6,14 @@ from boru.sandbox.coordinator import SandboxCoordinator
 from boru.evaluation import EvidenceEvaluator, EvaluationCoordinator
 from boru.improvement import ImprovementCoordinator, VerifiedImprovementApplier
 from boru.agent import GeneralAgentCoordinator, ReadOnlyToolAgent
-from boru.code_index import CodeSearchTool, FileSymbolsTool, ProjectOverviewTool, SafeCodeIndex
+from boru.code_index import (
+    CodeSearchTool,
+    FileSymbolsTool,
+    ProjectOverviewTool,
+    RelatedCodeTool,
+    SafeCodeIndex,
+    SafeCodeRelationshipIndex,
+)
 
 from boru.architecture import (
     ArchitectCoordinator,
@@ -321,6 +328,7 @@ def build_application(
     evaluation_enabled: bool = False,
     improvement_enabled: bool = False,
     general_agent_enabled: bool = False,
+    deep_code_index_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     settings = (
@@ -490,6 +498,10 @@ def build_application(
                 FileSymbolsTool(code_index),
             ]
         )
+        if deep_code_index_enabled:
+            read_tools.append(
+                RelatedCodeTool(SafeCodeRelationshipIndex(project_root))
+            )
 
     read_registry = ToolRegistry(read_tools)
 

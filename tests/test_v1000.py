@@ -82,13 +82,14 @@ class ReleaseWorkflowTests(unittest.TestCase):
 
     def test_milestone_flags(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            for version in ("V0.27", "V0.28", "V0.29", "V1.0", "V1.1"):
+            for version in ("V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2"):
                 self.assertEqual(build_release(version), "app")
                 flags = builder.call_args.kwargs
                 self.assertTrue(flags["sandbox_enabled"])
                 self.assertEqual(flags["evaluation_enabled"], version != "V0.27")
-                self.assertEqual(flags["improvement_enabled"], version in {"V0.29", "V1.0", "V1.1"})
-                self.assertEqual(flags["general_agent_enabled"], version == "V1.1")
+                self.assertEqual(flags["improvement_enabled"], version in {"V0.29", "V1.0", "V1.1", "V1.2"})
+                self.assertEqual(flags["general_agent_enabled"], version in {"V1.1", "V1.2"})
+                self.assertEqual(flags["deep_code_index_enabled"], version == "V1.2")
 
 
 @unittest.skipUnless(os.getenv("BORU_RUN_DOCKER_TESTS") == "1", "Docker canlı akış testi isteğe bağlı")

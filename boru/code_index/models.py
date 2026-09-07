@@ -34,3 +34,10 @@ class CodeIndexSummary:
     symbol_count: int
     suffix_counts: tuple[tuple[str, int], ...]
 
+
+@dataclass(frozen=True, slots=True)
+class RelatedCodeFile:
+    path: str
+    score: int
+    imported_via: str
+    matched_calls: tuple[str, ...] = ()

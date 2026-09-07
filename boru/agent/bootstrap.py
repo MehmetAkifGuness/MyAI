@@ -42,7 +42,45 @@ class DeterministicEvidenceBootstrapper:
                 ),
             )
         )
+        self._append_related_evidence(observations, source_path, objective)
         return observations
+
+    def _append_related_evidence(
+        self,
+        observations: list[AgentObservation],
+        source_path: str,
+        objective: str,
+    ) -> None:
+        if self._registry.get("related_code") is None:
+            return
+        related_arguments: dict[str, object] = {
+            "path": source_path,
+            "query": objective[:200],
+            "max_results": 2,
+        }
+        related_result = self._executor.execute(
+            ToolCall(tool_name="related_code", arguments=related_arguments)
+        )
+        observations.append(
+            AgentObservation(
+                step=len(observations) + 1,
+                tool_name="related_code",
+                arguments=related_arguments,
+                result=related_result,
+            )
+        )
+        for path in self._result_paths(related_result)[:2]:
+            read_arguments: dict[str, object] = {"path": path}
+            observations.append(
+                AgentObservation(
+                    step=len(observations) + 1,
+                    tool_name="read_file",
+                    arguments=read_arguments,
+                    result=self._executor.execute(
+                        ToolCall(tool_name="read_file", arguments=read_arguments)
+                    ),
+                )
+            )
 
     @staticmethod
     def _query(objective: str) -> str:
@@ -55,6 +93,13 @@ class DeterministicEvidenceBootstrapper:
         if code_tokens:
             return code_tokens[0]
         ignored = {"hangi", "nerede", "nasıl", "nedir", "içinde", "sınıfı", "dosyada"}
+        named_tokens = [
+            token
+            for token in tokens
+            if token[:1].isupper() and token.casefold() not in ignored
+        ]
+        if named_tokens:
+            return max(named_tokens, key=len)
         words = [token for token in tokens if token.casefold() not in ignored]
         words.sort(key=len, reverse=True)
         return " ".join(words[:2])
@@ -68,3 +113,11 @@ class DeterministicEvidenceBootstrapper:
             return None
         return next((path for path in paths if isinstance(path, str) and path), None)
 
+    @staticmethod
+    def _result_paths(result: ToolResult) -> list[str]:
+        if not result.success:
+            return []
+        paths = result.metadata.get("paths")
+        if not isinstance(paths, (list, tuple)):
+            return []
+        return [path for path in paths if isinstance(path, str) and path]
