@@ -16,6 +16,12 @@ from boru.tasks.parser import RuleBasedTaskCommandParser
 from boru.tasks.planner import ArchitectureTaskPlanner
 from boru.tasks.state import InMemoryTaskPlanState
 from boru.tasks.persistent_state import PersistentTaskPlanState
+from boru.tasks.source_guard import (
+    TaskSourceDrift,
+    TaskSourceDriftError,
+    TaskSourceFingerprint,
+    TaskSourceFingerprintGuard,
+)
 
 
 __all__ = [
@@ -34,4 +40,8 @@ __all__ = [
     "TaskPlanCoordinator",
     "TaskPlanner",
     "TaskStatus",
+    "TaskSourceDrift",
+    "TaskSourceDriftError",
+    "TaskSourceFingerprint",
+    "TaskSourceFingerprintGuard",
 ]

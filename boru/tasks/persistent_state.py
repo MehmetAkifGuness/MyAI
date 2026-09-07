@@ -7,6 +7,11 @@ from boru.tasks.checkpoint import (
     TaskJournalEntry,
 )
 from boru.tasks.models import TaskItem, TaskPlan, TaskStatus
+from boru.tasks.source_guard import (
+    TaskSourceDriftError,
+    TaskSourceFingerprint,
+    TaskSourceFingerprintGuard,
+)
 from boru.tasks.state import InMemoryTaskPlanState
 
 
@@ -15,12 +20,18 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
 
     _MAX_JOURNAL = 100
 
-    def __init__(self, repository: JsonTaskCheckpointRepository) -> None:
+    def __init__(
+        self,
+        repository: JsonTaskCheckpointRepository,
+        source_guard: TaskSourceFingerprintGuard | None = None,
+    ) -> None:
         super().__init__()
         self._repository = repository
+        self._source_guard = source_guard
         checkpoint = repository.load()
         self._plan = checkpoint.plan
         self._journal = list(checkpoint.journal)
+        self._fingerprints = checkpoint.fingerprints
         self._recover_interrupted_tasks()
 
     @property
@@ -33,16 +44,25 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
 
     def replace_plan(self, plan: TaskPlan) -> None:
         with self._lock:
+            fingerprints = self._snapshot_plan(plan)
             previous_plan = self._plan
             previous_journal = self._journal
+            previous_fingerprints = self._fingerprints
             self._plan = plan
             self._journal = [TaskJournalEntry(1, "plan_created", note=plan.summary)]
+            self._fingerprints = fingerprints
             try:
                 self._save()
             except (OSError, RuntimeError, ValueError):
                 self._plan = previous_plan
                 self._journal = previous_journal
+                self._fingerprints = previous_fingerprints
                 raise
+
+    def start(self, task_id: str) -> TaskItem:
+        with self._lock:
+            self._validate_sources()
+            return super().start(task_id)
 
     def transition(
         self,
@@ -53,13 +73,18 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
         with self._lock:
             previous_plan = self._plan
             previous_journal = list(self._journal)
-            updated = super().transition(task_id, status, note)
-            self._append("task_status", updated.task_id, updated.status.value, updated.note)
+            previous_fingerprints = self._fingerprints
             try:
+                if status is TaskStatus.COMPLETED:
+                    current = self.get_task(task_id)
+                    self._refresh_fingerprints(current.files)
+                updated = super().transition(task_id, status, note)
+                self._append("task_status", updated.task_id, updated.status.value, updated.note)
                 self._save()
             except (OSError, RuntimeError, ValueError):
                 self._plan = previous_plan
                 self._journal = previous_journal
+                self._fingerprints = previous_fingerprints
                 raise
             return updated
 
@@ -87,4 +112,33 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
         self._journal = self._journal[-self._MAX_JOURNAL :]
 
     def _save(self) -> None:
-        self._repository.save(TaskCheckpoint(self._plan, tuple(self._journal)))
+        self._repository.save(
+            TaskCheckpoint(self._plan, tuple(self._journal), self._fingerprints)
+        )
+
+    def _snapshot_plan(self, plan: TaskPlan) -> tuple[TaskSourceFingerprint, ...]:
+        if self._source_guard is None:
+            return ()
+        paths = tuple(path for item in plan.tasks for path in item.files)
+        return self._source_guard.snapshot(paths)
+
+    def _validate_sources(self) -> None:
+        if self._source_guard is None or self._plan is None:
+            return
+        paths = tuple(dict.fromkeys(path for item in self._plan.tasks for path in item.files))
+        if paths and not self._fingerprints:
+            raise TaskSourceDriftError((), missing_baseline=True)
+        expected_paths = {item.path for item in self._fingerprints}
+        if set(paths) != expected_paths:
+            raise TaskSourceDriftError((), missing_baseline=True)
+        drifts = self._source_guard.compare(self._fingerprints)
+        if drifts:
+            raise TaskSourceDriftError(drifts)
+
+    def _refresh_fingerprints(self, paths: tuple[str, ...]) -> None:
+        if self._source_guard is None or not paths:
+            return
+        refreshed = {item.path: item for item in self._source_guard.snapshot(paths)}
+        current = {item.path: item for item in self._fingerprints}
+        current.update(refreshed)
+        self._fingerprints = tuple(current[path] for path in sorted(current))

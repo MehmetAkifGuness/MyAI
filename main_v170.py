@@ -199,6 +199,7 @@ from boru.tasks import (
     PersistentTaskPlanState,
     RuleBasedTaskCommandParser,
     TaskPlanCoordinator,
+    TaskSourceFingerprintGuard,
 )
 from boru.ui import (
     ChatAppUI,
@@ -347,6 +348,7 @@ def build_application(
     batch_runtime_repair_enabled: bool = False,
     planned_task_execution_enabled: bool = False,
     persistent_task_checkpoint_enabled: bool = False,
+    source_drift_detection_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -377,6 +379,8 @@ def build_application(
         raise ValueError("Planlı görev yürütme Task/Plan sistemini gerektirir.")
     if persistent_task_checkpoint_enabled and not planned_task_execution_enabled:
         raise ValueError("Kalıcı task checkpoint planlı görev yürütmeyi gerektirir.")
+    if source_drift_detection_enabled and not persistent_task_checkpoint_enabled:
+        raise ValueError("Kaynak drift denetimi kalıcı task checkpoint gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1040,7 +1044,10 @@ def build_application(
             PersistentTaskPlanState(
                 JsonTaskCheckpointRepository(
                     _resolve_project_path(settings.task_checkpoint_path)
-                )
+                ),
+                TaskSourceFingerprintGuard(project_root)
+                if source_drift_detection_enabled
+                else None,
             )
             if persistent_task_checkpoint_enabled
             else None

@@ -165,7 +165,7 @@ class ReleaseV200Tests(unittest.TestCase):
 
     def test_default_release_enables_persistent_checkpoint(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V2.0"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V2.0")
             self.assertTrue(flags["planned_task_execution_enabled"])

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from boru.persistence import AtomicJsonFileStore, JsonFileReadError, JsonFileWriteError
 from boru.tasks.models import TaskItem, TaskPlan, TaskStatus
+from boru.tasks.source_guard import TaskSourceFingerprint
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,7 @@ class TaskJournalEntry:
 class TaskCheckpoint:
     plan: TaskPlan | None
     journal: tuple[TaskJournalEntry, ...] = ()
+    fingerprints: tuple[TaskSourceFingerprint, ...] = ()
 
 
 class JsonTaskCheckpointRepository:
@@ -87,13 +89,17 @@ class JsonTaskCheckpointRepository:
             raise ValueError("Checkpoint sürümü geçersiz.")
         raw_plan = data.get("plan")
         raw_journal = data.get("journal")
+        raw_fingerprints = data.get("fingerprints", [])
         if raw_plan is not None and not isinstance(raw_plan, dict):
             raise TypeError("Plan nesne olmalıdır.")
         if not isinstance(raw_journal, list) or len(raw_journal) > self._MAX_JOURNAL:
             raise ValueError("Task günlüğü geçersiz veya sınırı aşıyor.")
+        if not isinstance(raw_fingerprints, list) or len(raw_fingerprints) > 64:
+            raise ValueError("Task kaynak özetleri geçersiz veya sınırı aşıyor.")
         plan = self._decode_plan(raw_plan) if raw_plan is not None else None
         journal = tuple(self._decode_entry(item) for item in raw_journal)
-        checkpoint = TaskCheckpoint(plan, journal)
+        fingerprints = tuple(self._decode_fingerprint(item) for item in raw_fingerprints)
+        checkpoint = TaskCheckpoint(plan, journal, fingerprints)
         self._validate_safe(checkpoint)
         return checkpoint
 
@@ -136,6 +142,15 @@ class JsonTaskCheckpointRepository:
         )
 
     @staticmethod
+    def _decode_fingerprint(data: object) -> TaskSourceFingerprint:
+        if not isinstance(data, dict):
+            raise TypeError("Task kaynak özeti nesne olmalıdır.")
+        return TaskSourceFingerprint(
+            JsonTaskCheckpointRepository._required_string(data, "path"),
+            JsonTaskCheckpointRepository._required_string(data, "sha256"),
+        )
+
+    @staticmethod
     def _required_string(data: dict[str, object], key: str) -> str:
         value = data[key]
         if not isinstance(value, str):
@@ -170,6 +185,10 @@ class JsonTaskCheckpointRepository:
                 }
                 for item in checkpoint.journal
             ],
+            "fingerprints": [
+                {"path": item.path, "sha256": item.sha256}
+                for item in checkpoint.fingerprints
+            ],
         }
 
     @staticmethod
@@ -194,6 +213,9 @@ class JsonTaskCheckpointRepository:
     @classmethod
     def _validate_safe(cls, checkpoint: TaskCheckpoint) -> None:
         cls._validate_journal(checkpoint.journal)
+        paths = tuple(item.path for item in checkpoint.fingerprints)
+        if len(paths) > 64 or len(paths) != len(set(paths)):
+            raise ValueError("Task kaynak özetleri benzersiz ve en fazla 64 kayıt olmalıdır.")
         if checkpoint.plan is None:
             return
         values = cls._validated_plan_values(checkpoint.plan)
