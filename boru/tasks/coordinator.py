@@ -10,7 +10,7 @@ from boru.tasks.state import InMemoryTaskPlanState
 class TaskPlanCoordinator:
     _USAGE = (
         "Task sistemi biçimleri: 'görev planla: hedef', 'görev durumu', "
-        "'task çalıştır: TASK-1', 'task sıfırla: TASK-1' veya "
+        "'planı çalıştır', 'task çalıştır: TASK-1', 'task sıfırla: TASK-1' veya "
         "'task tamamla: TASK-1'."
     )
     _EXPLICIT_SCOPE = re.compile(
@@ -25,12 +25,15 @@ class TaskPlanCoordinator:
         planner: TaskPlanner,
         workflow: AgentWorkflow,
         state: InMemoryTaskPlanState | None = None,
+        planned_execution_enabled: bool = False,
     ) -> None:
         self._parser = parser
         self._planner = planner
         self._workflow = workflow
         self._state = state or InMemoryTaskPlanState()
+        self._planned_execution_enabled = planned_execution_enabled
         self._active_task_id: str | None = None
+        self._plan_run_active = False
         self._lock = RLock()
 
     @property
@@ -58,6 +61,8 @@ class TaskPlanCoordinator:
                 return self._render_current_plan()
             if command.action is TaskAction.RUN:
                 return self._start_task(command.value)
+            if command.action is TaskAction.RUN_PLAN:
+                return self._start_plan()
             if command.action is TaskAction.RESET:
                 return self._reset_task(command.value)
             if command.action is TaskAction.COMPLETE:
@@ -67,11 +72,37 @@ class TaskPlanCoordinator:
     def _create_plan(self, objective: str) -> str:
         try:
             plan = self._planner.plan(objective)
-        except Exception as error:
+        except (OSError, RuntimeError, TimeoutError, ValueError) as error:
             return f"Görev planı hazırlanamadı: {error}"
         self._state.replace_plan(plan)
         self._active_task_id = None
+        self._plan_run_active = False
         return self._render_plan(plan, "GÖREV PLANI HAZIRLANDI")
+
+    def _start_plan(self) -> str:
+        if not self._planned_execution_enabled:
+            return "Planlı görev yürütme bu sürümde etkin değil."
+        plan = self._state.get_plan()
+        if plan is None:
+            return "Planlı görev yürütme başlatılamadı: Henüz aktif bir task planı yok."
+        next_task = self._next_ready_task(plan)
+        if next_task is None:
+            if all(item.status is TaskStatus.COMPLETED for item in plan.tasks):
+                return self._render_plan_run("TAMAMLANDI", "Tüm tasklar zaten tamamlandı.")
+            return self._render_plan_run(
+                "BAŞLATILAMADI",
+                "Çalıştırılabilir pending task yok; failed veya blocked taskları inceleyin.",
+            )
+        self._plan_run_active = True
+        response = self._start_task(next_task.task_id)
+        if not self._workflow.has_pending:
+            self._plan_run_active = False
+            return self._render_plan_run("DURDU", response)
+        return self._render_plan_run(
+            "ONAY BEKLİYOR",
+            response,
+            task_id=next_task.task_id,
+        )
 
     def _start_task(self, task_id: str) -> str:
         try:
@@ -114,7 +145,32 @@ class TaskPlanCoordinator:
             status = TaskStatus.FAILED
             note = "Ajan akışı başarıyla tamamlanamadı."
         updated = self._state.transition(task_id, status, note)
-        return f"TASK DURUMU\n{updated.task_id}: {updated.status.value}\n\n{response}"
+        task_response = f"TASK DURUMU\n{updated.task_id}: {updated.status.value}\n\n{response}"
+        if not self._plan_run_active:
+            return task_response
+        return self._continue_plan(updated, task_response)
+
+    def _continue_plan(self, updated: TaskItem, task_response: str) -> str:
+        if updated.status is not TaskStatus.COMPLETED:
+            self._plan_run_active = False
+            return self._render_plan_run("DURDU", task_response, task_id=updated.task_id)
+        plan = self._state.get_plan()
+        if plan is None or all(item.status is TaskStatus.COMPLETED for item in plan.tasks):
+            self._plan_run_active = False
+            return self._render_plan_run("TAMAMLANDI", task_response)
+        next_task = self._next_ready_task(plan)
+        if next_task is None:
+            self._plan_run_active = False
+            return self._render_plan_run("DURDU", task_response)
+        next_response = self._start_task(next_task.task_id)
+        if not self._workflow.has_pending:
+            self._plan_run_active = False
+            return self._render_plan_run("DURDU", task_response + "\n\n" + next_response)
+        return self._render_plan_run(
+            "SONRAKİ ADIM ONAY BEKLİYOR",
+            task_response + "\n\n" + next_response,
+            task_id=next_task.task_id,
+        )
 
     def _reset_task(self, task_id: str) -> str:
         try:
@@ -141,7 +197,33 @@ class TaskPlanCoordinator:
         plan = self._state.get_plan()
         if plan is None:
             return "GÖREV DURUMU\nHenüz aktif bir task planı yok."
-        return self._render_plan(plan, "GÖREV DURUMU")
+        report = self._render_plan(plan, "GÖREV DURUMU")
+        if self._plan_run_active:
+            report += f"\nPlan yürütme: aktif ({self._active_task_id or 'task bekleniyor'})"
+        return report
+
+    @staticmethod
+    def _next_ready_task(plan: TaskPlan) -> TaskItem | None:
+        completed = {
+            item.task_id for item in plan.tasks if item.status is TaskStatus.COMPLETED
+        }
+        return next(
+            (
+                item
+                for item in plan.tasks
+                if item.status is TaskStatus.PENDING
+                and set(item.dependencies).issubset(completed)
+            ),
+            None,
+        )
+
+    @staticmethod
+    def _render_plan_run(status: str, detail: str, *, task_id: str = "") -> str:
+        lines = ["PLANLI GÖREV YÜRÜTME", f"Durum: {status}"]
+        if task_id:
+            lines.append(f"Aktif task: {task_id}")
+        lines.extend(("", detail))
+        return "\n".join(lines)
 
     @staticmethod
     def _render_plan(plan: TaskPlan, header: str) -> str:
@@ -167,10 +249,11 @@ class TaskPlanCoordinator:
                 lines.append(f"  Not: {item.note}")
         return "\n".join(lines)
 
-    @classmethod
-    def _task_prompt(cls, item: TaskItem) -> str:
+    def _task_prompt(self, item: TaskItem) -> str:
         prompt = item.description
-        if item.files and cls._EXPLICIT_SCOPE.search(prompt) is None:
+        if item.files and self._planned_execution_enabled:
+            prompt += "\nBORU_DOSYA_KAPSAMI: " + ", ".join(item.files)
+        elif item.files and self._EXPLICIT_SCOPE.search(prompt) is None:
             prompt += (
                 " Yalnızca şu dosyaları kapsa: "
                 + ", ".join(item.files)

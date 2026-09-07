@@ -11,12 +11,15 @@ class ArchitectureTaskPlanner:
         architect: ArchitecturePlanner,
         request_parser: RuleBasedArchitectureRequestParser | None = None,
         max_tasks: int = 12,
+        *,
+        preserve_objective_context: bool = False,
     ) -> None:
         if max_tasks < 1:
             raise ValueError("Task planlayıcı sınırı pozitif olmalıdır.")
         self._architect = architect
         self._request_parser = request_parser or RuleBasedArchitectureRequestParser()
         self._max_tasks = max_tasks
+        self._preserve_objective_context = preserve_objective_context
 
     def plan(self, objective: str) -> TaskPlan:
         architecture = self._architect.plan(
@@ -32,7 +35,7 @@ class ArchitectureTaskPlanner:
             description = (
                 objective
                 if len(architecture.steps) == 1
-                else step.description
+                else self._step_description(step.description, objective)
             )
             tasks.append(
                 TaskItem(
@@ -44,3 +47,8 @@ class ArchitectureTaskPlanner:
                 )
             )
         return TaskPlan(objective, architecture.summary, tuple(tasks))
+
+    def _step_description(self, description: str, objective: str) -> str:
+        if not self._preserve_objective_context:
+            return description
+        return f"{description} Ana hedef: {objective}"

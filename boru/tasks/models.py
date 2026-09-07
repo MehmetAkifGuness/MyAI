@@ -15,6 +15,7 @@ class TaskAction(str, Enum):
     PLAN = "plan"
     STATUS = "status"
     RUN = "run"
+    RUN_PLAN = "run_plan"
     RESET = "reset"
     COMPLETE = "complete"
 

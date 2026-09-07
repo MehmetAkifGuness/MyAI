@@ -16,6 +16,11 @@ class RuleBasedTaskCommandParser:
         r"^\s*task\s+(?:çalıştır|başlat)\s*:\s*(?P<task_id>TASK-[1-9]\d*)\s*$",
         re.IGNORECASE,
     )
+    _RUN_PLAN = re.compile(
+        r"^\s*(?:planı|görev\s+planını|task\s+planını)\s+"
+        r"(?:çalıştır|başlat)\s*[.!?]?\s*$",
+        re.IGNORECASE,
+    )
     _RESET = re.compile(
         r"^\s*task\s+(?:sıfırla|yeniden\s+aç)\s*:\s*"
         r"(?P<task_id>TASK-[1-9]\d*)\s*$",
@@ -28,7 +33,8 @@ class RuleBasedTaskCommandParser:
     )
     _INTENT = re.compile(
         r"^\s*(?:(?:görev|task)\s+(?:planla|durumu)|plan\s+durumu|"
-        r"task\s+(?:çalıştır|başlat|sıfırla|yeniden\s+aç|tamamla|kabul\s+et))\b",
+        r"task\s+(?:çalıştır|başlat|sıfırla|yeniden\s+aç|tamamla|kabul\s+et)|"
+        r"(?:planı|görev\s+planını|task\s+planını)\s+(?:çalıştır|başlat))\b",
         re.IGNORECASE,
     )
 
@@ -49,6 +55,8 @@ class RuleBasedTaskCommandParser:
             return TaskCommand(TaskAction.PLAN, objective)
         if self._STATUS.fullmatch(user_message):
             return TaskCommand(TaskAction.STATUS)
+        if self._RUN_PLAN.fullmatch(user_message):
+            return TaskCommand(TaskAction.RUN_PLAN)
         match = self._RUN.fullmatch(user_message)
         if match is not None:
             return TaskCommand(TaskAction.RUN, match.group("task_id").upper())

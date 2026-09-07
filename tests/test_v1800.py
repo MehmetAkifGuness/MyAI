@@ -224,9 +224,9 @@ class ReleaseV180Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "tekli onarım"):
             main_v170.build_application(batch_runtime_repair_enabled=True)
 
-    def test_default_release_enables_batch_runtime_repair(self):
+    def test_v180_release_enables_batch_runtime_repair(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.8"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V1.8")
             self.assertTrue(flags["runtime_repair_enabled"])

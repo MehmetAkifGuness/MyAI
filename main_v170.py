@@ -343,6 +343,7 @@ def build_application(
     runtime_test_agent_enabled: bool = False,
     runtime_repair_enabled: bool = False,
     batch_runtime_repair_enabled: bool = False,
+    planned_task_execution_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -369,6 +370,8 @@ def build_application(
         )
     if batch_runtime_repair_enabled and not runtime_repair_enabled:
         raise ValueError("Çoklu çalışma zamanı onarımı tekli onarım akışını gerektirir.")
+    if planned_task_execution_enabled and not task_system_enabled:
+        raise ValueError("Planlı görev yürütme Task/Plan sistemini gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1033,8 +1036,10 @@ def build_application(
             planner=ArchitectureTaskPlanner(
                 architect_agent,
                 architecture_request_parser,
+                preserve_objective_context=planned_task_execution_enabled,
             ),
             workflow=agent_orchestrator,
+            planned_execution_enabled=planned_task_execution_enabled,
         )
 
     operation_resolvers = [
