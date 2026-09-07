@@ -342,6 +342,7 @@ def build_application(
     impact_analysis_enabled: bool = False,
     runtime_test_agent_enabled: bool = False,
     runtime_repair_enabled: bool = False,
+    batch_runtime_repair_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -366,6 +367,8 @@ def build_application(
         raise ValueError(
             "Çalışma zamanı onarımı hedefli test ajanı ve hedef odaklı değişiklik gerektirir."
         )
+    if batch_runtime_repair_enabled and not runtime_repair_enabled:
+        raise ValueError("Çoklu çalışma zamanı onarımı tekli onarım akışını gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -851,7 +854,11 @@ def build_application(
     if evaluation_enabled:
         if sandbox_executor is None:
             raise ValueError("Öz değerlendirme sandbox gerektirir.")
-        evaluator = EvidenceEvaluator(project_root, command_executor)
+        evaluator = EvidenceEvaluator(
+            project_root,
+            command_executor,
+            max_paths=12 if batch_runtime_repair_enabled else 8,
+        )
     test_output_parser = TestOutputParser()
     command_coordinator = (
         SafeCommandCoordinator(
@@ -1039,7 +1046,11 @@ def build_application(
         if evaluator is None or coding_coordinator is None:
             raise ValueError("İyileştirme Coding, değerlendirme ve sandbox gerektirir.")
         def staged_evaluator(root):
-            return EvidenceEvaluator(root, DockerSandboxExecutor(root, sandbox_image))
+            return EvidenceEvaluator(
+                root,
+                DockerSandboxExecutor(root, sandbox_image),
+                max_paths=12 if batch_runtime_repair_enabled else 8,
+            )
 
         improvement_applier = VerifiedImprovementApplier(project_root, staged_evaluator)
         improvement_coding = ControlledCodingCoordinator(
@@ -1069,6 +1080,7 @@ def build_application(
                     code_index,
                     relationship_index,
                     impact_index,
+                    batch_runtime_repair_enabled=batch_runtime_repair_enabled,
                 )
             improvement_coordinator = NaturalLanguageImprovementCoordinator(
                 improvement_coordinator,

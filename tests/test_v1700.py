@@ -111,9 +111,9 @@ class ReleaseV170Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "hedefli test ajanı"):
             main_v170.build_application(runtime_repair_enabled=True)
 
-    def test_default_release_enables_runtime_repair(self):
+    def test_v170_release_enables_runtime_repair(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.7"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V1.7")
             self.assertTrue(flags["runtime_test_agent_enabled"])

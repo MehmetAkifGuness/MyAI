@@ -219,6 +219,28 @@ class ImprovementEvidenceContextTests(unittest.TestCase):
 
         self.assertEqual(request.file_scope, ("calculator.py",))
 
+    def test_scoped_prepare_overrides_file_names_in_objective(self):
+        from boru.architecture import RuleBasedArchitectureRequestParser
+
+        coding = FakeCoding()
+        coordinator = ImprovementCoordinator(
+            coding,
+            FakeApplier(),
+            FakeEvaluator(),
+            include_baseline_context=True,
+        )
+
+        coordinator.prepare_scoped(
+            ("calculator.py",),
+            "calculator_test.py sözleşmesini değiştirmeden yalnızca calculator.py dosyasını düzelt",
+            validation_paths=("calculator_test.py",),
+        )
+
+        task = coding.messages[0].removeprefix("kodla: ")
+        request = RuleBasedArchitectureRequestParser().parse_task(task)
+        self.assertEqual(request.file_scope, ("calculator.py",))
+        self.assertIn("BORU_DOSYA_KAPSAMI: calculator.py", task)
+
 
 class ScopedProjectPlannerRepairTests(unittest.TestCase):
     def test_repairs_out_of_scope_creation_with_a_grounded_patch(self):

@@ -121,11 +121,12 @@ class ControlledCodingCoordinator:
         ):
             return None
 
-        parsed = self._deterministic_edit_parser.parse(request.task)
+        deterministic_task = self._without_internal_context(request.task)
+        parsed = self._deterministic_edit_parser.parse(deterministic_task)
         if parsed is None:
             parsed = SmartEditRequest(
                 path=plan.existing_files[0],
-                instruction=request.task,
+                instruction=deterministic_task,
             )
         if parsed.path.replace("\\", "/").casefold() != plan.existing_files[0].casefold():
             return None
@@ -136,6 +137,14 @@ class ControlledCodingCoordinator:
         return ProjectEditProposal(
             instruction=project_request.instruction,
             edits=(edit,),
+        )
+
+    @staticmethod
+    def _without_internal_context(task: str) -> str:
+        return (
+            task.partition("\nBORU_DOSYA_KAPSAMI:")[0]
+            .partition("\n\nDOĞRULAMA_KANITI:")[0]
+            .strip()
         )
 
     @staticmethod

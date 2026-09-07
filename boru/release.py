@@ -1,20 +1,21 @@
 """Single, shared feature configuration for the final release milestones."""
 
 
-def build_release(version: str = "V1.7"):
+def build_release(version: str = "V1.8"):
     from main_v170 import build_application
 
-    if version not in {"V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7"}:
+    if version not in {"V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8"}:
         raise ValueError("Desteklenmeyen sürüm.")
     evaluation = version != "V0.27"
-    improvement = version in {"V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7"}
-    general_agent = version in {"V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7"}
-    deep_code_index = version in {"V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7"}
-    natural_change = version in {"V1.3", "V1.4", "V1.5", "V1.6", "V1.7"}
-    goal_driven_change = version in {"V1.4", "V1.5", "V1.6", "V1.7"}
-    impact_analysis = version in {"V1.5", "V1.6", "V1.7"}
-    runtime_test_agent = version in {"V1.6", "V1.7"}
-    runtime_repair = version == "V1.7"
+    improvement = version in {"V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8"}
+    general_agent = version in {"V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8"}
+    deep_code_index = version in {"V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8"}
+    natural_change = version in {"V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8"}
+    goal_driven_change = version in {"V1.4", "V1.5", "V1.6", "V1.7", "V1.8"}
+    impact_analysis = version in {"V1.5", "V1.6", "V1.7", "V1.8"}
+    runtime_test_agent = version in {"V1.6", "V1.7", "V1.8"}
+    runtime_repair = version in {"V1.7", "V1.8"}
+    batch_runtime_repair = version == "V1.8"
     features = "Docker sandbox"
     if evaluation:
         features += ", kanıta dayalı öz değerlendirme"
@@ -34,6 +35,8 @@ def build_release(version: str = "V1.7"):
         features += ", genel ajan için hedefli sandbox test kanıtı"
     if runtime_repair:
         features += ", başarısız testten onaylı düzeltme ve otomatik yeniden test"
+    if batch_runtime_repair:
+        features += ", çoklu test kök neden gruplama ve sınırlandırılmış çoklu dosya onarımı"
     return build_application(
         application_version=version,
         startup_message=f"Börü {version} hazır. {features} aktif. Testler için Docker Linux motoru gereklidir.",
@@ -50,5 +53,6 @@ def build_release(version: str = "V1.7"):
         impact_analysis_enabled=impact_analysis,
         runtime_test_agent_enabled=runtime_test_agent,
         runtime_repair_enabled=runtime_repair,
+        batch_runtime_repair_enabled=batch_runtime_repair,
         project_edit_max_attempts=2 if goal_driven_change else 1,
     )

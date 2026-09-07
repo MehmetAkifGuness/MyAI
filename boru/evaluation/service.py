@@ -12,17 +12,20 @@ from boru.tools.workspace import ReadOnlyWorkspace
 
 
 class EvidenceEvaluator:
-    def __init__(self, root: Path, executor):
+    def __init__(self, root: Path, executor, *, max_paths: int = 8):
+        if not 1 <= max_paths <= 12:
+            raise ValueError("Değerlendirme dosya sınırı 1–12 arasında olmalıdır.")
         self._reader = ReadOnlyWorkspace(root)
         self._discovery = RelatedTestDiscovery(root)
         self._security = PythonSecurityScanner(root)
         self._review = PythonCodeReviewScanner(root)
         self._executor = executor
+        self._max_paths = max_paths
         self.latest: EvaluationReport | None = None
 
     def evaluate(self, paths: tuple[str, ...]) -> EvaluationReport:
-        if not 1 <= len(paths) <= 8:
-            raise ValueError("Değerlendirme 1–8 dosya gerektirir.")
+        if not 1 <= len(paths) <= self._max_paths:
+            raise ValueError(f"Değerlendirme 1–{self._max_paths} dosya gerektirir.")
         selection = self._discovery.discover(paths)
         # Fingerprint both changed sources and the tests used as evidence.
         evidence_paths = tuple(dict.fromkeys((*selection.source_paths, *selection.test_paths)))

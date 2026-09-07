@@ -22,11 +22,14 @@ class GoalDrivenChangeScopeResolver:
         index: SafeCodeIndex,
         relationships: SafeCodeRelationshipIndex,
         impacts: SafeCodeImpactIndex | None = None,
+        *,
+        batch_runtime_repair_enabled: bool = False,
     ) -> None:
         self._base = SafeChangeScopeResolver(root, index)
         self._files = SafeProjectFileIndex(root, max_files=1000)
         self._relationships = relationships
         self._impacts = impacts
+        self._batch_runtime_repair_enabled = batch_runtime_repair_enabled
 
     def resolve(self, objective: str) -> ChangeScope:
         scope = self._resolve_base_scope(objective)
@@ -36,11 +39,90 @@ class GoalDrivenChangeScopeResolver:
 
     def resolve_runtime_repair(self, objective: str) -> ChangeScope:
         scope = self._resolve_base_scope(objective)
-        if len(scope.paths) != 1 or not self._is_test_path(scope.paths[0]):
+        if len(scope.paths) == 1 and self._is_test_path(scope.paths[0]):
+            return self._expand_test_scope(scope, objective, required=True)
+        if not self._batch_runtime_repair_enabled:
             raise ValueError(
                 "Çalışma zamanı onarımı mevcut ve tekil bir test dosyası gerektirir."
             )
-        return self._expand_test_scope(scope, objective, required=True)
+        if not 2 <= len(scope.paths) <= 8 or not all(
+            self._is_test_path(path) for path in scope.paths
+        ):
+            raise ValueError(
+                "Çoklu çalışma zamanı onarımı 2–8 mevcut test dosyası gerektirir."
+            )
+        return self._expand_batch_test_scope(scope, objective)
+
+    def _expand_batch_test_scope(
+        self,
+        scope: ChangeScope,
+        objective: str,
+    ) -> ChangeScope:
+        grouped = self._group_root_causes(scope.paths, objective)
+        if len(grouped) > 4:
+            raise ValueError("Çoklu onarım en fazla 4 kök neden dosyasını düzenleyebilir.")
+
+        validation_candidates, evidence = self._batch_evidence(scope, grouped)
+        root_cause_groups = tuple(
+            (path, tuple(test_path for test_path, _ in members))
+            for path, members in grouped.items()
+        )
+        grouping_text = "; ".join(
+            f"{path} ← {', '.join(tests)}" for path, tests in root_cause_groups
+        )
+        return ChangeScope(
+            paths=tuple(grouped),
+            evidence=tuple(evidence),
+            guidance=(
+                "Kök neden grupları: " + grouping_text + ". "
+                "Test sözleşmelerini değiştirmeden yalnızca bu uygulama dosyalarındaki "
+                "kök nedenleri düzelt"
+            ),
+            validation_paths=tuple(dict.fromkeys(validation_candidates))[:8],
+            root_cause_groups=root_cause_groups,
+        )
+
+    def _group_root_causes(
+        self,
+        test_paths: tuple[str, ...],
+        objective: str,
+    ) -> dict[str, list[tuple[str, RelatedCodeFile]]]:
+        grouped: dict[str, list[tuple[str, RelatedCodeFile]]] = {}
+        for test_path in test_paths:
+            implementation = self._select_implementation(test_path, objective)
+            if implementation is None:
+                raise ValueError(
+                    f"{test_path} testinden tekil bir proje içi kök neden dosyası çıkarılamadı."
+                )
+            grouped.setdefault(implementation.path, []).append((test_path, implementation))
+        return grouped
+
+    def _batch_evidence(
+        self,
+        scope: ChangeScope,
+        grouped: dict[str, list[tuple[str, RelatedCodeFile]]],
+    ) -> tuple[list[str], list[str]]:
+        validation_candidates = list(scope.paths)
+        evidence = list(scope.evidence)
+        for implementation_path, members in grouped.items():
+            for test_path, relationship in members:
+                evidence.append(
+                    f"import ilişkisi — {test_path} → {implementation_path} "
+                    f"({relationship.imported_via})"
+                )
+            if self._impacts is not None:
+                for impact in self._impacts.impacted_files(
+                    implementation_path,
+                    max_depth=3,
+                    max_results=12,
+                ):
+                    evidence.append(
+                        f"ters bağımlılık — {impact.path}, mesafe {impact.distance}, "
+                        f"{'test' if impact.is_test else 'çağıran'}"
+                    )
+                    if impact.is_test:
+                        validation_candidates.append(impact.path)
+        return validation_candidates, evidence
 
     def _expand_test_scope(
         self,

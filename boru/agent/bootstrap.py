@@ -61,21 +61,22 @@ class DeterministicEvidenceBootstrapper:
             or not any(cue in folded for cue in ("çalıştır", "calistir", "koş", "run", "sandbox"))
         ):
             return
-        target = self._test_path(objective) or source_path
-        arguments: dict[str, object] = {
-            "path": target,
-            "runner": "pytest" if "pytest" in folded else "unittest",
-        }
-        observations.append(
-            AgentObservation(
-                step=len(observations) + 1,
-                tool_name="run_targeted_test",
-                arguments=arguments,
-                result=self._executor.execute(
-                    ToolCall(tool_name="run_targeted_test", arguments=arguments)
-                ),
+        targets = self._test_paths(objective) or (source_path,)
+        for target in targets:
+            arguments: dict[str, object] = {
+                "path": target,
+                "runner": "pytest" if "pytest" in folded else "unittest",
+            }
+            observations.append(
+                AgentObservation(
+                    step=len(observations) + 1,
+                    tool_name="run_targeted_test",
+                    arguments=arguments,
+                    result=self._executor.execute(
+                        ToolCall(tool_name="run_targeted_test", arguments=arguments)
+                    ),
+                )
             )
-        )
 
     def _append_impact_evidence(
         self,
@@ -172,14 +173,14 @@ class DeterministicEvidenceBootstrapper:
         return " ".join(words[:2])
 
     @staticmethod
-    def _test_path(objective: str) -> str | None:
+    def _test_paths(objective: str) -> tuple[str, ...]:
         matches = re.findall(
             r"\b[A-Za-z0-9_./\\-]+\.py\b",
             objective,
             re.IGNORECASE,
         )
-        return next(
-            (
+        return tuple(
+            dict.fromkeys(
                 path.replace("\\", "/")
                 for path in matches
                 if Path(path.replace("\\", "/")).name.casefold().startswith("test_")
@@ -188,9 +189,8 @@ class DeterministicEvidenceBootstrapper:
                     part.casefold()
                     for part in Path(path.replace("\\", "/")).parts[:-1]
                 }
-            ),
-            None,
-        )
+            )
+        )[:8]
 
     @staticmethod
     def _first_path(result: ToolResult) -> str | None:

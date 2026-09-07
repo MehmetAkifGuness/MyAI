@@ -1,0 +1,1 @@
+MIN_STOCK = 1

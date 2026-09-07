@@ -1,5 +1,4 @@
 from boru.testing.parser import RuleBasedTestAgentRequestParser
-from boru.architecture.request_parser import RuleBasedArchitectureRequestParser
 
 
 class ImprovementCoordinator:
@@ -81,9 +80,7 @@ class ImprovementCoordinator:
             self._applier.allowed_paths = request.source_paths
             self._applier.validation_paths = tuple(validation_paths)
             task = objective.strip()
-            explicit = RuleBasedArchitectureRequestParser().parse_task(task).file_scope
-            if not explicit:
-                task += "\nBORU_DOSYA_KAPSAMI: " + ", ".join(request.source_paths)
+            task += "\nBORU_DOSYA_KAPSAMI: " + ", ".join(request.source_paths)
             if self._include_baseline_context:
                 task += (
                     "\n\nDOĞRULAMA_KANITI:\n"

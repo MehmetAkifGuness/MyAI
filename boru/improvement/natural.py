@@ -14,6 +14,7 @@ class ChangeScope:
     guidance: str = ""
     explicit: bool = False
     validation_paths: tuple[str, ...] = ()
+    root_cause_groups: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
 class SafeChangeScopeResolver:
@@ -303,6 +304,17 @@ class NaturalLanguageImprovementCoordinator:
             *(
                 ["Doğrulama kapsamı: " + ", ".join(scope.validation_paths)]
                 if scope.validation_paths
+                else []
+            ),
+            *(
+                [
+                    "Kök neden grupları:",
+                    *(
+                        f"- {implementation}: {', '.join(tests)}"
+                        for implementation, tests in scope.root_cause_groups
+                    ),
+                ]
+                if scope.root_cause_groups
                 else []
             ),
             "Kanıtlar:",
