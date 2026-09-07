@@ -76,7 +76,9 @@ class PersistentTaskStateTests(unittest.TestCase):
                 tuple(item.event for item in reloaded.get_journal()),
                 ("plan_created", "task_status", "task_status"),
             )
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8"))["version"], 1)
+            document = json.loads(path.read_text(encoding="utf-8"))
+            self.assertEqual(document["schema"], "boru.task-checkpoint")
+            self.assertEqual(document["version"], 2)
 
     def test_restart_recovers_running_task_as_pending_without_reusing_approval(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -96,7 +98,7 @@ class PersistentTaskStateTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "checkpoint.json"
             path.write_text('{"version": 999}', encoding="utf-8")
-            with self.assertRaisesRegex(RuntimeError, "V1"):
+            with self.assertRaisesRegex(RuntimeError, "desteklenen"):
                 PersistentTaskPlanState(JsonTaskCheckpointRepository(path))
 
             path.unlink()

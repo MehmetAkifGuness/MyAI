@@ -5,6 +5,10 @@ from boru.tasks.checkpoint import (
     TaskCheckpoint,
     TaskJournalEntry,
 )
+from boru.tasks.checkpoint_migration import (
+    TaskCheckpointMigration,
+    TaskCheckpointMigrator,
+)
 from boru.tasks.models import (
     TaskAction,
     TaskCommand,
@@ -35,6 +39,8 @@ __all__ = [
     "TaskCommand",
     "TaskItem",
     "TaskCheckpoint",
+    "TaskCheckpointMigration",
+    "TaskCheckpointMigrator",
     "TaskJournalEntry",
     "TaskPlan",
     "TaskPlanCoordinator",

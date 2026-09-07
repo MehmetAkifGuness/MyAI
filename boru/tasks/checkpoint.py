@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from boru.persistence import AtomicJsonFileStore, JsonFileReadError, JsonFileWriteError
+from boru.tasks.checkpoint_migration import TaskCheckpointMigrator
 from boru.tasks.models import TaskItem, TaskPlan, TaskStatus
 from boru.tasks.source_guard import TaskSourceFingerprint
 
@@ -46,7 +47,8 @@ class TaskCheckpoint:
 class JsonTaskCheckpointRepository:
     """Persist one bounded task plan and journal through atomic JSON replacement."""
 
-    _VERSION = 1
+    _VERSION = TaskCheckpointMigrator.CURRENT_VERSION
+    _SCHEMA = TaskCheckpointMigrator.SCHEMA
     _MAX_BYTES = 256 * 1024
     _MAX_JOURNAL = 100
     _SECRET_PATTERNS = (
@@ -58,12 +60,23 @@ class JsonTaskCheckpointRepository:
 
     def __init__(self, file_path: str | Path) -> None:
         self._store = AtomicJsonFileStore(file_path)
+        self._migrator = TaskCheckpointMigrator()
+        self._last_migrated_from: int | None = None
 
     @property
     def path(self) -> Path:
         return self._store.path
 
+    @property
+    def schema_label(self) -> str:
+        return f"{self._SCHEMA}/v{self._VERSION}"
+
+    @property
+    def last_migrated_from(self) -> int | None:
+        return self._last_migrated_from
+
     def load(self) -> TaskCheckpoint:
+        self._last_migrated_from = None
         try:
             if self.path.exists() and self.path.stat().st_size > self._MAX_BYTES:
                 raise RuntimeError("Task checkpoint dosyası boyut sınırını aşıyor.")
@@ -73,9 +86,14 @@ class JsonTaskCheckpointRepository:
         if data is None:
             return TaskCheckpoint(None)
         try:
-            return self._decode(data)
+            migration = self._migrator.migrate(data)
+            checkpoint = self._decode(migration.document)
         except (KeyError, TypeError, ValueError) as error:
-            raise RuntimeError("Task checkpoint geçerli bir V1 belgesi değil.") from error
+            raise RuntimeError("Task checkpoint geçerli veya desteklenen bir belge değil.") from error
+        if migration.migrated:
+            self.save(checkpoint)
+            self._last_migrated_from = migration.migrated_from
+        return checkpoint
 
     def save(self, checkpoint: TaskCheckpoint) -> None:
         self._validate_safe(checkpoint)
@@ -85,8 +103,8 @@ class JsonTaskCheckpointRepository:
             raise RuntimeError(f"Task checkpoint yazılamadı: {self.path}") from error
 
     def _decode(self, data: object) -> TaskCheckpoint:
-        if not isinstance(data, dict) or data.get("version") != self._VERSION:
-            raise ValueError("Checkpoint sürümü geçersiz.")
+        self._validate_document_header(data)
+        assert isinstance(data, dict)
         raw_plan = data.get("plan")
         raw_journal = data.get("journal")
         raw_fingerprints = data.get("fingerprints", [])
@@ -102,6 +120,14 @@ class JsonTaskCheckpointRepository:
         checkpoint = TaskCheckpoint(plan, journal, fingerprints)
         self._validate_safe(checkpoint)
         return checkpoint
+
+    def _validate_document_header(self, data: object) -> None:
+        if (
+            not isinstance(data, dict)
+            or data.get("schema") != self._SCHEMA
+            or data.get("version") != self._VERSION
+        ):
+            raise ValueError("Checkpoint sürümü geçersiz.")
 
     @staticmethod
     def _decode_plan(data: dict[str, object]) -> TaskPlan:
@@ -173,6 +199,7 @@ class JsonTaskCheckpointRepository:
     @classmethod
     def _encode(cls, checkpoint: TaskCheckpoint) -> dict[str, object]:
         return {
+            "schema": cls._SCHEMA,
             "version": cls._VERSION,
             "plan": cls._encode_plan(checkpoint.plan) if checkpoint.plan is not None else None,
             "journal": [

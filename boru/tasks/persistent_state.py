@@ -38,6 +38,14 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
     def checkpoint_path(self) -> Path:
         return self._repository.path
 
+    @property
+    def checkpoint_schema(self) -> str:
+        return self._repository.schema_label
+
+    @property
+    def checkpoint_migrated_from(self) -> int | None:
+        return self._repository.last_migrated_from
+
     def get_journal(self) -> tuple[TaskJournalEntry, ...]:
         with self._lock:
             return tuple(self._journal)

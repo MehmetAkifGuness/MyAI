@@ -1,24 +1,35 @@
 """Single, shared feature configuration for the final release milestones."""
 
 
-def build_release(version: str = "V2.1"):
+_RELEASES = (
+    "V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4",
+    "V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1", "V2.2",
+)
+
+
+def _enabled_from(version: str, milestone: str) -> bool:
+    return _RELEASES.index(version) >= _RELEASES.index(milestone)
+
+
+def build_release(version: str = "V2.2"):
     from main_v170 import build_application
 
-    if version not in {"V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}:
+    if version not in _RELEASES:
         raise ValueError("Desteklenmeyen sürüm.")
-    evaluation = version != "V0.27"
-    improvement = version in {"V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}
-    general_agent = version in {"V1.1", "V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}
-    deep_code_index = version in {"V1.2", "V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}
-    natural_change = version in {"V1.3", "V1.4", "V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}
-    goal_driven_change = version in {"V1.4", "V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}
-    impact_analysis = version in {"V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}
-    runtime_test_agent = version in {"V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}
-    runtime_repair = version in {"V1.7", "V1.8", "V1.9", "V2.0", "V2.1"}
-    batch_runtime_repair = version in {"V1.8", "V1.9", "V2.0", "V2.1"}
-    planned_task_execution = version in {"V1.9", "V2.0", "V2.1"}
-    persistent_task_checkpoint = version in {"V2.0", "V2.1"}
-    source_drift_detection = version == "V2.1"
+    evaluation = _enabled_from(version, "V0.28")
+    improvement = _enabled_from(version, "V0.29")
+    general_agent = _enabled_from(version, "V1.1")
+    deep_code_index = _enabled_from(version, "V1.2")
+    natural_change = _enabled_from(version, "V1.3")
+    goal_driven_change = _enabled_from(version, "V1.4")
+    impact_analysis = _enabled_from(version, "V1.5")
+    runtime_test_agent = _enabled_from(version, "V1.6")
+    runtime_repair = _enabled_from(version, "V1.7")
+    batch_runtime_repair = _enabled_from(version, "V1.8")
+    planned_task_execution = _enabled_from(version, "V1.9")
+    persistent_task_checkpoint = _enabled_from(version, "V2.0")
+    source_drift_detection = _enabled_from(version, "V2.1")
+    checkpoint_migration = _enabled_from(version, "V2.2")
     optional_features = (
         ("kanıta dayalı öz değerlendirme", evaluation),
         ("onaylı ve geri alınabilir iyileştirme", improvement),
@@ -36,6 +47,7 @@ def build_release(version: str = "V2.1"):
         ("bağımlılık sıralı plan yürütme ve adım bazlı doğrulama", planned_task_execution),
         ("kalıcı task checkpoint, güvenli yeniden başlatma ve işlem günlüğü", persistent_task_checkpoint),
         ("SHA-256 kaynak drift algılama ve eski plan durdurma", source_drift_detection),
+        ("checkpoint şema sürümleme ve doğrulanmış otomatik migration", checkpoint_migration),
     )
     features = ", ".join(
         ("Docker sandbox", *(name for name, enabled in optional_features if enabled))

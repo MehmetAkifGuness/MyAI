@@ -222,6 +222,12 @@ class TaskPlanCoordinator:
         checkpoint_path = getattr(self._state, "checkpoint_path", None)
         if checkpoint_path is not None:
             lines.append(f"Checkpoint: {checkpoint_path}")
+        checkpoint_schema = getattr(self._state, "checkpoint_schema", None)
+        if checkpoint_schema:
+            lines.append(f"Checkpoint şeması: {checkpoint_schema}")
+        migrated_from = getattr(self._state, "checkpoint_migrated_from", None)
+        if migrated_from is not None:
+            lines.append(f"Son yükleme: V{migrated_from} → V2 migration tamamlandı.")
         return "\n".join(lines)
 
     @staticmethod

@@ -112,7 +112,7 @@ class ReleaseV210Tests(unittest.TestCase):
 
     def test_default_release_enables_source_drift_detection(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V2.1"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V2.1")
             self.assertTrue(flags["persistent_task_checkpoint_enabled"])
