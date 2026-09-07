@@ -1,17 +1,18 @@
 """Single, shared feature configuration for the final release milestones."""
 
 
-def build_release(version: str = "V1.4"):
+def build_release(version: str = "V1.5"):
     from main_v170 import build_application
 
-    if version not in {"V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4"}:
+    if version not in {"V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4", "V1.5"}:
         raise ValueError("Desteklenmeyen sürüm.")
     evaluation = version != "V0.27"
-    improvement = version in {"V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4"}
-    general_agent = version in {"V1.1", "V1.2", "V1.3", "V1.4"}
-    deep_code_index = version in {"V1.2", "V1.3", "V1.4"}
-    natural_change = version in {"V1.3", "V1.4"}
-    goal_driven_change = version == "V1.4"
+    improvement = version in {"V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4", "V1.5"}
+    general_agent = version in {"V1.1", "V1.2", "V1.3", "V1.4", "V1.5"}
+    deep_code_index = version in {"V1.2", "V1.3", "V1.4", "V1.5"}
+    natural_change = version in {"V1.3", "V1.4", "V1.5"}
+    goal_driven_change = version in {"V1.4", "V1.5"}
+    impact_analysis = version == "V1.5"
     features = "Docker sandbox"
     if evaluation:
         features += ", kanıta dayalı öz değerlendirme"
@@ -25,6 +26,8 @@ def build_release(version: str = "V1.4"):
         features += ", doğal dilden onaylı değişiklik ve doğrulama döngüsü"
     if goal_driven_change:
         features += ", hedef odaklı hata teşhisi ve ilişkili dosya kapsamı"
+    if impact_analysis:
+        features += ", ters bağımlılık ve etkilenen test analizi"
     return build_application(
         application_version=version,
         startup_message=f"Börü {version} hazır. {features} aktif. Testler için Docker Linux motoru gereklidir.",
@@ -38,5 +41,6 @@ def build_release(version: str = "V1.4"):
         deep_code_index_enabled=deep_code_index,
         natural_change_enabled=natural_change,
         goal_driven_change_enabled=goal_driven_change,
+        impact_analysis_enabled=impact_analysis,
         project_edit_max_attempts=2 if goal_driven_change else 1,
     )

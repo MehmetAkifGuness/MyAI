@@ -43,7 +43,36 @@ class DeterministicEvidenceBootstrapper:
             )
         )
         self._append_related_evidence(observations, source_path, objective)
+        self._append_impact_evidence(observations, source_path, objective)
         return observations
+
+    def _append_impact_evidence(
+        self,
+        observations: list[AgentObservation],
+        source_path: str,
+        objective: str,
+    ) -> None:
+        folded = objective.casefold()
+        if (
+            self._registry.get("impact_analysis") is None
+            or not any(cue in folded for cue in ("etkilen", "etki", "kim kullan", "nereden çağr"))
+        ):
+            return
+        arguments: dict[str, object] = {
+            "path": source_path,
+            "max_depth": 3,
+            "max_results": 20,
+        }
+        observations.append(
+            AgentObservation(
+                step=len(observations) + 1,
+                tool_name="impact_analysis",
+                arguments=arguments,
+                result=self._executor.execute(
+                    ToolCall(tool_name="impact_analysis", arguments=arguments)
+                ),
+            )
+        )
 
     def _append_related_evidence(
         self,
@@ -84,6 +113,13 @@ class DeterministicEvidenceBootstrapper:
 
     @staticmethod
     def _query(objective: str) -> str:
+        path_match = re.search(
+            r"\b[A-Za-z0-9_./\\-]+\.(?:py|js|ts|java|cs|dart|go|rs)\b",
+            objective,
+            re.IGNORECASE,
+        )
+        if path_match is not None:
+            return path_match.group(0).replace("\\", "/")
         tokens = re.findall(r"\b[A-Za-z_][A-Za-z0-9_]{2,}\b", objective)
         code_tokens = [
             token

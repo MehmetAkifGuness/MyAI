@@ -19,6 +19,7 @@ class VerifiedImprovementApplier:
         self._delegate = BatchProjectEditApplier(workspace=self._workspace)
         self._evaluator_factory = evaluator_factory
         self.allowed_paths: tuple[str, ...] = ()
+        self.validation_paths: tuple[str, ...] = ()
         self.last_validation = None
         self._undo: ProjectEditProposal | None = None
 
@@ -48,7 +49,10 @@ class VerifiedImprovementApplier:
                 staged_workspace.apply_text_update(
                     relative_path=edit.path, content=edit.updated_content, expected_sha256=current.sha256)
             evaluator = self._evaluator_factory(staged_root)
-            self.last_validation = evaluator.evaluate(self.allowed_paths)
+            evaluation_paths = tuple(
+                dict.fromkeys((*self.allowed_paths, *self.validation_paths))
+            )
+            self.last_validation = evaluator.evaluate(evaluation_paths)
             if self.last_validation.verdict is not Verdict.PASS:
                 raise ValueError("Geçici kopya kontrolleri geçmedi; kaynaklar değiştirilmedi.\n"
                                  + self.last_validation.render())

@@ -62,7 +62,11 @@ class AgentReportRenderer:
         if not result.success:
             return False
         result_count = result.metadata.get("result_count")
-        if isinstance(result_count, int) and result_count < 1:
+        if (
+            isinstance(result_count, int)
+            and result_count < 1
+            and result.metadata.get("absence_is_evidence") is not True
+        ):
             return False
         return bool(result.content.strip())
 
@@ -77,4 +81,3 @@ class AgentReportRenderer:
             return label
         safe_paths = [item for item in paths if isinstance(item, str)][:5]
         return f"{label} — {', '.join(safe_paths)}" if safe_paths else label
-

@@ -1,9 +1,11 @@
 import json
 from time import monotonic
 
+from boru.agent.answer_safety import SafeAgentAnswerFilter
 from boru.agent.bootstrap import DeterministicEvidenceBootstrapper
 from boru.agent.contracts import StructuredChatModel
 from boru.agent.final_synthesis import GroundedFinalSynthesizer
+from boru.agent.impact_synthesis import GroundedImpactSynthesizer
 from boru.agent.models import AgentAction, AgentActionKind, AgentObservation
 from boru.agent.parser import JsonAgentActionParser
 from boru.agent.reporting import AgentReportRenderer
@@ -37,6 +39,7 @@ class ReadOnlyToolAgent:
                 "properties": {
                     "path": {"type": "string"},
                     "query": {"type": "string"},
+                    "max_depth": {"type": "integer"},
                     "max_results": {"type": "integer"},
                 },
                 "additionalProperties": False,
@@ -75,6 +78,8 @@ class ReadOnlyToolAgent:
         self._final_synthesizer = GroundedFinalSynthesizer(model)
         self._reporter = AgentReportRenderer()
         self._answer_verifier = GroundedAnswerVerifier(model)
+        self._answer_filter = SafeAgentAnswerFilter()
+        self._impact_synthesizer = GroundedImpactSynthesizer()
 
     def run(self, objective: str) -> str:
         cleaned = objective.strip()
@@ -92,6 +97,10 @@ class ReadOnlyToolAgent:
             for observation in observations
         }
         try:
+            deterministic_report = self._render_deterministic_impact(cleaned, observations)
+            if deterministic_report is not None:
+                succeeded = True
+                return deterministic_report
             report, succeeded = self._run_steps(
                 cleaned,
                 observations,
@@ -102,6 +111,23 @@ class ReadOnlyToolAgent:
         finally:
             if self._monitor is not None:
                 self._monitor.record("agent.total", monotonic() - started, succeeded)
+
+    def _render_deterministic_impact(
+        self,
+        objective: str,
+        observations: list[AgentObservation],
+    ) -> str | None:
+        answer = self._impact_synthesizer.synthesize(objective, observations)
+        if answer is None:
+            return None
+        action = AgentAction(
+            kind=AgentActionKind.FINAL,
+            answer=answer,
+            evidence=tuple(
+                item.step for item in observations if item.result.success
+            ),
+        )
+        return self._reporter.render_final(action, observations, objective)
 
     def _run_steps(
         self,
@@ -203,8 +229,14 @@ class ReadOnlyToolAgent:
         usable = self._reporter.usable_observations(observations)
         if not usable:
             return None
+        candidate = self._answer_filter.clean(action.answer)
+        if candidate is None:
+            return None
         evidence = self._trace(usable, [])
-        verified = self._answer_verifier.verify(objective, action.answer, evidence)
+        verified = self._answer_verifier.verify(objective, candidate, evidence)
+        if verified is None:
+            return None
+        verified = self._answer_filter.clean(verified)
         if verified is None:
             return None
         verified_action = AgentAction(

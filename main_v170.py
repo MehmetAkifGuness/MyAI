@@ -15,9 +15,11 @@ from boru.agent import GeneralAgentCoordinator, ReadOnlyToolAgent
 from boru.code_index import (
     CodeSearchTool,
     FileSymbolsTool,
+    ImpactAnalysisTool,
     ProjectOverviewTool,
     RelatedCodeTool,
     SafeCodeIndex,
+    SafeCodeImpactIndex,
     SafeCodeRelationshipIndex,
 )
 
@@ -337,6 +339,7 @@ def build_application(
     deep_code_index_enabled: bool = False,
     natural_change_enabled: bool = False,
     goal_driven_change_enabled: bool = False,
+    impact_analysis_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -347,6 +350,10 @@ def build_application(
         raise ValueError(
             "Hedef odaklı değişiklik akışı doğal değişiklik ve ilişki indeksi gerektirir."
         )
+    if impact_analysis_enabled and (
+        not general_agent_enabled or not deep_code_index_enabled
+    ):
+        raise ValueError("Etki analizi güvenli ilişki indeksi gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -502,6 +509,7 @@ def build_application(
 
     code_index = None
     relationship_index = None
+    impact_index = None
     read_tools = [
         CalculatorTool(),
         CurrentTimeTool(),
@@ -522,6 +530,9 @@ def build_application(
             read_tools.append(
                 RelatedCodeTool(relationship_index)
             )
+        if impact_analysis_enabled:
+            impact_index = SafeCodeImpactIndex(project_root)
+            read_tools.append(ImpactAnalysisTool(impact_index))
 
     read_registry = ToolRegistry(read_tools)
 
@@ -1034,6 +1045,7 @@ def build_application(
                     project_root,
                     code_index,
                     relationship_index,
+                    impact_index,
                 )
             improvement_coordinator = NaturalLanguageImprovementCoordinator(
                 improvement_coordinator,

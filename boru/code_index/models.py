@@ -41,3 +41,11 @@ class RelatedCodeFile:
     score: int
     imported_via: str
     matched_calls: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True, slots=True)
+class ImpactedCodeFile:
+    path: str
+    distance: int
+    imported_via: str
+    is_test: bool = False

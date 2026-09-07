@@ -1,7 +1,12 @@
 import re
 from pathlib import Path
 
-from boru.code_index import SafeCodeIndex, SafeCodeRelationshipIndex
+from boru.code_index import (
+    RelatedCodeFile,
+    SafeCodeImpactIndex,
+    SafeCodeIndex,
+    SafeCodeRelationshipIndex,
+)
 from boru.improvement.natural import ChangeScope, SafeChangeScopeResolver
 from boru.tools.project_index import SafeProjectFileIndex
 
@@ -16,21 +21,33 @@ class GoalDrivenChangeScopeResolver:
         root: str | Path,
         index: SafeCodeIndex,
         relationships: SafeCodeRelationshipIndex,
+        impacts: SafeCodeImpactIndex | None = None,
     ) -> None:
         self._base = SafeChangeScopeResolver(root, index)
         self._files = SafeProjectFileIndex(root, max_files=1000)
         self._relationships = relationships
+        self._impacts = impacts
 
     def resolve(self, objective: str) -> ChangeScope:
+        scope = self._resolve_base_scope(objective)
+        if scope.explicit or len(scope.paths) != 1 or not self._is_test_path(scope.paths[0]):
+            return scope
+        implementation = self._select_implementation(scope.paths[0], objective)
+        if implementation is None:
+            return scope
+        return self._build_implementation_scope(scope, implementation, objective)
+
+    def _resolve_base_scope(self, objective: str) -> ChangeScope:
         try:
-            scope = self._base.resolve(objective)
+            return self._base.resolve(objective)
         except ValueError as original_error:
-            scope = self._resolve_file_stem(objective, original_error)
-        if scope.explicit or len(scope.paths) != 1:
-            return scope
-        primary = scope.paths[0]
-        if not self._is_test_path(primary):
-            return scope
+            return self._resolve_file_stem(objective, original_error)
+
+    def _select_implementation(
+        self,
+        primary: str,
+        objective: str,
+    ) -> RelatedCodeFile | None:
         related = tuple(
             item
             for item in self._relationships.related_files(
@@ -42,17 +59,40 @@ class GoalDrivenChangeScopeResolver:
             and Path(item.path).name != "__init__.py"
         )
         if not related:
-            return scope
+            return None
         if len(related) > 1 and related[0].score == related[1].score:
             raise ValueError(
                 "Test birden fazla eşit güçlü uygulama dosyasına bağlı: "
                 + ", ".join(item.path for item in related if item.score == related[0].score)
                 + ". Kök neden dosyasını açıkça belirtin."
             )
-        implementation = related[0]
+        return related[0]
+
+    def _build_implementation_scope(
+        self,
+        scope: ChangeScope,
+        implementation: RelatedCodeFile,
+        objective: str,
+    ) -> ChangeScope:
+        primary = scope.paths[0]
+        impacts = (
+            self._impacts.impacted_files(
+                implementation.path,
+                max_depth=3,
+                max_results=12,
+            )
+            if self._impacts is not None
+            else ()
+        )
+        validation_paths = tuple(item.path for item in impacts if item.is_test)[:7]
         evidence = (
             *scope.evidence,
             f"import ilişkisi — {primary} → {implementation.path} ({implementation.imported_via})",
+            *(
+                f"ters bağımlılık — {item.path}, mesafe {item.distance}, "
+                f"{'test' if item.is_test else 'çağıran'}"
+                for item in impacts
+            ),
         )
         guidance = (
             f"Kök neden adayı {implementation.path} dosyasındadır. "
@@ -62,6 +102,7 @@ class GoalDrivenChangeScopeResolver:
             paths=(implementation.path,),
             evidence=evidence,
             guidance=guidance,
+            validation_paths=validation_paths,
         )
 
     def _resolve_file_stem(self, objective: str, original_error: ValueError) -> ChangeScope:

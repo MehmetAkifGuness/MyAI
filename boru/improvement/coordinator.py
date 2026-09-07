@@ -51,14 +51,35 @@ class ImprovementCoordinator:
             return "Biçim: iyileştir: boru/dosya.py[, ikinci.py] | somut iyileştirme hedefi"
         return self._prepare(paths_text, objective)
 
-    def _prepare(self, paths_text: str, objective: str) -> str:
+    def prepare_scoped(
+        self,
+        paths: tuple[str, ...],
+        objective: str,
+        *,
+        validation_paths: tuple[str, ...] = (),
+    ) -> str:
+        return self._prepare(
+            ", ".join(paths),
+            objective,
+            validation_paths=validation_paths,
+        )
+
+    def _prepare(
+        self,
+        paths_text: str,
+        objective: str,
+        *,
+        validation_paths: tuple[str, ...] = (),
+    ) -> str:
         try:
             request = RuleBasedTestAgentRequestParser().parse("test ajanı: " + paths_text)
             if request is None:
                 raise ValueError("Dosya kapsamı boş.")
-            baseline = self._evaluator.evaluate(request.source_paths)
+            evidence_paths = tuple(dict.fromkeys((*request.source_paths, *validation_paths)))
+            baseline = self._evaluator.evaluate(evidence_paths)
             baseline_text = baseline.render()
             self._applier.allowed_paths = request.source_paths
+            self._applier.validation_paths = tuple(validation_paths)
             task = objective.strip()
             explicit = RuleBasedArchitectureRequestParser().parse_task(task).file_scope
             if not explicit:

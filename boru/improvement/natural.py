@@ -13,6 +13,7 @@ class ChangeScope:
     evidence: tuple[str, ...]
     guidance: str = ""
     explicit: bool = False
+    validation_paths: tuple[str, ...] = ()
 
 
 class SafeChangeScopeResolver:
@@ -228,6 +229,13 @@ class NaturalLanguageImprovementCoordinator:
                 "aynı dosya kapsamında test hatasının kök nedenini gider."
             )
         paths = ", ".join(session.scope.paths)
+        prepare_scoped = getattr(self._workflow, "prepare_scoped", None)
+        if callable(prepare_scoped):
+            return prepare_scoped(
+                session.scope.paths,
+                objective,
+                validation_paths=session.scope.validation_paths,
+            )
         return self._workflow.resolve(f"iyileştir: {paths} | {objective}") or "Öneri hazırlanamadı."
 
     @classmethod
@@ -256,6 +264,11 @@ class NaturalLanguageImprovementCoordinator:
             "DOĞAL DİL AJAN AKIŞI",
             "Durum: ARAŞTIRMA TAMAMLANDI",
             "Güvenli kapsam: " + ", ".join(scope.paths),
+            *(
+                ["Doğrulama kapsamı: " + ", ".join(scope.validation_paths)]
+                if scope.validation_paths
+                else []
+            ),
             "Kanıtlar:",
             *(f"- {item}" for item in scope.evidence),
             "",

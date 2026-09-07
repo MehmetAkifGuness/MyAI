@@ -281,13 +281,14 @@ class ReleaseV140Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "ilişki indeksi"):
             main_v170.build_application(goal_driven_change_enabled=True)
 
-    def test_default_release_enables_goal_driven_change_flow(self):
+    def test_v140_release_enables_goal_driven_change_flow(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.4"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V1.4")
             self.assertTrue(flags["natural_change_enabled"])
             self.assertTrue(flags["goal_driven_change_enabled"])
+            self.assertFalse(flags["impact_analysis_enabled"])
             self.assertEqual(flags["project_edit_max_attempts"], 2)
 
 

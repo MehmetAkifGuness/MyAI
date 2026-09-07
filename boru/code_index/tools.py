@@ -1,4 +1,5 @@
 from boru.code_index.index import SafeCodeIndex
+from boru.code_index.impact import SafeCodeImpactIndex
 from boru.code_index.relationships import SafeCodeRelationshipIndex
 from boru.tools.arguments import ToolArgumentSchema, ToolArgumentSpec, ToolArgumentType
 from boru.tools.models import ToolResult, ToolRisk
@@ -207,5 +208,99 @@ class RelatedCodeTool:
                 "path": path,
                 "result_count": len(related),
                 "paths": tuple(item.path for item in related),
+            },
+        )
+
+
+class ImpactAnalysisTool:
+    def __init__(self, index: SafeCodeImpactIndex) -> None:
+        self._index = index
+
+    @property
+    def name(self) -> str:
+        return "impact_analysis"
+
+    @property
+    def description(self) -> str:
+        return (
+            "Bir Python dosyasını doğrudan veya dolaylı import eden proje dosyalarını ve "
+            "testleri bulur. Argümanlar: path, max_depth, max_results."
+        )
+
+    @property
+    def risk(self) -> ToolRisk:
+        return ToolRisk.READ_ONLY
+
+    @property
+    def argument_schema(self) -> ToolArgumentSchema:
+        return ToolArgumentSchema(
+            arguments=(
+                ToolArgumentSpec(
+                    "path",
+                    ToolArgumentType.STRING,
+                    strip=True,
+                    allow_empty=False,
+                    max_length=1024,
+                ),
+                ToolArgumentSpec(
+                    "max_depth",
+                    ToolArgumentType.INTEGER,
+                    required=False,
+                    has_default=True,
+                    default=3,
+                ),
+                ToolArgumentSpec(
+                    "max_results",
+                    ToolArgumentType.INTEGER,
+                    required=False,
+                    has_default=True,
+                    default=20,
+                ),
+            )
+        )
+
+    def execute(self, arguments: dict[str, object]) -> ToolResult:
+        path = arguments["path"]
+        max_depth = arguments["max_depth"]
+        max_results = arguments["max_results"]
+        if not isinstance(path, str):
+            raise ValueError("impact_analysis path argümanı metin olmalıdır.")
+        if any(
+            isinstance(value, bool) or not isinstance(value, int)
+            for value in (max_depth, max_results)
+        ):
+            raise ValueError("impact_analysis sınırları tam sayı olmalıdır.")
+        impacted = self._index.impacted_files(
+            path,
+            max_depth=max_depth,
+            max_results=max_results,
+        )
+        lines = [f"ETKİ ANALİZİ\nKaynak: {path}\nSonuç: {len(impacted)}"]
+        lines.extend(
+            f"- {item.path} | mesafe: {item.distance} | tür: "
+            f"{'test' if item.is_test else 'çağıran'} | import: {item.imported_via}"
+            for item in impacted
+        )
+        if not impacted:
+            lines.append("(proje içi ters bağımlılık bulunamadı)")
+        return ToolResult(
+            tool_name=self.name,
+            success=True,
+            content="\n".join(lines),
+            metadata={
+                "path": path,
+                "result_count": len(impacted),
+                "paths": tuple(item.path for item in impacted),
+                "test_paths": tuple(item.path for item in impacted if item.is_test),
+                "impacts": tuple(
+                    {
+                        "path": item.path,
+                        "distance": item.distance,
+                        "imported_via": item.imported_via,
+                        "is_test": item.is_test,
+                    }
+                    for item in impacted
+                ),
+                "absence_is_evidence": True,
             },
         )
