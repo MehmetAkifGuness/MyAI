@@ -113,7 +113,7 @@ class CheckpointMigrationTests(unittest.TestCase):
 class ReleaseV220Tests(unittest.TestCase):
     def test_default_release_preserves_prior_features(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V2.2"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V2.2")
             self.assertTrue(flags["source_drift_detection_enabled"])

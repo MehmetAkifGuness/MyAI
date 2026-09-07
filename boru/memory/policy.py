@@ -48,6 +48,12 @@ class ConservativeMemoryDecisionGate:
 
     _ONE_TIME_TASK_PATTERNS = (
         re.compile(
+            r"^\s*(?:checkpoint\b|terminal\s*(?::|durumu\b|ortamı\b)|"
+            r"plan\s+sağlığı\b|görev\s+(?:günlüğü|arşivi)\b|"
+            r"planı\s+(?:arşivle|çalıştır|devam\s+ettir)\b|task\s+yeniden\s+dene\b)",
+            re.IGNORECASE | re.DOTALL,
+        ),
+        re.compile(
             r"^\s*(?:sandbox\b|kendini\s+değerlendir\b|öz\s+değerlendir\b|"
             r"değerlendirme\s+durumu\b|iyileştir\b|iyileştirmeyi\b|iyileştirme\s+geri\b)",
             re.IGNORECASE | re.DOTALL,

@@ -6,6 +6,7 @@ from boru.persistence import AtomicJsonFileStore, JsonFileReadError, JsonFileWri
 from boru.tasks.checkpoint_migration import TaskCheckpointMigrator
 from boru.tasks.models import TaskItem, TaskPlan, TaskStatus
 from boru.tasks.source_guard import TaskSourceFingerprint
+from boru.tasks.execution_record import TaskExecutionRecord
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,6 +43,7 @@ class TaskCheckpoint:
     plan: TaskPlan | None
     journal: tuple[TaskJournalEntry, ...] = ()
     fingerprints: tuple[TaskSourceFingerprint, ...] = ()
+    execution: TaskExecutionRecord | None = None
 
 
 class JsonTaskCheckpointRepository:

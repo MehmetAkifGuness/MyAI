@@ -201,6 +201,11 @@ from boru.tasks import (
     TaskPlanCoordinator,
     TaskSourceFingerprintGuard,
 )
+from boru.tasks.managed_checkpoint import ManagedTaskCheckpointRepository
+from boru.tasks.reliable_state import ReliableTaskPlanState
+from boru.tasks.reliable_coordinator import ReliableTaskCoordinator
+from boru.tasks.workflow_guard import GuardedTaskWorkflow
+from boru.sandbox.terminal import SandboxTerminalCoordinator
 from boru.ui import (
     ChatAppUI,
 )
@@ -349,6 +354,8 @@ def build_application(
     planned_task_execution_enabled: bool = False,
     persistent_task_checkpoint_enabled: bool = False,
     source_drift_detection_enabled: bool = False,
+    reliable_tasks_enabled: bool = False,
+    sandbox_terminal_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -381,6 +388,10 @@ def build_application(
         raise ValueError("Kalıcı task checkpoint planlı görev yürütmeyi gerektirir.")
     if source_drift_detection_enabled and not persistent_task_checkpoint_enabled:
         raise ValueError("Kaynak drift denetimi kalıcı task checkpoint gerektirir.")
+    if reliable_tasks_enabled and not source_drift_detection_enabled:
+        raise ValueError("Güvenilir görev yürütme kaynak drift denetimi gerektirir.")
+    if sandbox_terminal_enabled and not sandbox_enabled:
+        raise ValueError("Terminal Docker sandbox gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1040,8 +1051,17 @@ def build_application(
     if task_system_enabled:
         if agent_orchestrator is None:
             raise ValueError("Task sistemi için Agent Orchestrator etkin olmalıdır.")
-        task_state = (
-            PersistentTaskPlanState(
+        task_state = None
+        task_repository = None
+        if reliable_tasks_enabled:
+            task_repository = ManagedTaskCheckpointRepository(
+                _resolve_project_path(settings.task_checkpoint_path),
+                lock_path=project_root / "data" / "task_project.lock",
+            )
+            task_state = ReliableTaskPlanState(task_repository, TaskSourceFingerprintGuard(project_root))
+            agent_orchestrator = GuardedTaskWorkflow(agent_orchestrator, task_state)
+        elif persistent_task_checkpoint_enabled:
+            task_state = PersistentTaskPlanState(
                 JsonTaskCheckpointRepository(
                     _resolve_project_path(settings.task_checkpoint_path)
                 ),
@@ -1049,9 +1069,6 @@ def build_application(
                 if source_drift_detection_enabled
                 else None,
             )
-            if persistent_task_checkpoint_enabled
-            else None
-        )
         coding_operation = TaskPlanCoordinator(
             parser=RuleBasedTaskCommandParser(),
             planner=ArchitectureTaskPlanner(
@@ -1063,12 +1080,16 @@ def build_application(
             state=task_state,
             planned_execution_enabled=planned_task_execution_enabled,
         )
+        if reliable_tasks_enabled:
+            coding_operation = ReliableTaskCoordinator(coding_operation, task_state, task_repository)
 
     operation_resolvers = [
         auto_fix_coordinator,
         controlled_write,
         git_coordinator,
     ]
+    if sandbox_terminal_enabled:
+        operation_resolvers.insert(0, SandboxTerminalCoordinator(project_root, sandbox_executor))
     if improvement_enabled:
         if evaluator is None or coding_coordinator is None:
             raise ValueError("İyileştirme Coding, değerlendirme ve sandbox gerektirir.")

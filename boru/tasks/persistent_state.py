@@ -32,6 +32,7 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
         self._plan = checkpoint.plan
         self._journal = list(checkpoint.journal)
         self._fingerprints = checkpoint.fingerprints
+        self._execution = checkpoint.execution
         self._recover_interrupted_tasks()
 
     @property
@@ -121,7 +122,7 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
 
     def _save(self) -> None:
         self._repository.save(
-            TaskCheckpoint(self._plan, tuple(self._journal), self._fingerprints)
+            TaskCheckpoint(self._plan, tuple(self._journal), self._fingerprints, self._execution)
         )
 
     def _snapshot_plan(self, plan: TaskPlan) -> tuple[TaskSourceFingerprint, ...]:

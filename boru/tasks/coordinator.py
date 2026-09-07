@@ -5,6 +5,7 @@ from boru.tasks.contracts import AgentWorkflow, TaskPlanner
 from boru.tasks.models import TaskAction, TaskItem, TaskPlan, TaskStatus
 from boru.tasks.parser import RuleBasedTaskCommandParser
 from boru.tasks.state import InMemoryTaskPlanState
+from boru.tasks.journal_reporting import render_task_journal
 
 
 class TaskPlanCoordinator:
@@ -111,7 +112,7 @@ class TaskPlanCoordinator:
     def _start_task(self, task_id: str) -> str:
         try:
             item = self._state.start(task_id)
-        except ValueError as error:
+        except (OSError, RuntimeError, ValueError) as error:
             return f"Task başlatılamadı: {error}"
 
         response = self._workflow.resolve(
@@ -124,7 +125,7 @@ class TaskPlanCoordinator:
         self._state.transition(
             item.task_id,
             TaskStatus.FAILED,
-            "Ajan akışı başlatılamadı.",
+            "Ajan akışı başlatılamadı." if not response else self._failure_note(response),
         )
         return f"TASK DURUMU\n{item.task_id}: failed\n\n{response or 'Yanıt yok.'}"
 
@@ -147,7 +148,7 @@ class TaskPlanCoordinator:
             note = "Test, güvenlik veya review bulgusu insan incelemesi gerektiriyor."
         else:
             status = TaskStatus.FAILED
-            note = "Ajan akışı başarıyla tamamlanamadı."
+            note = self._failure_note(response or "")
         updated = self._state.transition(task_id, status, note)
         task_response = f"TASK DURUMU\n{updated.task_id}: {updated.status.value}\n\n{response}"
         if not self._plan_run_active:
@@ -207,28 +208,7 @@ class TaskPlanCoordinator:
         return report
 
     def _render_journal(self) -> str:
-        getter = getattr(self._state, "get_journal", None)
-        if not callable(getter):
-            return "GÖREV GÜNLÜĞÜ\nKalıcı task günlüğü bu sürümde etkin değil."
-        entries = getter()
-        if not entries:
-            return "GÖREV GÜNLÜĞÜ\nHenüz kayıt yok."
-        lines = ["GÖREV GÜNLÜĞÜ", f"Kayıt: {len(entries)}"]
-        for item in entries[-20:]:
-            detail = " ".join(
-                value for value in (item.task_id, item.status, item.note) if value
-            )
-            lines.append(f"- #{item.sequence} {item.event}" + (f": {detail}" if detail else ""))
-        checkpoint_path = getattr(self._state, "checkpoint_path", None)
-        if checkpoint_path is not None:
-            lines.append(f"Checkpoint: {checkpoint_path}")
-        checkpoint_schema = getattr(self._state, "checkpoint_schema", None)
-        if checkpoint_schema:
-            lines.append(f"Checkpoint şeması: {checkpoint_schema}")
-        migrated_from = getattr(self._state, "checkpoint_migrated_from", None)
-        if migrated_from is not None:
-            lines.append(f"Son yükleme: V{migrated_from} → V2 migration tamamlandı.")
-        return "\n".join(lines)
+        return render_task_journal(self._state)
 
     @staticmethod
     def _next_ready_task(plan: TaskPlan) -> TaskItem | None:
@@ -300,3 +280,10 @@ class TaskPlanCoordinator:
             if line.startswith("Genel durum:"):
                 return line.partition(":")[2].strip()
         return "BELİRSİZ"
+
+    @staticmethod
+    def _failure_note(response):
+        for code in ("TIMEOUT", "IO_ERROR", "VALIDATION_ERROR", "RECOVERY_REQUIRED", "SOURCE_DRIFT"):
+            if f"[{code}]" in response:
+                return f"[{code}] Ajan akışı başlatılamadı; plan sağlığı ve servis durumunu inceleyin."
+        return "[PROPOSAL_FAILED] Ajan önerisi hazırlanamadı; kapsam ve model çıktısını inceleyin."
