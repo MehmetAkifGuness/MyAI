@@ -106,6 +106,25 @@ class AgentOrchestratorTests(unittest.TestCase):
         self.assertIn("- Security: TEMİZ", response or "")
         self.assertIn("- Code Review: UYGUN", response or "")
 
+    def test_already_satisfied_coding_result_completes_without_approval(self):
+        class AlreadySatisfiedWorkflow(CodingWorkflow):
+            def resolve(self, message):
+                self.calls.append(message)
+                return (
+                    "Coding Agent değişikliği gerekmiyor: hedef kaynakta zaten sağlanıyor.\n\n"
+                    "TEST AGENT RAPORU\nDurum: BAŞARILI\n\n"
+                    "SECURITY AGENT RAPORU\nDurum: TEMİZ\n\n"
+                    "CODE REVIEW RAPORU\nDurum: UYGUN"
+                )
+
+        instance = orchestrator(AlreadySatisfiedWorkflow())
+
+        response = instance.resolve("ajan görevi: a.py içinde VALUE değerini 2 yap")
+
+        self.assertIn("Genel durum: TAMAMLANDI", response or "")
+        self.assertIn("- Coding: TAMAMLANDI", response or "")
+        self.assertFalse(instance.has_pending)
+
     def test_failed_tests_make_workflow_failed(self):
         workflow = CodingWorkflow(
             completed_response(test_status="BAŞARISIZ")

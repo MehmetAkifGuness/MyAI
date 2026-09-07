@@ -253,15 +253,16 @@ class LiveAdvancedTerminalTests(unittest.TestCase):
 
 
 class ReleaseV400Tests(unittest.TestCase):
-    def test_default_release_enables_autonomous_and_terminal_features(self):
+    def test_v400_release_enables_autonomous_and_terminal_features(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V4.0"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V4.0")
             self.assertTrue(flags["sandbox_terminal_enabled"])
             self.assertTrue(flags["autonomous_development_enabled"])
             self.assertTrue(flags["reliable_tasks_enabled"])
             self.assertEqual(flags["terminal_feature_level"], 9)
+            self.assertEqual(flags["autonomy_feature_level"], 0)
 
     def test_all_intermediate_releases_remain_buildable(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:

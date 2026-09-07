@@ -78,16 +78,23 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
         task_id: str,
         status: TaskStatus,
         note: str = "",
+        *,
+        refresh_sources: bool = False,
     ) -> TaskItem:
         with self._lock:
             previous_plan = self._plan
             previous_journal = list(self._journal)
             previous_fingerprints = self._fingerprints
             try:
-                if status is TaskStatus.COMPLETED:
+                if status is TaskStatus.COMPLETED or refresh_sources:
                     current = self.get_task(task_id)
                     self._refresh_fingerprints(current.files)
-                updated = super().transition(task_id, status, note)
+                updated = super().transition(
+                    task_id,
+                    status,
+                    note,
+                    refresh_sources=refresh_sources,
+                )
                 self._append("task_status", updated.task_id, updated.status.value, updated.note)
                 self._save()
             except (OSError, RuntimeError, ValueError):

@@ -48,7 +48,7 @@ class ReliableTaskPlanState(PersistentTaskPlanState):
             self.validate_execution()
             return super().start(task_id)
 
-    def transition(self, task_id, status, note=""):
+    def transition(self, task_id, status, note="", *, refresh_sources=False):
         with self._lock:
             self._repository.ensure_writable()
             previous = self._execution
@@ -64,7 +64,12 @@ class ReliableTaskPlanState(PersistentTaskPlanState):
                 # A manual acceptance must not bless source drift or expired plans.
                 self.validate_execution()
             try:
-                return super().transition(task_id, status, note)
+                return super().transition(
+                    task_id,
+                    status,
+                    note,
+                    refresh_sources=refresh_sources,
+                )
             except (OSError, RuntimeError, ValueError):
                 self._execution = previous
                 raise

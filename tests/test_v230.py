@@ -77,6 +77,44 @@ class Workflow:
         return "delegated"
 
 
+class AppliedFailureWorkflow(Workflow):
+    def resolve(self, message):
+        self.calls.append(message)
+        if self.pending and message == "kod değişikliğini onayla":
+            self.pending = False
+            return (
+                "ORKESTRATÖR RAPORU\nGenel durum: BAŞARISIZ\n"
+                "- Coding: TAMAMLANDI\n- Test: BAŞARISIZ"
+            )
+        if message.startswith("ajan görevi:"):
+            self.pending = True
+            return "ORKESTRATÖR RAPORU\nGenel durum: ONAY BEKLİYOR"
+        return "delegated"
+
+
+class AlreadySatisfiedWorkflow(Workflow):
+    def resolve(self, message):
+        self.calls.append(message)
+        if message.startswith("ajan görevi:"):
+            return "ORKESTRATÖR RAPORU\nGenel durum: TAMAMLANDI"
+        return "delegated"
+
+
+class RefreshRecordingState(InMemoryTaskPlanState):
+    def __init__(self):
+        super().__init__()
+        self.refresh_sources = False
+
+    def transition(self, task_id, status, note="", *, refresh_sources=False):
+        self.refresh_sources = refresh_sources
+        return super().transition(
+            task_id,
+            status,
+            note,
+            refresh_sources=refresh_sources,
+        )
+
+
 def coordinator(*, workflow=None, state=None, planner=None):
     return TaskPlanCoordinator(
         parser=RuleBasedTaskCommandParser(),
@@ -221,6 +259,16 @@ class TaskPlanCoordinatorTests(unittest.TestCase):
             "ajan görevi: a.py içinde VALUE değerini yalnızca bu dosyada 2 yap",
         )
 
+    def test_already_satisfied_task_completes_synchronously(self):
+        state = InMemoryTaskPlanState()
+        state.replace_plan(task_plan())
+        instance = coordinator(workflow=AlreadySatisfiedWorkflow(), state=state)
+
+        response = instance.resolve("task çalıştır: TASK-1")
+
+        self.assertIn("TASK-1: completed", response or "")
+        self.assertEqual(state.get_task("TASK-1").status, TaskStatus.COMPLETED)
+
     def test_review_required_marks_task_blocked(self):
         state = InMemoryTaskPlanState()
         state.replace_plan(task_plan())
@@ -250,6 +298,19 @@ class TaskPlanCoordinatorTests(unittest.TestCase):
 
         self.assertIn("TASK-1: failed", response or "")
 
+    def test_applied_failure_records_change_and_requests_fingerprint_refresh(self):
+        state = RefreshRecordingState()
+        state.replace_plan(task_plan())
+        instance = coordinator(workflow=AppliedFailureWorkflow(), state=state)
+        instance.resolve("task çalıştır: TASK-1")
+
+        response = instance.resolve("kod değişikliğini onayla")
+
+        self.assertIn("TASK-1: failed", response or "")
+        self.assertTrue(state.refresh_sources)
+        self.assertIn("[CHANGES_APPLIED]", state.get_task("TASK-1").note)
+        self.assertIn("[TEST_FAILED]", state.get_task("TASK-1").note)
+
     def test_cancel_returns_running_task_to_pending(self):
         state = InMemoryTaskPlanState()
         state.replace_plan(task_plan())
@@ -271,6 +332,21 @@ class TaskPlanCoordinatorTests(unittest.TestCase):
 
         self.assertIn("İlerleme: 1/2 tamamlandı", response or "")
         self.assertIn("Not: Bitti", response or "")
+
+    def test_status_and_journal_remain_readable_while_approval_is_pending(self):
+        state = InMemoryTaskPlanState()
+        state.replace_plan(task_plan())
+        workflow = Workflow()
+        instance = coordinator(workflow=workflow, state=state)
+        instance.resolve("task çalıştır: TASK-1")
+
+        status = instance.resolve("görev durumu")
+        journal = instance.resolve("görev günlüğü")
+
+        self.assertIn("TASK-1 [running]", status or "")
+        self.assertIn("GÖREV GÜNLÜĞÜ", journal or "")
+        self.assertTrue(workflow.has_pending)
+        self.assertEqual(len(workflow.calls), 1)
 
     def test_unrelated_message_is_delegated_for_backward_compatibility(self):
         workflow = Workflow()

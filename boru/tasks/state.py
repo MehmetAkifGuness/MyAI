@@ -61,7 +61,10 @@ class InMemoryTaskPlanState:
         task_id: str,
         status: TaskStatus,
         note: str = "",
+        *,
+        refresh_sources: bool = False,
     ) -> TaskItem:
+        del refresh_sources
         with self._lock:
             current = self.get_task(task_id)
             if status not in self._TRANSITIONS[current.status]:

@@ -1,6 +1,7 @@
 import re
 from threading import RLock
 
+from boru.evaluation.models import Verdict
 from boru.tasks.models import TaskStatus
 from boru.tasks.workflow_guard import GuardedTaskWorkflow
 
@@ -8,10 +9,11 @@ from boru.tasks.workflow_guard import GuardedTaskWorkflow
 class ReliableTaskCoordinator:
     """Recovery, inspection and explicit retry commands around the task workflow."""
 
-    def __init__(self, coordinator, state, repository):
+    def __init__(self, coordinator, state, repository, *, evaluator=None):
         self._coordinator = coordinator
         self._state = state
         self._repository = repository
+        self._evaluator = evaluator
         self._restore_pending = False
         self._lock = RLock()
 
@@ -58,11 +60,35 @@ class ReliableTaskCoordinator:
             return GuardedTaskWorkflow.failure(error)
 
     def _retry(self, task_id):
-        if self._state.get_task(task_id).status is not TaskStatus.FAILED:
+        task = self._state.get_task(task_id)
+        if task.status is not TaskStatus.FAILED:
             raise ValueError("Yalnızca failed task yeniden denenebilir.")
         self._state.validate_execution()
+        if "[CHANGES_APPLIED]" in task.note and self._evaluator is not None:
+            return self._retry_applied_change(task)
         self._state.reset(task_id)
         return self._coordinator.resolve(f"task çalıştır: {task_id}")
+
+    def _retry_applied_change(self, task):
+        report = self._evaluator.evaluate(task.files)
+        if report.verdict is not Verdict.PASS:
+            return (
+                "TASK YENİDEN DENEME\nDurum: DOĞRULAMA BAŞARISIZ\n"
+                "Kod daha önce uygulandı; aynı patch yeniden uygulanmadı. "
+                "Test sözleşmesini veya hedefi inceleyip yeni plan oluşturun.\n\n"
+                + report.render()
+            )
+        self._state.reset(task.task_id)
+        self._state.start(task.task_id)
+        completed = self._state.transition(
+            task.task_id,
+            TaskStatus.COMPLETED,
+            "Uygulanmış değişiklik yeniden doğrulandı; tüm kontroller geçti.",
+        )
+        return (
+            f"TASK YENİDEN DENEME\nDurum: TAMAMLANDI\n{completed.task_id}: completed\n\n"
+            + report.workflow_report()
+        )
 
     def _continue_restore(self, normalized):
         if normalized == "iptal":

@@ -56,6 +56,8 @@ class AgentOrchestrator:
             if self._coding_workflow.has_pending:
                 self._orchestrated_pending = True
                 return self._render_proposal(response)
+            if "coding agent değişikliği gerekmiyor" in response.casefold():
+                return self._render_finished(response)
             return self._render_start_failure(response)
 
     @staticmethod
@@ -116,7 +118,10 @@ class AgentOrchestrator:
 
         coding_status = (
             "TAMAMLANDI"
-            if "coding agent değişikliği uygulandı" in folded
+            if (
+                "coding agent değişikliği uygulandı" in folded
+                or "coding agent değişikliği gerekmiyor" in folded
+            )
             else "BAŞARISIZ"
         )
         test_status = cls._extract_status(text, "TEST AGENT RAPORU")

@@ -15,6 +15,10 @@ class SmartEditNotApplicable(RuntimeError):
     """Deterministik smart-edit katmanının bu isteği güvenle çözemediğini belirtir."""
 
 
+class RequestedStateAlreadySatisfied(ValueError):
+    """The requested deterministic assignment already matches the source."""
+
+
 class RuleBasedAssignmentEditProposalPreparer:
     """Basit `name değerini value yap` isteklerini LLM kullanmadan hazırlar."""
 
@@ -29,6 +33,10 @@ class RuleBasedAssignmentEditProposalPreparer:
         r"^(?:yalnızca|sadece)\s+bu\s+dosyada\s+",
         re.IGNORECASE,
     )
+    _TRAILING_FILE_SCOPE = re.compile(
+        r"\s*[;,]?\s*(?:yalnızca|sadece)\s+bu\s+dosya(?:yı|da)\s+kapsa\s*$",
+        re.IGNORECASE,
+    )
 
     def __init__(
         self,
@@ -41,9 +49,10 @@ class RuleBasedAssignmentEditProposalPreparer:
         self,
         request: SmartEditRequest,
     ) -> EditProposal:
+        instruction = self._TRAILING_FILE_SCOPE.sub("", request.instruction).strip()
         instruction_match = (
             self._INSTRUCTION_PATTERN.fullmatch(
-                request.instruction
+                instruction
             )
         )
 
@@ -113,7 +122,7 @@ class RuleBasedAssignmentEditProposalPreparer:
         )
 
         if old_text == new_text:
-            raise ValueError(
+            raise RequestedStateAlreadySatisfied(
                 "İstenen değer dosyada zaten mevcut; uygulanacak değişiklik yok."
             )
 

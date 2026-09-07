@@ -7,7 +7,7 @@ from boru.coding.parser import RuleBasedCodingRequestParser
 from boru.reviewing.contracts import CodeReviewer
 from boru.security.contracts import SecurityReviewer
 from boru.testing.contracts import RegressionTestRunner
-from boru.tools.deterministic_edit import SmartEditNotApplicable
+from boru.tools.deterministic_edit import RequestedStateAlreadySatisfied, SmartEditNotApplicable
 from boru.tools.edit_contracts import SmartEditProposalPreparer, SmartEditRequestParser
 from boru.tools.edit_models import SmartEditRequest
 from boru.tools.project_edit_contracts import ProjectEditApplier, ProjectEditProposalPreparer
@@ -90,6 +90,8 @@ class ControlledCodingCoordinator:
                 self._validate_scope(architecture_plan, proposal)
                 if self._proposal_guard is not None:
                     self._proposal_guard(proposal)
+            except RequestedStateAlreadySatisfied:
+                return self._render_already_satisfied(architecture_plan)
             except Exception as error:
                 return f"Coding Agent önerisi hazırlanamadı: {error}"
 
@@ -194,31 +196,43 @@ class ControlledCodingCoordinator:
             f"Coding Agent değişikliği uygulandı: {len(outcome.outcomes)} dosya\n{paths}"
         )
         changed_paths = tuple(item.relative_path for item in outcome.outcomes)
+        reports = self._validation_reports(changed_paths)
+        return "\n\n".join((response, *reports))
+
+    def _render_already_satisfied(self, plan: ArchitecturePlan) -> str:
+        paths = plan.existing_files
+        response = (
+            "Coding Agent değişikliği gerekmiyor: hedef kaynakta zaten sağlanıyor.\n"
+            "Doğrulanan dosyalar:\n- " + "\n- ".join(paths)
+        )
+        return "\n\n".join((response, *self._validation_reports(paths)))
+
+    def _validation_reports(self, paths: tuple[str, ...]) -> tuple[str, ...]:
         if self._quality_evaluator is not None:
-            return response + "\n\n" + self._quality_evaluator.validate_paths(changed_paths)
+            return (self._quality_evaluator.validate_paths(paths),)
         reports: list[str] = []
         if self._regression_runner is not None:
             try:
-                reports.append(self._regression_runner.run_for_paths(changed_paths))
+                reports.append(self._regression_runner.run_for_paths(paths))
             except Exception as error:
                 reports.append(
                     f"TEST AGENT RAPORU\nDurum: BAŞLATILAMADI\nHata: {error}"
                 )
         if self._security_reviewer is not None:
             try:
-                reports.append(self._security_reviewer.review_paths(changed_paths))
+                reports.append(self._security_reviewer.review_paths(paths))
             except Exception as error:
                 reports.append(
                     f"SECURITY AGENT RAPORU\nDurum: BAŞLATILAMADI\nHata: {error}"
                 )
         if self._code_reviewer is not None:
             try:
-                reports.append(self._code_reviewer.review_paths(changed_paths))
+                reports.append(self._code_reviewer.review_paths(paths))
             except Exception as error:
                 reports.append(
                     f"CODE REVIEW RAPORU\nDurum: BAŞLATILAMADI\nHata: {error}"
                 )
-        return "\n\n".join((response, *reports))
+        return tuple(reports)
 
     def _render_preview(self, session: CodingSession) -> str:
         proposal = session.proposal

@@ -372,6 +372,47 @@ class CodingWorkspaceIntegrationTests(unittest.TestCase):
             instance.resolve("kod değişikliğini onayla")
             self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 2\n")
 
+    def test_already_satisfied_assignment_is_verified_without_model_patch(self):
+        class UnexpectedPreparer:
+            def prepare_project_edit(self, request):
+                raise AssertionError(request)
+
+        class QualityEvaluator:
+            def validate_paths(self, paths):
+                self.paths = paths
+                return (
+                    "TEST AGENT RAPORU\nDurum: BAŞARILI\n\n"
+                    "SECURITY AGENT RAPORU\nDurum: TEMİZ\n\n"
+                    "CODE REVIEW RAPORU\nDurum: UYGUN"
+                )
+
+        with tempfile.TemporaryDirectory() as directory:
+            target = Path(directory) / "a.py"
+            target.write_text("VALUE = 2\n", encoding="utf-8")
+            workspace = SafeEditWorkspace(directory)
+            quality = QualityEvaluator()
+            instance = ControlledCodingCoordinator(
+                parser=RuleBasedCodingRequestParser(),
+                architect=Architect(),
+                proposal_preparer=UnexpectedPreparer(),
+                proposal_applier=BatchProjectEditApplier(workspace=workspace),
+                deterministic_edit_parser=RuleBasedSmartEditRequestParser(),
+                deterministic_edit_preparer=RuleBasedAssignmentEditProposalPreparer(
+                    workspace=workspace
+                ),
+                quality_evaluator=quality,
+            )
+
+            response = instance.resolve(
+                "kodla: a.py içinde VALUE değerini 2 yap; yalnızca bu dosyayı kapsa"
+            )
+
+            self.assertIn("değişikliği gerekmiyor", response or "")
+            self.assertIn("TEST AGENT RAPORU\nDurum: BAŞARILI", response or "")
+            self.assertEqual(quality.paths, ("a.py",))
+            self.assertFalse(instance.has_pending)
+            self.assertEqual(target.read_text(encoding="utf-8"), "VALUE = 2\n")
+
     def test_single_file_fast_architecture_scope_never_calls_selector(self):
         class UnexpectedModel:
             def generate_structured(self, messages, schema):

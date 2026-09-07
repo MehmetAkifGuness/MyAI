@@ -359,6 +359,7 @@ def build_application(
     reliable_tasks_enabled: bool = False,
     sandbox_terminal_enabled: bool = False,
     autonomous_development_enabled: bool = False,
+    autonomy_feature_level: int = 0,
     terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
@@ -402,6 +403,10 @@ def build_application(
         raise ValueError("Terminal özellikleri sandbox terminal gerektirir.")
     if autonomous_development_enabled and not reliable_tasks_enabled:
         raise ValueError("Otonom geliştirme güvenilir görev yürütme gerektirir.")
+    if type(autonomy_feature_level) is not int or not 0 <= autonomy_feature_level <= 10:
+        raise ValueError("Otonomi özellik seviyesi 0-10 arasında olmalıdır.")
+    if autonomy_feature_level and not autonomous_development_enabled:
+        raise ValueError("Otonomi özellikleri otonom geliştirme akışını gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1091,9 +1096,18 @@ def build_application(
             planned_execution_enabled=planned_task_execution_enabled,
         )
         if reliable_tasks_enabled:
-            coding_operation = ReliableTaskCoordinator(coding_operation, task_state, task_repository)
+            coding_operation = ReliableTaskCoordinator(
+                coding_operation,
+                task_state,
+                task_repository,
+                evaluator=evaluator,
+            )
         if autonomous_development_enabled:
-            coding_operation = AutonomousDevelopmentCoordinator(coding_operation)
+            coding_operation = AutonomousDevelopmentCoordinator(
+                coding_operation,
+                evaluator=evaluator,
+                feature_level=autonomy_feature_level,
+            )
 
     operation_resolvers = [
         auto_fix_coordinator,

@@ -49,7 +49,9 @@ class ConservativeMemoryDecisionGate:
     _ONE_TIME_TASK_PATTERNS = (
         re.compile(
             r"^\s*(?:checkpoint\b|terminal\s*(?::|durumu\b|ortamı\b)|"
-            r"otonom\s+(?:geliştir|devam\s+et|durum|iptal)\b|"
+            r"otonom\s+(?:geliştir|gelistir|planla|başlat|baslat|devam|sürdür|surdur|"
+            r"durum|drum|duraklat|beklet|yeniden\s+dene|tekrar\s+dene|doğrula|dogrula|"
+            r"özet|ozet|arşivle|arsivle|sınırlar|sinirlar|yardım|yardim|iptal)\b|"
             r"plan\s+sağlığı\b|görev\s+(?:günlüğü|arşivi)\b|"
             r"planı\s+(?:arşivle|çalıştır|devam\s+ettir)\b|task\s+yeniden\s+dene\b)",
             re.IGNORECASE | re.DOTALL,

@@ -44,13 +44,14 @@ class TaskPlanCoordinator:
 
     def resolve(self, user_message: str) -> str | None:
         with self._lock:
-            if self._workflow.has_pending:
-                return self._continue_workflow(user_message)
-
             try:
                 command = self._parser.parse(user_message)
             except ValueError as error:
                 return f"Task sistemi isteği geçersiz: {error} {self._USAGE}"
+            if self._workflow.has_pending:
+                if command is not None and command.action in {TaskAction.STATUS, TaskAction.JOURNAL}:
+                    return self._dispatch(command.action, command.value)
+                return self._continue_workflow(user_message)
             if command is None:
                 if self._parser.is_task_intent(user_message):
                     return self._USAGE
@@ -101,8 +102,8 @@ class TaskPlanCoordinator:
         self._plan_run_active = True
         response = self._start_task(next_task.task_id)
         if not self._workflow.has_pending:
-            self._plan_run_active = False
-            return self._render_plan_run("DURDU", response)
+            updated = self._state.get_task(next_task.task_id)
+            return self._continue_plan(updated, response)
         return self._render_plan_run(
             "ONAY BEKLİYOR",
             response,
@@ -122,12 +123,24 @@ class TaskPlanCoordinator:
             self._active_task_id = item.task_id
             return f"TASK DURUMU\n{item.task_id}: running\n\n{response}"
 
-        self._state.transition(
-            item.task_id,
-            TaskStatus.FAILED,
-            "Ajan akışı başlatılamadı." if not response else self._failure_note(response),
+        response_text = response or ""
+        overall = self._orchestrator_status(response_text)
+        if overall == "TAMAMLANDI":
+            updated = self._state.transition(
+                item.task_id,
+                TaskStatus.COMPLETED,
+                "Hedef zaten sağlandı; doğrulamalar başarıyla tamamlandı.",
+            )
+        else:
+            updated = self._state.transition(
+                item.task_id,
+                TaskStatus.FAILED,
+                "Ajan akışı başlatılamadı." if not response else self._failure_note(response),
+            )
+        return (
+            f"TASK DURUMU\n{item.task_id}: {updated.status.value}\n\n"
+            f"{response or 'Yanıt yok.'}"
         )
-        return f"TASK DURUMU\n{item.task_id}: failed\n\n{response or 'Yanıt yok.'}"
 
     def _continue_workflow(self, user_message: str) -> str | None:
         response = self._workflow.resolve(user_message)
@@ -136,7 +149,9 @@ class TaskPlanCoordinator:
 
         task_id = self._active_task_id
         self._active_task_id = None
-        overall = self._orchestrator_status(response or "")
+        response_text = response or ""
+        overall = self._orchestrator_status(response_text)
+        changes_applied = self._phase_status(response_text, "Coding") == "TAMAMLANDI"
         if overall == "TAMAMLANDI":
             status = TaskStatus.COMPLETED
             note = "Tüm ajan aşamaları başarıyla tamamlandı."
@@ -148,8 +163,15 @@ class TaskPlanCoordinator:
             note = "Test, güvenlik veya review bulgusu insan incelemesi gerektiriyor."
         else:
             status = TaskStatus.FAILED
-            note = self._failure_note(response or "")
-        updated = self._state.transition(task_id, status, note)
+            note = self._failure_note(response_text)
+        if changes_applied and status is not TaskStatus.COMPLETED:
+            note = "[CHANGES_APPLIED] " + note
+        updated = self._state.transition(
+            task_id,
+            status,
+            note,
+            refresh_sources=changes_applied,
+        )
         task_response = f"TASK DURUMU\n{updated.task_id}: {updated.status.value}\n\n{response}"
         if not self._plan_run_active:
             return task_response
@@ -282,7 +304,17 @@ class TaskPlanCoordinator:
         return "BELİRSİZ"
 
     @staticmethod
+    def _phase_status(response: str, phase: str) -> str:
+        prefix = f"- {phase}:"
+        for line in response.splitlines():
+            if line.startswith(prefix):
+                return line.partition(":")[2].strip()
+        return "BELİRSİZ"
+
+    @staticmethod
     def _failure_note(response):
+        if "- Test: BAŞARISIZ" in response:
+            return "[TEST_FAILED] Uygulama sonrası test doğrulaması başarısız."
         for code in ("TIMEOUT", "IO_ERROR", "VALIDATION_ERROR", "RECOVERY_REQUIRED", "SOURCE_DRIFT"):
             if f"[{code}]" in response:
                 return f"[{code}] Ajan akışı başlatılamadı; plan sağlığı ve servis durumunu inceleyin."
