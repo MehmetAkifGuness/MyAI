@@ -195,6 +195,8 @@ from boru.testing import (
 )
 from boru.tasks import (
     ArchitectureTaskPlanner,
+    JsonTaskCheckpointRepository,
+    PersistentTaskPlanState,
     RuleBasedTaskCommandParser,
     TaskPlanCoordinator,
 )
@@ -344,6 +346,7 @@ def build_application(
     runtime_repair_enabled: bool = False,
     batch_runtime_repair_enabled: bool = False,
     planned_task_execution_enabled: bool = False,
+    persistent_task_checkpoint_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -372,6 +375,8 @@ def build_application(
         raise ValueError("Çoklu çalışma zamanı onarımı tekli onarım akışını gerektirir.")
     if planned_task_execution_enabled and not task_system_enabled:
         raise ValueError("Planlı görev yürütme Task/Plan sistemini gerektirir.")
+    if persistent_task_checkpoint_enabled and not planned_task_execution_enabled:
+        raise ValueError("Kalıcı task checkpoint planlı görev yürütmeyi gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1031,6 +1036,15 @@ def build_application(
     if task_system_enabled:
         if agent_orchestrator is None:
             raise ValueError("Task sistemi için Agent Orchestrator etkin olmalıdır.")
+        task_state = (
+            PersistentTaskPlanState(
+                JsonTaskCheckpointRepository(
+                    _resolve_project_path(settings.task_checkpoint_path)
+                )
+            )
+            if persistent_task_checkpoint_enabled
+            else None
+        )
         coding_operation = TaskPlanCoordinator(
             parser=RuleBasedTaskCommandParser(),
             planner=ArchitectureTaskPlanner(
@@ -1039,6 +1053,7 @@ def build_application(
                 preserve_objective_context=planned_task_execution_enabled,
             ),
             workflow=agent_orchestrator,
+            state=task_state,
             planned_execution_enabled=planned_task_execution_enabled,
         )
 

@@ -13,6 +13,7 @@ class AppSettings:
     memory_path: str = "data/long_term_memory.json"
     project_memory_path: str = "data/project_memory.json"
     knowledge_path: str = "data/knowledge_index.json"
+    task_checkpoint_path: str = "data/task_checkpoint.json"
     api_allowed_hosts: tuple[str, ...] = ()
     memory_context_limit: int = 5
     memory_auto_capture: bool = True
@@ -53,6 +54,11 @@ class AppSettings:
         knowledge_path = os.getenv(
             "BORU_KNOWLEDGE_PATH",
             defaults.knowledge_path,
+        ).strip()
+
+        task_checkpoint_path = os.getenv(
+            "BORU_TASK_CHECKPOINT_PATH",
+            defaults.task_checkpoint_path,
         ).strip()
 
         api_allowed_hosts = tuple(
@@ -138,6 +144,11 @@ class AppSettings:
                 "BORU_KNOWLEDGE_PATH boş olamaz."
             )
 
+        if not task_checkpoint_path:
+            raise ValueError(
+                "BORU_TASK_CHECKPOINT_PATH boş olamaz."
+            )
+
         if (
             memory_semantic_enabled
             and not memory_embedding_model
@@ -170,6 +181,7 @@ class AppSettings:
             memory_path=memory_path,
             project_memory_path=project_memory_path,
             knowledge_path=knowledge_path,
+            task_checkpoint_path=task_checkpoint_path,
             api_allowed_hosts=api_allowed_hosts,
             memory_context_limit=(
                 memory_context_limit

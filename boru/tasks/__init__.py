@@ -1,5 +1,10 @@
 from boru.tasks.contracts import AgentWorkflow, TaskPlanner
 from boru.tasks.coordinator import TaskPlanCoordinator
+from boru.tasks.checkpoint import (
+    JsonTaskCheckpointRepository,
+    TaskCheckpoint,
+    TaskJournalEntry,
+)
 from boru.tasks.models import (
     TaskAction,
     TaskCommand,
@@ -10,16 +15,21 @@ from boru.tasks.models import (
 from boru.tasks.parser import RuleBasedTaskCommandParser
 from boru.tasks.planner import ArchitectureTaskPlanner
 from boru.tasks.state import InMemoryTaskPlanState
+from boru.tasks.persistent_state import PersistentTaskPlanState
 
 
 __all__ = [
     "AgentWorkflow",
     "ArchitectureTaskPlanner",
     "InMemoryTaskPlanState",
+    "JsonTaskCheckpointRepository",
+    "PersistentTaskPlanState",
     "RuleBasedTaskCommandParser",
     "TaskAction",
     "TaskCommand",
     "TaskItem",
+    "TaskCheckpoint",
+    "TaskJournalEntry",
     "TaskPlan",
     "TaskPlanCoordinator",
     "TaskPlanner",

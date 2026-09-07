@@ -172,9 +172,9 @@ class ReleaseV190Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Task/Plan"):
             main_v170.build_application(planned_task_execution_enabled=True)
 
-    def test_default_release_enables_planned_execution(self):
+    def test_v190_release_enables_planned_execution(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.9"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V1.9")
             self.assertTrue(flags["planned_task_execution_enabled"])

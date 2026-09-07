@@ -9,7 +9,7 @@ from boru.tasks.state import InMemoryTaskPlanState
 
 class TaskPlanCoordinator:
     _USAGE = (
-        "Task sistemi biçimleri: 'görev planla: hedef', 'görev durumu', "
+        "Task sistemi biçimleri: 'görev planla: hedef', 'görev durumu', 'görev günlüğü', "
         "'planı çalıştır', 'task çalıştır: TASK-1', 'task sıfırla: TASK-1' veya "
         "'task tamamla: TASK-1'."
     )
@@ -54,27 +54,31 @@ class TaskPlanCoordinator:
                 if self._parser.is_task_intent(user_message):
                     return self._USAGE
                 return self._workflow.resolve(user_message)
+            return self._dispatch(command.action, command.value)
 
-            if command.action is TaskAction.PLAN:
-                return self._create_plan(command.value)
-            if command.action is TaskAction.STATUS:
-                return self._render_current_plan()
-            if command.action is TaskAction.RUN:
-                return self._start_task(command.value)
-            if command.action is TaskAction.RUN_PLAN:
-                return self._start_plan()
-            if command.action is TaskAction.RESET:
-                return self._reset_task(command.value)
-            if command.action is TaskAction.COMPLETE:
-                return self._complete_blocked_task(command.value)
-            return self._USAGE
+    def _dispatch(self, action: TaskAction, value: str) -> str:
+        if action is TaskAction.PLAN:
+            return self._create_plan(value)
+        if action is TaskAction.STATUS:
+            return self._render_current_plan()
+        if action is TaskAction.JOURNAL:
+            return self._render_journal()
+        if action is TaskAction.RUN:
+            return self._start_task(value)
+        if action is TaskAction.RUN_PLAN:
+            return self._start_plan()
+        if action is TaskAction.RESET:
+            return self._reset_task(value)
+        if action is TaskAction.COMPLETE:
+            return self._complete_blocked_task(value)
+        return self._USAGE
 
     def _create_plan(self, objective: str) -> str:
         try:
             plan = self._planner.plan(objective)
+            self._state.replace_plan(plan)
         except (OSError, RuntimeError, TimeoutError, ValueError) as error:
             return f"Görev planı hazırlanamadı: {error}"
-        self._state.replace_plan(plan)
         self._active_task_id = None
         self._plan_run_active = False
         return self._render_plan(plan, "GÖREV PLANI HAZIRLANDI")
@@ -202,6 +206,24 @@ class TaskPlanCoordinator:
             report += f"\nPlan yürütme: aktif ({self._active_task_id or 'task bekleniyor'})"
         return report
 
+    def _render_journal(self) -> str:
+        getter = getattr(self._state, "get_journal", None)
+        if not callable(getter):
+            return "GÖREV GÜNLÜĞÜ\nKalıcı task günlüğü bu sürümde etkin değil."
+        entries = getter()
+        if not entries:
+            return "GÖREV GÜNLÜĞÜ\nHenüz kayıt yok."
+        lines = ["GÖREV GÜNLÜĞÜ", f"Kayıt: {len(entries)}"]
+        for item in entries[-20:]:
+            detail = " ".join(
+                value for value in (item.task_id, item.status, item.note) if value
+            )
+            lines.append(f"- #{item.sequence} {item.event}" + (f": {detail}" if detail else ""))
+        checkpoint_path = getattr(self._state, "checkpoint_path", None)
+        if checkpoint_path is not None:
+            lines.append(f"Checkpoint: {checkpoint_path}")
+        return "\n".join(lines)
+
     @staticmethod
     def _next_ready_task(plan: TaskPlan) -> TaskItem | None:
         completed = {
@@ -225,13 +247,18 @@ class TaskPlanCoordinator:
         lines.extend(("", detail))
         return "\n".join(lines)
 
-    @staticmethod
-    def _render_plan(plan: TaskPlan, header: str) -> str:
+    def _render_plan(self, plan: TaskPlan, header: str) -> str:
+        checkpoint_path = getattr(self._state, "checkpoint_path", None)
+        storage = (
+            f"kalıcı checkpoint ({checkpoint_path})"
+            if checkpoint_path is not None
+            else "yalnızca bu uygulama oturumu"
+        )
         lines = [
             header,
             f"Hedef: {plan.objective}",
             f"Özet: {plan.summary}",
-            "Saklama: yalnızca bu uygulama oturumu",
+            f"Saklama: {storage}",
             f"İlerleme: {sum(item.status is TaskStatus.COMPLETED for item in plan.tasks)}"
             f"/{len(plan.tasks)} tamamlandı",
         ]

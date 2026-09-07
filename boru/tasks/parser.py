@@ -12,13 +12,17 @@ class RuleBasedTaskCommandParser:
         r"^\s*(?:görev|task|plan)\s+durumu\s*[.!?]?\s*$",
         re.IGNORECASE,
     )
+    _JOURNAL = re.compile(
+        r"^\s*(?:görev|task|plan)\s+(?:günlüğü|geçmişi)\s*[.!?]?\s*$",
+        re.IGNORECASE,
+    )
     _RUN = re.compile(
         r"^\s*task\s+(?:çalıştır|başlat)\s*:\s*(?P<task_id>TASK-[1-9]\d*)\s*$",
         re.IGNORECASE,
     )
     _RUN_PLAN = re.compile(
         r"^\s*(?:planı|görev\s+planını|task\s+planını)\s+"
-        r"(?:çalıştır|başlat)\s*[.!?]?\s*$",
+        r"(?:çalıştır|başlat|devam\s+ettir|sürdür)\s*[.!?]?\s*$",
         re.IGNORECASE,
     )
     _RESET = re.compile(
@@ -32,9 +36,11 @@ class RuleBasedTaskCommandParser:
         re.IGNORECASE,
     )
     _INTENT = re.compile(
-        r"^\s*(?:(?:görev|task)\s+(?:planla|durumu)|plan\s+durumu|"
+        r"^\s*(?:(?:görev|task)\s+(?:planla|durumu|günlüğü|geçmişi)|"
+        r"plan\s+(?:durumu|günlüğü|geçmişi)|"
         r"task\s+(?:çalıştır|başlat|sıfırla|yeniden\s+aç|tamamla|kabul\s+et)|"
-        r"(?:planı|görev\s+planını|task\s+planını)\s+(?:çalıştır|başlat))\b",
+        r"(?:planı|görev\s+planını|task\s+planını)\s+"
+        r"(?:çalıştır|başlat|devam\s+ettir|sürdür))\b",
         re.IGNORECASE,
     )
 
@@ -55,6 +61,8 @@ class RuleBasedTaskCommandParser:
             return TaskCommand(TaskAction.PLAN, objective)
         if self._STATUS.fullmatch(user_message):
             return TaskCommand(TaskAction.STATUS)
+        if self._JOURNAL.fullmatch(user_message):
+            return TaskCommand(TaskAction.JOURNAL)
         if self._RUN_PLAN.fullmatch(user_message):
             return TaskCommand(TaskAction.RUN_PLAN)
         match = self._RUN.fullmatch(user_message)
