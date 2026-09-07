@@ -5,6 +5,8 @@ _RELEASES = (
     "V0.27", "V0.28", "V0.29", "V1.0", "V1.1", "V1.2", "V1.3", "V1.4",
     "V1.5", "V1.6", "V1.7", "V1.8", "V1.9", "V2.0", "V2.1", "V2.2",
     "V2.3", "V2.4", "V2.5", "V2.6", "V2.7", "V2.8", "V2.9", "V3.0",
+    "V3.1", "V3.2", "V3.3", "V3.4", "V3.5", "V3.6", "V3.7", "V3.8",
+    "V3.9", "V4.0",
 )
 
 
@@ -12,7 +14,7 @@ def _enabled_from(version: str, milestone: str) -> bool:
     return _RELEASES.index(version) >= _RELEASES.index(milestone)
 
 
-def build_release(version: str = "V3.0"):
+def build_release(version: str = "V4.0"):
     from main_v170 import build_application
 
     if version not in _RELEASES:
@@ -33,6 +35,13 @@ def build_release(version: str = "V3.0"):
     checkpoint_migration = _enabled_from(version, "V2.2")
     reliable_tasks = _enabled_from(version, "V2.3")
     sandbox_terminal = _enabled_from(version, "V3.0")
+    advanced_terminal = _enabled_from(version, "V3.1")
+    autonomous_development = _enabled_from(version, "V4.0")
+    terminal_feature_level = (
+        min(9, _RELEASES.index(version) - _RELEASES.index("V3.0"))
+        if sandbox_terminal
+        else 0
+    )
     optional_features = (
         ("kanıta dayalı öz değerlendirme", evaluation),
         ("onaylı ve geri alınabilir iyileştirme", improvement),
@@ -53,6 +62,14 @@ def build_release(version: str = "V3.0"):
         ("checkpoint şema sürümleme ve doğrulanmış otomatik migration", checkpoint_migration),
         ("checkpoint yedeği, onaylı kurtarma, proje kilidi, sınırlı yeniden deneme ve görev arşivi", reliable_tasks),
         ("Docker içinde izinli terminal komutları ve ortam raporu", sandbox_terminal),
+        (
+            "proje içi çalışma dizini, ortam/bağımlılık inceleme, syntax/kalite hattı ve terminal günlüğü",
+            advanced_terminal,
+        ),
+        (
+            "doğal dil hedeften planlama, kontrollü uygulama ve otomatik doğrulama döngüsü",
+            autonomous_development,
+        ),
     )
     features = ", ".join(
         ("Docker sandbox", *(name for name, enabled in optional_features if enabled))
@@ -79,5 +96,7 @@ def build_release(version: str = "V3.0"):
         source_drift_detection_enabled=source_drift_detection,
         reliable_tasks_enabled=reliable_tasks,
         sandbox_terminal_enabled=sandbox_terminal,
+        autonomous_development_enabled=autonomous_development,
+        terminal_feature_level=terminal_feature_level,
         project_edit_max_attempts=2 if goal_driven_change else 1,
     )

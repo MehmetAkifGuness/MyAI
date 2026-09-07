@@ -177,6 +177,7 @@ class LLMArchitectAgent:
         succeeded = False
         try:
             available = self._file_index.list_editable_files()
+            available = self._include_existing_explicit_scope(request, available)
             self._validate_explicit_scope_availability(request, available)
             scoped_available = self._apply_explicit_scope(request, available)
             fingerprint = None
@@ -199,6 +200,37 @@ class LLMArchitectAgent:
                     monotonic() - started,
                     succeeded,
                 )
+
+    def _include_existing_explicit_scope(
+        self,
+        request: ArchitectureRequest,
+        available: tuple[str, ...],
+    ) -> tuple[str, ...]:
+        """Keep explicit safe paths usable when the bounded manifest is truncated."""
+        if not request.file_scope or self._CREATION_INTENT.search(request.task):
+            return available
+        reader = getattr(self._workspace, "read_edit_source", None)
+        if not callable(reader):
+            return available
+        known = {
+            path.replace("\\", "/").casefold()
+            for path in available
+        }
+        additions: list[str] = []
+        for path in request.file_scope:
+            normalized = path.replace("\\", "/").casefold()
+            if normalized in known:
+                continue
+            try:
+                source = reader(path)
+            except (OSError, ValueError):
+                continue
+            canonical = source.path.replace("\\", "/")
+            canonical_key = canonical.casefold()
+            if canonical_key not in known:
+                additions.append(canonical)
+                known.add(canonical_key)
+        return (*available, *additions)
 
     def _plan_for_available(
         self,

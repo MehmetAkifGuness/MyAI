@@ -206,6 +206,8 @@ from boru.tasks.reliable_state import ReliableTaskPlanState
 from boru.tasks.reliable_coordinator import ReliableTaskCoordinator
 from boru.tasks.workflow_guard import GuardedTaskWorkflow
 from boru.sandbox.terminal import SandboxTerminalCoordinator
+from boru.sandbox.history import TerminalHistory
+from boru.autonomy import AutonomousDevelopmentCoordinator
 from boru.ui import (
     ChatAppUI,
 )
@@ -356,6 +358,8 @@ def build_application(
     source_drift_detection_enabled: bool = False,
     reliable_tasks_enabled: bool = False,
     sandbox_terminal_enabled: bool = False,
+    autonomous_development_enabled: bool = False,
+    terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -392,6 +396,12 @@ def build_application(
         raise ValueError("Güvenilir görev yürütme kaynak drift denetimi gerektirir.")
     if sandbox_terminal_enabled and not sandbox_enabled:
         raise ValueError("Terminal Docker sandbox gerektirir.")
+    if type(terminal_feature_level) is not int or not 0 <= terminal_feature_level <= 9:
+        raise ValueError("Terminal özellik seviyesi 0-9 arasında olmalıdır.")
+    if terminal_feature_level and not sandbox_terminal_enabled:
+        raise ValueError("Terminal özellikleri sandbox terminal gerektirir.")
+    if autonomous_development_enabled and not reliable_tasks_enabled:
+        raise ValueError("Otonom geliştirme güvenilir görev yürütme gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1082,6 +1092,8 @@ def build_application(
         )
         if reliable_tasks_enabled:
             coding_operation = ReliableTaskCoordinator(coding_operation, task_state, task_repository)
+        if autonomous_development_enabled:
+            coding_operation = AutonomousDevelopmentCoordinator(coding_operation)
 
     operation_resolvers = [
         auto_fix_coordinator,
@@ -1089,7 +1101,19 @@ def build_application(
         git_coordinator,
     ]
     if sandbox_terminal_enabled:
-        operation_resolvers.insert(0, SandboxTerminalCoordinator(project_root, sandbox_executor))
+        operation_resolvers.insert(
+            0,
+            SandboxTerminalCoordinator(
+                project_root,
+                sandbox_executor,
+                (
+                    TerminalHistory(project_root / "data" / "terminal_history.json")
+                    if terminal_feature_level >= 2
+                    else None
+                ),
+                feature_level=terminal_feature_level,
+            ),
+        )
     if improvement_enabled:
         if evaluator is None or coding_coordinator is None:
             raise ValueError("İyileştirme Coding, değerlendirme ve sandbox gerektirir.")

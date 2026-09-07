@@ -54,6 +54,7 @@ class EvaluationTests(unittest.TestCase):
             report = EvidenceEvaluator(root, EvidenceExecutor()).evaluate(("a.py",))
             self.assertIs(report.verdict, Verdict.UNKNOWN)
             self.assertIn("İlişkili test bulunamadı", report.render())
+            self.assertIn("TEST AGENT RAPORU\nDurum: TEST BULUNAMADI", report.workflow_report())
 
     def test_changed_test_invalidates_previous_report(self):
         evaluator = EvidenceEvaluator(self.root, EvidenceExecutor())

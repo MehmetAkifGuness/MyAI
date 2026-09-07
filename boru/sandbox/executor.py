@@ -10,17 +10,34 @@ from boru.sandbox.snapshot import SourceSnapshot
 from boru.tools.command_executor import BoundedCommandExecutor
 from boru.tools.command_models import CommandExecutionResult, CommandKind, CommandRequest, CommandRisk, CommandSpec
 from boru.tools.command_policy import SafeCommandPolicy
+from boru.tools.workspace import WorkspacePathResolver
 
 
 class DockerSandboxExecutor:
     """Runs only canonical test/lint commands in a restricted Linux container."""
 
-    _KINDS = {CommandKind.UNITTEST, CommandKind.PYTEST, CommandKind.RUFF, CommandKind.MYPY}
+    _KINDS = {
+        CommandKind.UNITTEST,
+        CommandKind.PYTEST,
+        CommandKind.RUFF,
+        CommandKind.MYPY,
+        CommandKind.COMPILEALL,
+        CommandKind.PIP_CHECK,
+        CommandKind.ENVIRONMENT,
+    }
+    _TARGET_KINDS = {
+        CommandKind.UNITTEST,
+        CommandKind.PYTEST,
+        CommandKind.RUFF,
+        CommandKind.MYPY,
+        CommandKind.COMPILEALL,
+    }
 
     def __init__(self, root: Path, image: str = "boru-sandbox:1.0", runner=None, docker: str | None = None):
         if re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._/:@-]{0,255}", image) is None:
             raise ValueError("Sandbox imaj adı geçersiz.")
         self._root = root.resolve()
+        self._resolver = WorkspacePathResolver(self._root)
         self._image = image
         self._docker = docker or shutil.which("docker")
         self._runner = runner or BoundedCommandExecutor(self._root, timeout_seconds=120)
@@ -60,21 +77,41 @@ class DockerSandboxExecutor:
     def _canonical_arguments(cls, command: CommandSpec) -> tuple[str, ...]:
         if command.risk is not CommandRisk.SAFE or command.kind not in cls._KINDS:
             raise ValueError("Sandbox yalnızca izinli test/lint komutlarını çalıştırır.")
-        default = SafeCommandPolicy().build(CommandRequest(command.kind))
+        default = SafeCommandPolicy().build(
+            CommandRequest(command.kind, working_directory=command.working_directory)
+        )
         if command.arguments == default.arguments:
             return command.arguments
-        if not command.arguments:
+        if not command.arguments or command.kind not in cls._TARGET_KINDS:
             raise ValueError("Sandbox komutu boş.")
         target = command.arguments[-1]
-        canonical = SafeCommandPolicy().build(CommandRequest(command.kind, target))
+        canonical = SafeCommandPolicy().build(
+            CommandRequest(command.kind, target, command.working_directory)
+        )
         if canonical.arguments != command.arguments:
             raise ValueError("Sandbox serbest Python veya shell argümanlarını reddeder.")
-        normalized = SafeCommandPolicy().build(CommandRequest(command.kind, target.replace("\\", "/")))
+        normalized = SafeCommandPolicy().build(
+            CommandRequest(
+                command.kind,
+                target.replace("\\", "/"),
+                command.working_directory,
+            )
+        )
         return normalized.arguments
 
     def _run_spec(self, command, snapshot, name, arguments):
         if "," in str(snapshot):
             raise ValueError("Sandbox geçici yolunda virgül desteklenmiyor.")
+        workdir = "/workspace"
+        if command.working_directory:
+            source_directory = self._resolver.resolve(command.working_directory)
+            if not source_directory.is_dir():
+                raise ValueError("Sandbox çalışma yolu klasör olmalıdır.")
+            relative = source_directory.relative_to(self._root).as_posix()
+            snapshot_directory = snapshot / relative
+            if not snapshot_directory.exists():
+                snapshot_directory.mkdir(parents=True)
+            workdir += "/" + relative
         return CommandSpec(
             command.kind, self._docker,
             ("run", "--rm", "--pull=never", "--name", name, "--network=none",
@@ -83,10 +120,11 @@ class DockerSandboxExecutor:
              "--user=65534:65534", "--init", "--no-healthcheck", "--log-driver=none",
              "--tmpfs", "/tmp:rw,nosuid,nodev,size=67108864,mode=1777",
              "--mount", f"type=bind,source={snapshot},target=/workspace,readonly",
-             "--workdir=/workspace", "--env=HOME=/tmp", "--env=PYTHONDONTWRITEBYTECODE=1",
+             f"--workdir={workdir}", "--env=HOME=/tmp", "--env=PYTHONDONTWRITEBYTECODE=1",
+             "--env=PYTHONPYCACHEPREFIX=/tmp/pycache",
              "--env=PYTHONIOENCODING=utf-8", "--entrypoint=python", self._image,
              "-B", *arguments),
-            f"Sandbox: {command.display}", CommandRisk.SAFE,
+            f"Sandbox: {command.display}", CommandRisk.SAFE, command.working_directory,
         )
 
     def _check(self, arguments: tuple[str, ...], expected: str | None = None) -> None:

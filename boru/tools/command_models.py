@@ -7,6 +7,9 @@ class CommandKind(str, Enum):
     PYTEST = "pytest"
     RUFF = "ruff"
     MYPY = "mypy"
+    COMPILEALL = "compileall"
+    PIP_CHECK = "pip_check"
+    ENVIRONMENT = "environment"
     GIT_STATUS = "git_status"
     GIT_DIFF = "git_diff"
     GIT_BRANCH = "git_branch"
@@ -26,9 +29,15 @@ class CommandRisk(str, Enum):
 class CommandRequest:
     kind: CommandKind
     target: str = ""
+    working_directory: str = ""
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "target", self.target.strip())
+        object.__setattr__(
+            self,
+            "working_directory",
+            self.working_directory.strip().replace("\\", "/"),
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -38,6 +47,7 @@ class CommandSpec:
     arguments: tuple[str, ...]
     display: str
     risk: CommandRisk
+    working_directory: str = ""
 
     def __post_init__(self) -> None:
         if not self.executable.strip():

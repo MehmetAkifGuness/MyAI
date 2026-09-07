@@ -331,7 +331,7 @@ class ReleaseV300Tests(unittest.TestCase):
         import main_v170
 
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V3.0"), "app")
             self.assertEqual(builder.call_args.kwargs["application_version"], "V3.0")
             self.assertTrue(builder.call_args.kwargs["sandbox_terminal_enabled"])
             for version in ("V2.3", "V2.4", "V2.5", "V2.6", "V2.7", "V2.8", "V2.9", "V3.0"):
@@ -365,7 +365,7 @@ class ApplicationRoutingTests(TaskFixture):
             assistant = ui.call_args.kwargs["assistant"]
             self.assertIn("CHECKPOINT DURUMU", assistant.reply("checkpoint durumu"))
             self.assertIn("PLAN SAĞLIĞI", assistant.reply("plan sağlığı"))
-            self.assertIn("TERMİNAL ORTAMI", assistant.reply("terminal durumu"))
+            self.assertIn("TERMİNAL DURUMU", assistant.reply("terminal durumu"))
             self.assertIn("ÇALIŞTIRILAMADI", assistant.reply('terminal: python -c "print(1)"'))
             model.return_value.generate.assert_not_called()
 

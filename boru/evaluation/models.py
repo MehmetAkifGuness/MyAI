@@ -47,7 +47,14 @@ class EvaluationReport:
         sections = []
         for name, (header, success) in headers.items():
             check = next((item for item in self.checks if item.name == name), None)
-            status = success if check and check.verdict is Verdict.PASS else "BAŞARISIZ"
+            if check is None or check.verdict is Verdict.FAIL:
+                status = "BAŞARISIZ"
+            elif check.verdict is Verdict.PASS:
+                status = success
+            elif name == "Test" and "İlişkili test bulunamadı" in check.detail:
+                status = "TEST BULUNAMADI"
+            else:
+                status = "KANIT YETERSİZ"
             if name == "Test" and any(c.name == "Kaynak bütünlüğü" and c.verdict is not Verdict.PASS for c in self.checks):
                 status = "BAŞARISIZ"
             sections.append(f"{header}\nDurum: {status}")
