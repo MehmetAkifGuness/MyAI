@@ -32,8 +32,29 @@ class GoalDrivenChangeScopeResolver:
         scope = self._resolve_base_scope(objective)
         if scope.explicit or len(scope.paths) != 1 or not self._is_test_path(scope.paths[0]):
             return scope
+        return self._expand_test_scope(scope, objective, required=False)
+
+    def resolve_runtime_repair(self, objective: str) -> ChangeScope:
+        scope = self._resolve_base_scope(objective)
+        if len(scope.paths) != 1 or not self._is_test_path(scope.paths[0]):
+            raise ValueError(
+                "Çalışma zamanı onarımı mevcut ve tekil bir test dosyası gerektirir."
+            )
+        return self._expand_test_scope(scope, objective, required=True)
+
+    def _expand_test_scope(
+        self,
+        scope: ChangeScope,
+        objective: str,
+        *,
+        required: bool,
+    ) -> ChangeScope:
         implementation = self._select_implementation(scope.paths[0], objective)
         if implementation is None:
+            if required:
+                raise ValueError(
+                    "Testten tekil bir proje içi kök neden dosyası çıkarılamadı."
+                )
             return scope
         return self._build_implementation_scope(scope, implementation, objective)
 
@@ -84,7 +105,9 @@ class GoalDrivenChangeScopeResolver:
             if self._impacts is not None
             else ()
         )
-        validation_paths = tuple(item.path for item in impacts if item.is_test)[:7]
+        validation_paths = tuple(
+            dict.fromkeys((primary, *(item.path for item in impacts if item.is_test)))
+        )[:7]
         evidence = (
             *scope.evidence,
             f"import ilişkisi — {primary} → {implementation.path} ({implementation.imported_via})",

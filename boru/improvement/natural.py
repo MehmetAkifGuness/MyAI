@@ -136,6 +136,7 @@ class _NaturalChangeSession:
     objective: str
     scope: ChangeScope
     retry_count: int = 0
+    runtime_repair: bool = False
 
 
 class NaturalLanguageImprovementCoordinator:
@@ -169,12 +170,14 @@ class NaturalLanguageImprovementCoordinator:
         scope_resolver: SafeChangeScopeResolver,
         *,
         max_retries: int = 1,
+        runtime_repair_enabled: bool = False,
     ) -> None:
         if max_retries < 0 or max_retries > 2:
             raise ValueError("Yeniden öneri sınırı 0 ile 2 arasında olmalıdır.")
         self._workflow = workflow
         self._scope_resolver = scope_resolver
         self._max_retries = max_retries
+        self._runtime_repair_enabled = runtime_repair_enabled
         self._session: _NaturalChangeSession | None = None
 
     @property
@@ -188,17 +191,31 @@ class NaturalLanguageImprovementCoordinator:
         if self._is_explicit_improvement_command(normalized):
             self._session = None
             return self._workflow.resolve(message)
-        if not self._is_natural_change_request(message, normalized):
+        runtime_repair = self._is_runtime_repair(message, normalized)
+        if not runtime_repair and not self._is_natural_change_request(message, normalized):
             return None
+        objective = self._runtime_objective(message) if runtime_repair else message.strip()
         try:
-            scope = self._scope_resolver.resolve(message)
+            scope = self._resolve_scope(objective, runtime_repair)
         except ValueError as error:
             return f"Doğal dil değişiklik isteği başlatılamadı: {error}"
-        self._session = _NaturalChangeSession(objective=message.strip(), scope=scope)
+        self._session = _NaturalChangeSession(
+            objective=objective,
+            scope=scope,
+            runtime_repair=runtime_repair,
+        )
         response = self._prepare(self._session)
         if not self._workflow.has_pending:
             self._session = None
-        return self._render_research(scope, response)
+        return self._render_research(scope, response, runtime_repair=runtime_repair)
+
+    def _resolve_scope(self, objective: str, runtime_repair: bool) -> ChangeScope:
+        if runtime_repair:
+            resolver = getattr(self._scope_resolver, "resolve_runtime_repair", None)
+            if not callable(resolver):
+                raise ValueError("Çalışma zamanı kök neden çözümleyicisi etkin değil.")
+            return resolver(objective)
+        return self._scope_resolver.resolve(objective)
 
     def _resolve_pending(self, message: str, normalized: str) -> str:
         response = self._workflow.resolve(message) or "İyileştirme akışı yanıt üretmedi."
@@ -244,6 +261,20 @@ class NaturalLanguageImprovementCoordinator:
             return False
         return cls._MUTATION_PATTERN.search(message) is not None
 
+    def _is_runtime_repair(self, message: str, normalized: str) -> bool:
+        return (
+            self._runtime_repair_enabled
+            and normalized.startswith("ajan:")
+            and "test" in normalized
+            and any(cue in normalized for cue in ("çalıştır", "calistir", "koş", "sandbox"))
+            and self._MUTATION_PATTERN.search(message) is not None
+        )
+
+    @staticmethod
+    def _runtime_objective(message: str) -> str:
+        _, separator, objective = message.partition(":")
+        return objective.strip() if separator else message.strip()
+
     @staticmethod
     def _is_explicit_improvement_command(normalized: str) -> bool:
         return normalized.startswith("iyileştir:") or normalized in {
@@ -259,9 +290,14 @@ class NaturalLanguageImprovementCoordinator:
         )
 
     @staticmethod
-    def _render_research(scope: ChangeScope, response: str) -> str:
+    def _render_research(
+        scope: ChangeScope,
+        response: str,
+        *,
+        runtime_repair: bool = False,
+    ) -> str:
         lines = [
-            "DOĞAL DİL AJAN AKIŞI",
+            "ÇALIŞMA ZAMANI ONARIM AKIŞI" if runtime_repair else "DOĞAL DİL AJAN AKIŞI",
             "Durum: ARAŞTIRMA TAMAMLANDI",
             "Güvenli kapsam: " + ", ".join(scope.paths),
             *(

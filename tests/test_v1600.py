@@ -126,13 +126,14 @@ class ReleaseV160Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "genel ajan ve Docker sandbox"):
             main_v170.build_application(runtime_test_agent_enabled=True)
 
-    def test_default_release_enables_runtime_test_agent(self):
+    def test_v160_release_enables_runtime_test_agent(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.6"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V1.6")
             self.assertTrue(flags["sandbox_enabled"])
             self.assertTrue(flags["runtime_test_agent_enabled"])
+            self.assertFalse(flags["runtime_repair_enabled"])
 
 
 if __name__ == "__main__":

@@ -341,6 +341,7 @@ def build_application(
     goal_driven_change_enabled: bool = False,
     impact_analysis_enabled: bool = False,
     runtime_test_agent_enabled: bool = False,
+    runtime_repair_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
@@ -359,6 +360,12 @@ def build_application(
         not general_agent_enabled or not sandbox_enabled
     ):
         raise ValueError("Çalışma zamanı test ajanı genel ajan ve Docker sandbox gerektirir.")
+    if runtime_repair_enabled and (
+        not runtime_test_agent_enabled or not goal_driven_change_enabled
+    ):
+        raise ValueError(
+            "Çalışma zamanı onarımı hedefli test ajanı ve hedef odaklı değişiklik gerektirir."
+        )
 
     settings = (
         AppSettings.from_env()
@@ -1066,6 +1073,7 @@ def build_application(
             improvement_coordinator = NaturalLanguageImprovementCoordinator(
                 improvement_coordinator,
                 scope_resolver,
+                runtime_repair_enabled=runtime_repair_enabled,
             )
         operation_resolvers.insert(0, improvement_coordinator)
     if external_tools_enabled:
@@ -1163,6 +1171,7 @@ def build_application(
             direct_response_resolvers=[
                 *([SandboxCoordinator(sandbox_executor)] if sandbox_executor is not None else []),
                 *([EvaluationCoordinator(evaluator)] if evaluator is not None else []),
+                *([operation_coordinator] if runtime_repair_enabled else []),
                 *([general_agent_coordinator] if general_agent_coordinator is not None else []),
                 *(
                     [knowledge_coordinator]
@@ -1183,7 +1192,7 @@ def build_application(
                 ),
                 performance_coordinator,
                 architect_coordinator,
-                operation_coordinator,
+                *([] if runtime_repair_enabled else [operation_coordinator]),
                 *([test_agent] if test_agent is not None else []),
                 *([security_agent] if security_agent is not None else []),
                 *([code_review_agent] if code_review_agent is not None else []),
