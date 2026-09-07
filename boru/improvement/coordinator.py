@@ -9,10 +9,22 @@ class ImprovementCoordinator:
     _UNDO = "iyileştirmeyi geri al"
     _UNDO_APPROVE = "iyileştirme geri almayı onayla"
 
-    def __init__(self, coding, applier, evaluator):
+    def __init__(
+        self,
+        coding,
+        applier,
+        evaluator,
+        *,
+        include_baseline_context: bool = False,
+        baseline_context_characters: int = 5000,
+    ):
+        if baseline_context_characters < 1:
+            raise ValueError("Başlangıç değerlendirme bağlamı sınırı pozitif olmalıdır.")
         self._coding = coding
         self._applier = applier
         self._evaluator = evaluator
+        self._include_baseline_context = include_baseline_context
+        self._baseline_context_characters = baseline_context_characters
         self._undo_pending = False
 
     @property
@@ -45,15 +57,21 @@ class ImprovementCoordinator:
             if request is None:
                 raise ValueError("Dosya kapsamı boş.")
             baseline = self._evaluator.evaluate(request.source_paths)
+            baseline_text = baseline.render()
             self._applier.allowed_paths = request.source_paths
             task = objective.strip()
             explicit = RuleBasedArchitectureRequestParser().parse_task(task).file_scope
             if not explicit:
-                task += ". Yalnızca şu mevcut dosyaları kapsa: " + ", ".join(request.source_paths)
+                task += "\nBORU_DOSYA_KAPSAMI: " + ", ".join(request.source_paths)
+            if self._include_baseline_context:
+                task += (
+                    "\n\nDOĞRULAMA_KANITI:\n"
+                    + baseline_text[: self._baseline_context_characters]
+                )
             response = self._coding.resolve("kodla: " + task)
         except (OSError, ValueError, RuntimeError) as error:
             return f"İyileştirme başlatılamadı: {error}"
-        return ("İYİLEŞTİRME ÖNERİSİ\nBaşlangıç değerlendirmesi:\n" + baseline.render()
+        return ("İYİLEŞTİRME ÖNERİSİ\nBaşlangıç değerlendirmesi:\n" + baseline_text
                 + "\n\n" + (response or "Öneri hazırlanamadı.").replace(
                     "kod değişikliğini onayla", self._APPROVE))
 

@@ -5,6 +5,7 @@ from boru.sandbox import DockerSandboxExecutor
 from boru.sandbox.coordinator import SandboxCoordinator
 from boru.evaluation import EvidenceEvaluator, EvaluationCoordinator
 from boru.improvement import (
+    GoalDrivenChangeScopeResolver,
     ImprovementCoordinator,
     NaturalLanguageImprovementCoordinator,
     SafeChangeScopeResolver,
@@ -335,10 +336,17 @@ def build_application(
     general_agent_enabled: bool = False,
     deep_code_index_enabled: bool = False,
     natural_change_enabled: bool = False,
+    goal_driven_change_enabled: bool = False,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
     if natural_change_enabled and not improvement_enabled:
         raise ValueError("Doğal dil değişiklik akışı kontrollü iyileştirme gerektirir.")
+    if goal_driven_change_enabled and (
+        not natural_change_enabled or not deep_code_index_enabled
+    ):
+        raise ValueError(
+            "Hedef odaklı değişiklik akışı doğal değişiklik ve ilişki indeksi gerektirir."
+        )
 
     settings = (
         AppSettings.from_env()
@@ -493,6 +501,7 @@ def build_application(
     )
 
     code_index = None
+    relationship_index = None
     read_tools = [
         CalculatorTool(),
         CurrentTimeTool(),
@@ -509,8 +518,9 @@ def build_application(
             ]
         )
         if deep_code_index_enabled:
+            relationship_index = SafeCodeRelationshipIndex(project_root)
             read_tools.append(
-                RelatedCodeTool(SafeCodeRelationshipIndex(project_root))
+                RelatedCodeTool(relationship_index)
             )
 
     read_registry = ToolRegistry(read_tools)
@@ -1011,13 +1021,23 @@ def build_application(
             improvement_coding,
             improvement_applier,
             evaluator,
+            include_baseline_context=goal_driven_change_enabled,
         )
         if natural_change_enabled:
             if code_index is None:
                 raise ValueError("Doğal dil değişiklik akışı güvenli kod indeksi gerektirir.")
+            scope_resolver = SafeChangeScopeResolver(project_root, code_index)
+            if goal_driven_change_enabled:
+                if relationship_index is None:
+                    raise ValueError("Hedef odaklı değişiklik akışı ilişki indeksi gerektirir.")
+                scope_resolver = GoalDrivenChangeScopeResolver(
+                    project_root,
+                    code_index,
+                    relationship_index,
+                )
             improvement_coordinator = NaturalLanguageImprovementCoordinator(
                 improvement_coordinator,
-                SafeChangeScopeResolver(project_root, code_index),
+                scope_resolver,
             )
         operation_resolvers.insert(0, improvement_coordinator)
     if external_tools_enabled:

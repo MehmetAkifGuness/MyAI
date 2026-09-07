@@ -11,6 +11,8 @@ from boru.tools.project_index import SafeProjectFileIndex
 class ChangeScope:
     paths: tuple[str, ...]
     evidence: tuple[str, ...]
+    guidance: str = ""
+    explicit: bool = False
 
 
 class SafeChangeScopeResolver:
@@ -47,6 +49,7 @@ class SafeChangeScopeResolver:
             return ChangeScope(
                 paths=explicit,
                 evidence=tuple(f"açık dosya kapsamı — {path}" for path in explicit),
+                explicit=True,
             )
         return self._symbol_scope(objective)
 
@@ -217,6 +220,8 @@ class NaturalLanguageImprovementCoordinator:
 
     def _prepare(self, session: _NaturalChangeSession, *, retry: bool = False) -> str:
         objective = session.objective
+        if session.scope.guidance:
+            objective += ". " + session.scope.guidance
         if retry:
             objective += (
                 ". Önceki aday geçici kopya doğrulamasından geçmedi; "

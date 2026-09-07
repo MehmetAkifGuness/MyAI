@@ -141,9 +141,9 @@ class ReleaseV130Tests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "kontrollü iyileştirme"):
             main_v170.build_application(natural_change_enabled=True)
 
-    def test_default_release_enables_natural_change_flow(self):
+    def test_v130_release_enables_natural_change_flow(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V1.3"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V1.3")
             self.assertTrue(flags["improvement_enabled"])

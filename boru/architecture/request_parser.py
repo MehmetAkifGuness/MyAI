@@ -20,6 +20,10 @@ class RuleBasedArchitectureRequestParser:
         r"(?<![\w.-])(?:[\w.-]+[/\\])*[\w.-]+\.[A-Za-z0-9]+",
         re.UNICODE,
     )
+    _SCOPE_MARKER = re.compile(
+        r"(?:^|\n)BORU_DOSYA_KAPSAMI:\s*(?P<scope>[^\r\n]+)",
+        re.IGNORECASE,
+    )
 
     def parse(self, user_message: str) -> ArchitectureRequest | None:
         match = self._REQUEST.fullmatch(user_message)
@@ -28,11 +32,18 @@ class RuleBasedArchitectureRequestParser:
         return self.parse_task(match.group("task"))
 
     def parse_task(self, task: str) -> ArchitectureRequest:
+        scope_source = task.partition("\n\nDOĞRULAMA_KANITI:")[0]
         file_scope = ()
-        if self._EXPLICIT_SCOPE.search(task) is not None:
+        marker = self._SCOPE_MARKER.search(scope_source)
+        if marker is not None:
             file_scope = tuple(
                 path.replace("\\", "/")
-                for path in self._FILE_PATH.findall(task)
+                for path in self._FILE_PATH.findall(marker.group("scope"))
+            )
+        elif self._EXPLICIT_SCOPE.search(scope_source) is not None:
+            file_scope = tuple(
+                path.replace("\\", "/")
+                for path in self._FILE_PATH.findall(scope_source)
             )
         return ArchitectureRequest(task, file_scope)
 
