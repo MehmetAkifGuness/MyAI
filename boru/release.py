@@ -9,6 +9,7 @@ _RELEASES = (
     "V3.9", "V4.0",
     "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7", "V4.8",
     "V4.9", "V5.0", "V5.1", "V5.2", "V6.0", "V6.1", "V6.2", "V6.3",
+    "V6.4", "V6.5", "V6.6", "V7.0",
 )
 
 
@@ -22,6 +23,10 @@ _MILESTONES = {
     "sandbox_terminal": "V3.0", "advanced_terminal": "V3.1",
     "autonomous_development": "V4.0",
     "staged_coding": "V6.3",
+    "reliable_structured_calls": "V6.4",
+    "relevant_context": "V6.5",
+    "staged_feedback_repair": "V6.6",
+    "agentic_benchmark": "V7.0",
 }
 
 
@@ -69,10 +74,14 @@ def _feature_labels(flags: dict[str, bool | int]) -> tuple[tuple[str, bool], ...
         ("testleri koruyan onaylı task onarımı", autonomy >= 12),
         ("çok adımlı ilerleme ve sınırlı yeniden doğrulama", autonomy >= 13),
         ("ana dosyaya yazmadan önce geçici kopyada doğrulama", bool(flags["staged_coding"])),
+        ("doğrulama geri bildirimli structured yeniden deneme", bool(flags["reliable_structured_calls"])),
+        ("kod indeksli akıllı bağlam seçimi", bool(flags["relevant_context"])),
+        ("sandbox testinden sınırlı onarım döngüsü", bool(flags["staged_feedback_repair"])),
+        ("ölçülebilir model-test-onarım benchmarkı", bool(flags["agentic_benchmark"])),
     )
 
 
-def build_release(version: str = "V6.3"):
+def build_release(version: str = "V7.0"):
     from main_v170 import build_application
 
     if version not in _RELEASES:
@@ -111,6 +120,10 @@ def build_release(version: str = "V6.3"):
         autonomous_development_enabled=bool(flags["autonomous_development"]),
         autonomy_feature_level=int(flags["autonomy_feature_level"]),
         staged_coding_enabled=bool(flags["staged_coding"]),
+        reliable_structured_calls_enabled=bool(flags["reliable_structured_calls"]),
+        relevant_context_enabled=bool(flags["relevant_context"]),
+        staged_feedback_repair_enabled=bool(flags["staged_feedback_repair"]),
+        benchmark_chat_enabled=bool(flags["agentic_benchmark"]),
         terminal_feature_level=int(flags["terminal_feature_level"]),
         project_edit_max_attempts=2 if flags["goal_driven_change"] else 1,
     )

@@ -315,6 +315,7 @@ class ApplicationRoutingTests(RepairFixture):
             self.assertIn("otonom onar", assistant.reply("otonom yardım"))
             self.assertIn("PLAN SAĞLIĞI", assistant.reply("otonom sağlık"))
             self.assertIn("TASK TEŞHİSİ", assistant.reply("otonom teşhis: TASK-1"))
+            self.assertIn("Toplam: 30", assistant.reply("benchmark görevleri"))
             model.return_value.generate.assert_not_called()
 
 

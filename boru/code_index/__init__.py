@@ -1,4 +1,5 @@
 from boru.code_index.index import SafeCodeIndex
+from boru.code_index.context import RelevantFileRanker
 from boru.code_index.impact import SafeCodeImpactIndex
 from boru.code_index.models import (
     CodeIndexSummary,
@@ -30,6 +31,7 @@ __all__ = [
     "RelatedCodeFile",
     "RelatedCodeTool",
     "SafeCodeIndex",
+    "RelevantFileRanker",
     "SafeCodeImpactIndex",
     "SafeCodeRelationshipIndex",
 ]

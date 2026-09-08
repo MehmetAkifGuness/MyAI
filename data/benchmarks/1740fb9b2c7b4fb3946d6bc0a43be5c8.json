@@ -1,0 +1,48 @@
+{
+  "schema": "boru.benchmark/v2",
+  "state": "completed",
+  "suite_sha256": "133ad5ec9abcff0291a59cb2a4bf9dac478ba7a8d2357da1a3f1926b68242e22",
+  "configuration": {
+    "structured_attempts": 2,
+    "repair_attempts": 0
+  },
+  "scope": "bounded model-test-repair loop; clarification requires human quality review",
+  "summary": {
+    "qwen2.5-coder:7b": {
+      "attempted": 1,
+      "coding_passed": 0,
+      "coding_total": 1,
+      "coding_pass_rate": 0.0,
+      "model_calls": 2,
+      "structured_retries": 1,
+      "repair_attempts": 0,
+      "human_interventions": 0,
+      "statuses": {
+        "sandbox_error": 1
+      },
+      "seconds": 9.828
+    }
+  },
+  "results": [
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "addition",
+      "category": "bugfix",
+      "repeat": 1,
+      "status": "sandbox_error",
+      "detail": "Docker Linux motorunu başlatın ve boru-sandbox imajını hazırlayın. Sandbox komutu çalıştırılmadı.",
+      "seconds": 9.828,
+      "input_characters": 122,
+      "output_characters": 280,
+      "model_calls": 2,
+      "structured_attempts": 2,
+      "structured_errors": [
+        "Eylem ile içerik uyumsuz."
+      ],
+      "repair_attempts": 0,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 0
+    }
+  ]
+}

@@ -17,6 +17,7 @@ def main():
     parser.add_argument("--limit", type=int, default=3)
     parser.add_argument("--repeats", type=int, choices=range(1, 4), default=1)
     parser.add_argument("--budget-seconds", type=int, default=1800)
+    parser.add_argument("--repair-attempts", type=int, choices=(0, 1), default=1)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
     cases = catalog()
@@ -35,8 +36,8 @@ def main():
         parser.error("Rapor dosyası zaten var; farklı bir yol seçin.")
     models = {name: OllamaChatModel(name, structured_timeout_seconds=180, structured_num_predict=2048)
               for name in dict.fromkeys(args.model)}
-    report = CodingBenchmark(DockerSandboxExecutor).run(models, cases, repeats=args.repeats,
-                                                       budget_seconds=args.budget_seconds)
+    report = CodingBenchmark(DockerSandboxExecutor, repair_attempts=args.repair_attempts).run(
+        models, cases, repeats=args.repeats, budget_seconds=args.budget_seconds)
     output = args.output or Path("data/benchmarks") / (uuid4().hex + ".json")
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x", encoding="utf-8") as stream:

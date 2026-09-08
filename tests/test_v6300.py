@@ -52,7 +52,7 @@ class BenchmarkTests(unittest.TestCase):
         models = {"scope": self.model(path="../escape.py"), "syntax": self.model("return 2")}
         models["none"] = Mock(generate_structured=Mock(return_value=None))
         result = CodingBenchmark(factory).run(models, catalog()[:1])
-        self.assertTrue(all(r["status"] == "output_validation_error" for r in result["results"]))
+        self.assertTrue(all(r["status"] == "validation_error" for r in result["results"]))
         factory.assert_not_called()
 
     def test_provider_failure_is_recorded(self):
@@ -147,7 +147,7 @@ class StagedCodingTests(unittest.TestCase):
     def test_release_gate(self):
         with patch.object(main_v170, "build_application") as builder:
             build_release()
-            self.assertEqual(builder.call_args.kwargs["application_version"], "V6.3")
+            self.assertEqual(builder.call_args.kwargs["application_version"], "V7.0")
             self.assertTrue(builder.call_args.kwargs["staged_coding_enabled"])
             build_release("V6.0")
             self.assertFalse(builder.call_args.kwargs["staged_coding_enabled"])

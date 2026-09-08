@@ -5,6 +5,7 @@ from boru.architecture.contracts import ArchitecturePlanner
 from boru.architecture.models import ArchitecturePlan
 from boru.coding.models import CodingRequest, CodingSession
 from boru.coding.parser import RuleBasedCodingRequestParser
+from boru.coding.staged_repair import StagedValidationRepair
 from boru.reviewing.contracts import CodeReviewer
 from boru.security.contracts import SecurityReviewer
 from boru.testing.contracts import RegressionTestRunner
@@ -37,6 +38,7 @@ class ControlledCodingCoordinator:
         preview_characters: int = 8000,
         quality_evaluator=None,
         proposal_guard=None,
+        max_staged_repairs: int = 0,
     ) -> None:
         if preview_characters < 1:
             raise ValueError("Coding Agent önizleme sınırı pozitif olmalıdır.")
@@ -56,6 +58,9 @@ class ControlledCodingCoordinator:
         self._preview_characters = preview_characters
         self._quality_evaluator = quality_evaluator
         self._proposal_guard = proposal_guard
+        self._staged_repair = StagedValidationRepair(
+            proposal_preparer, max_attempts=max_staged_repairs
+        )
         self._pending: CodingSession | None = None
         self._lock = RLock()
 
@@ -98,6 +103,7 @@ class ControlledCodingCoordinator:
                 return f"Coding Agent önerisi hazırlanamadı: {error}"
 
             self._pending = CodingSession(request, architecture_plan, proposal)
+            self._staged_repair.reset()
             return self._render_preview(self._pending)
 
     def _prepare_proposal(
@@ -212,6 +218,26 @@ class ControlledCodingCoordinator:
                 self._proposal_guard(session.proposal)
             outcome = self._proposal_applier.apply_project_edit(session.proposal)
         except Exception as error:
+            try:
+                proposal = self._staged_repair.prepare(
+                    session, getattr(self._proposal_applier, "last_validation", None)
+                )
+                if proposal is not None:
+                    self._validate_scope(session.architecture_plan, proposal)
+                    self._validate_python_syntax(proposal)
+                    if self._proposal_guard is not None:
+                        self._proposal_guard(proposal)
+                    self._pending = CodingSession(session.request, session.architecture_plan, proposal)
+                    return (
+                        "Geçici kopya doğrulaması başarısız oldu; ana kaynaklar değiştirilmedi. "
+                        "Test kanıtıyla bir onarım önerisi hazırlandı.\n\n"
+                        + self._render_preview(self._pending)
+                    )
+            except Exception as repair_error:
+                return (
+                    f"Coding Agent değişikliği uygulanamadı: {error}\n"
+                    f"Test kanıtlı onarım önerisi hazırlanamadı: {repair_error}"
+                )
             return f"Coding Agent değişikliği uygulanamadı: {error}"
         paths = "\n".join(f"- {item.relative_path}" for item in outcome.outcomes)
         response = (

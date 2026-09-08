@@ -11,6 +11,7 @@ from boru.agent.parser import JsonAgentActionParser
 from boru.agent.reporting import AgentReportRenderer
 from boru.agent.verification import GroundedAnswerVerifier
 from boru.models import ChatMessage
+from boru.modeling import ValidatedStructuredGenerator
 from boru.performance import PerformanceMonitor
 from boru.tools.contracts import ToolExecutorPort, ToolRegistryPort
 from boru.tools.models import ToolCall, ToolDefinition, ToolResult
@@ -63,6 +64,7 @@ class ReadOnlyToolAgent:
         max_observation_characters: int = 6000,
         parser: JsonAgentActionParser | None = None,
         performance_monitor: PerformanceMonitor | None = None,
+        structured_attempts: int = 1,
     ) -> None:
         if max_steps < 1 or max_steps > 20:
             raise ValueError("Ajan adım sınırı 1 ile 20 arasında olmalıdır.")
@@ -75,6 +77,7 @@ class ReadOnlyToolAgent:
         self._max_observation_characters = max_observation_characters
         self._parser = parser or JsonAgentActionParser()
         self._monitor = performance_monitor
+        self._structured = ValidatedStructuredGenerator(max_attempts=structured_attempts)
         self._bootstrapper = DeterministicEvidenceBootstrapper(registry, executor)
         self._final_synthesizer = GroundedFinalSynthesizer(model)
         self._reporter = AgentReportRenderer()
@@ -240,14 +243,16 @@ class ReadOnlyToolAgent:
             f"HEDEF:\n{objective}\n\nARAÇ KATALOĞU:\n{self._catalog()}\n\n"
             f"ÖNCEKİ GÖZLEMLER:\n{self._trace(observations, validation_errors)}"
         )
-        raw = self._model.generate_structured(
+        generated = self._structured.generate(
+            self._model,
             [
                 ChatMessage(role="system", content=self._SYSTEM_PROMPT),
                 ChatMessage(role="user", content=prompt),
             ],
             self._ACTION_SCHEMA,
+            self._parser.parse,
         )
-        return self._parser.parse(raw)
+        return generated.value
 
     def _catalog(self) -> str:
         return "\n".join(self._render_definition(item) for item in self._registry.definitions())

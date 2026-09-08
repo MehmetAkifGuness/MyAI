@@ -142,6 +142,7 @@ class LLMProjectFileSelector:
         parser: JsonProjectFileSelectionParser | None = None,
         max_files: int = 4,
         max_attempts: int = 2,
+        context_ranker=None,
     ):
         if max_files < 1:
             raise ValueError(
@@ -169,6 +170,7 @@ class LLMProjectFileSelector:
         self._max_attempts = (
             max_attempts
         )
+        self._context_ranker = context_ranker
 
     def select_files(
         self,
@@ -184,6 +186,9 @@ class LLMProjectFileSelector:
                 if path.strip()
             )
         )
+
+        if self._context_ranker is not None:
+            catalog = self._context_ranker.rank(request.instruction, catalog)
 
         if not catalog:
             raise ValueError(

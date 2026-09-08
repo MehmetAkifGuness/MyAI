@@ -18,6 +18,7 @@ from boru.code_index import (
     ImpactAnalysisTool,
     ProjectOverviewTool,
     RelatedCodeTool,
+    RelevantFileRanker,
     SafeCodeIndex,
     SafeCodeImpactIndex,
     SafeCodeRelationshipIndex,
@@ -210,6 +211,8 @@ from boru.sandbox.history import TerminalHistory
 from boru.autonomy import AutonomousDevelopmentCoordinator
 from boru.tasks.repair import RepairProposalGuard, TaskRepairController
 from boru.coding.staged_applier import StagedCodingApplier
+from boru.benchmark import BenchmarkCoordinator
+from boru.benchmark.runner import CodingBenchmark
 from boru.ui import (
     ChatAppUI,
 )
@@ -363,6 +366,10 @@ def build_application(
     autonomous_development_enabled: bool = False,
     autonomy_feature_level: int = 0,
     staged_coding_enabled: bool = False,
+    reliable_structured_calls_enabled: bool = False,
+    relevant_context_enabled: bool = False,
+    staged_feedback_repair_enabled: bool = False,
+    benchmark_chat_enabled: bool = False,
     terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
@@ -414,6 +421,14 @@ def build_application(
         raise ValueError("Task teşhisi ve onarımı kanıt değerlendiricisi gerektirir.")
     if staged_coding_enabled and not (coding_agent_enabled and sandbox_enabled and evaluation_enabled):
         raise ValueError("Geçici kopya doğrulaması Coding, sandbox ve değerlendirme gerektirir.")
+    if reliable_structured_calls_enabled and not general_agent_enabled:
+        raise ValueError("Structured yeniden deneme genel ajanı gerektirir.")
+    if relevant_context_enabled and not general_agent_enabled:
+        raise ValueError("Akıllı bağlam seçimi kod indeksini gerektirir.")
+    if staged_feedback_repair_enabled and not staged_coding_enabled:
+        raise ValueError("Test geri bildirimli onarım geçici kopya doğrulamasını gerektirir.")
+    if benchmark_chat_enabled and not sandbox_enabled:
+        raise ValueError("Sohbet benchmarkı Docker sandbox gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -619,6 +634,7 @@ def build_application(
                 registry=read_registry,
                 executor=read_executor,
                 performance_monitor=performance_monitor,
+                structured_attempts=2 if reliable_structured_calls_enabled else 1,
             )
         )
 
@@ -765,6 +781,10 @@ def build_application(
                             ),
                             max_files=4,
                             max_attempts=2,
+                            context_ranker=(
+                                RelevantFileRanker(code_index)
+                                if relevant_context_enabled else None
+                            ),
                         )
                     ),
                     max_files=4,
@@ -789,6 +809,10 @@ def build_application(
                             ),
                             max_files=8,
                             max_attempts=2,
+                            context_ranker=(
+                                RelevantFileRanker(code_index)
+                                if relevant_context_enabled else None
+                            ),
                         )
                     ),
                     max_files=8,
@@ -1062,6 +1086,7 @@ def build_application(
             code_reviewer=code_review_agent,
             quality_evaluator=evaluator,
             proposal_guard=repair_guard,
+            max_staged_repairs=1 if staged_feedback_repair_enabled else 0,
         )
 
     coding_operation = coding_coordinator
@@ -1149,6 +1174,22 @@ def build_application(
                     else None
                 ),
                 feature_level=terminal_feature_level,
+            ),
+        )
+    if benchmark_chat_enabled:
+        operation_resolvers.insert(
+            0,
+            BenchmarkCoordinator(
+                project_root,
+                runner_factory=lambda repair_attempts: CodingBenchmark(
+                    lambda root: DockerSandboxExecutor(root, sandbox_image),
+                    repair_attempts=repair_attempts,
+                ),
+                model_factory=lambda name: OllamaChatModel(
+                    name,
+                    structured_timeout_seconds=structured_timeout_seconds,
+                    structured_num_predict=structured_num_predict,
+                ),
             ),
         )
     if improvement_enabled:
