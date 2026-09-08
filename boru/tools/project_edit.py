@@ -3,6 +3,7 @@ from collections.abc import Sequence
 
 from boru.contracts import ChatModel
 from boru.models import ChatMessage
+from boru.modeling import structured_model_for_attempt
 from boru.tools.edit_contracts import (
     SmartEditWorkspace,
 )
@@ -239,7 +240,8 @@ class LLMProjectFileSelector:
 
             raw_output = (
                 self._generate_selection(
-                    messages
+                    messages,
+                    attempt,
                 )
             )
 
@@ -315,9 +317,11 @@ class LLMProjectFileSelector:
         messages: Sequence[
             ChatMessage
         ],
+        attempt: int = 1,
     ) -> str:
+        model = structured_model_for_attempt(self._chat_model, attempt)
         structured_generator = getattr(
-            self._chat_model,
+            model,
             "generate_structured",
             None,
         )
@@ -330,7 +334,7 @@ class LLMProjectFileSelector:
                 self._OUTPUT_SCHEMA,
             )
 
-        return self._chat_model.generate(
+        return model.generate(
             messages
         )
 
@@ -889,7 +893,8 @@ class LLMProjectEditProposalPreparer:
 
             raw_output = (
                 self._generate_patch_plan(
-                    messages
+                    messages,
+                    attempt,
                 )
             )
 
@@ -1020,9 +1025,11 @@ class LLMProjectEditProposalPreparer:
         messages: Sequence[
             ChatMessage
         ],
+        attempt: int = 1,
     ) -> str:
+        model = structured_model_for_attempt(self._chat_model, attempt)
         structured_generator = getattr(
-            self._chat_model,
+            model,
             "generate_structured",
             None,
         )
@@ -1035,7 +1042,7 @@ class LLMProjectEditProposalPreparer:
                 self._OUTPUT_SCHEMA,
             )
 
-        return self._chat_model.generate(
+        return model.generate(
             messages
         )
 

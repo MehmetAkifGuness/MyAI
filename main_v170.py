@@ -96,6 +96,7 @@ from boru.knowledge import (
 from boru.ollama_model import (
     OllamaChatModel,
 )
+from boru.modeling import StructuredModelCascade
 from boru.orchestration import (
     AgentOrchestrator,
     RuleBasedOrchestrationRequestParser,
@@ -370,6 +371,7 @@ def build_application(
     relevant_context_enabled: bool = False,
     staged_feedback_repair_enabled: bool = False,
     benchmark_chat_enabled: bool = False,
+    adaptive_model_routing_enabled: bool = False,
     terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
@@ -430,6 +432,9 @@ def build_application(
     if benchmark_chat_enabled and not sandbox_enabled:
         raise ValueError("Sohbet benchmarkı Docker sandbox gerektirir.")
 
+    if adaptive_model_routing_enabled and not reliable_structured_calls_enabled:
+        raise ValueError("Uyarlamalı model yönlendirme structured yeniden deneme gerektirir.")
+
     settings = (
         AppSettings.from_env()
     )
@@ -438,8 +443,7 @@ def build_application(
         PerformanceMonitor()
     )
 
-    chat_model = (
-        OllamaChatModel(
+    primary_chat_model = OllamaChatModel(
             settings.model_name,
             request_timeout_seconds=180,
             structured_timeout_seconds=structured_timeout_seconds,
@@ -449,7 +453,20 @@ def build_application(
                 performance_monitor
             ),
         )
-    )
+    if adaptive_model_routing_enabled and settings.fallback_model_name:
+        chat_model = StructuredModelCascade(
+            primary_chat_model,
+            OllamaChatModel(
+                settings.fallback_model_name,
+                request_timeout_seconds=180,
+                structured_timeout_seconds=structured_timeout_seconds,
+                structured_num_predict=structured_num_predict,
+                keep_alive="10m",
+                performance_monitor=performance_monitor,
+            ),
+        )
+    else:
+        chat_model = primary_chat_model
 
     history = (
         ConversationHistory(

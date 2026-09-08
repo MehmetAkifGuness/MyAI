@@ -8,6 +8,11 @@ from boru.models import ChatMessage
 T = TypeVar("T")
 
 
+def structured_model_for_attempt(model, attempt: int):
+    selector = getattr(type(model), "model_for_attempt", None)
+    return selector(model, attempt) if callable(selector) else model
+
+
 @dataclass(frozen=True, slots=True)
 class StructuredGeneration(Generic[T]):
     value: T
@@ -24,6 +29,30 @@ class StructuredGenerationError(ValueError):
         self.attempts = attempts
         self.errors = errors
         self.output_characters = output_characters
+
+
+@dataclass(frozen=True, slots=True)
+class StructuredModelCascade:
+    """Uses a fast primary model and a fallback for structured retries."""
+
+    primary: Any
+    fallback: Any
+
+    def generate(self, messages: Sequence[ChatMessage]) -> str:
+        return self.primary.generate(messages)
+
+    def generate_structured(
+        self, messages: Sequence[ChatMessage], schema: Mapping[str, Any]
+    ) -> str:
+        return self.primary.generate_structured(messages, schema)
+
+    def model_for_attempt(self, attempt: int):
+        return self.primary if attempt == 1 else self.fallback
+
+    def warmup(self) -> None:
+        warmup = getattr(self.primary, "warmup", None)
+        if callable(warmup):
+            warmup()
 
 
 class ValidatedStructuredGenerator:
@@ -51,7 +80,8 @@ class ValidatedStructuredGenerator:
         for attempt in range(1, self._max_attempts + 1):
             raw = ""
             try:
-                raw = model.generate_structured(current, schema)
+                attempt_model = structured_model_for_attempt(model, attempt)
+                raw = attempt_model.generate_structured(current, schema)
                 output_characters += len(raw) if isinstance(raw, str) else 0
             except Exception as error:
                 # A provider failure is an outcome at this bounded model boundary.

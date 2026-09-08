@@ -9,7 +9,7 @@ _RELEASES = (
     "V3.9", "V4.0",
     "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7", "V4.8",
     "V4.9", "V5.0", "V5.1", "V5.2", "V6.0", "V6.1", "V6.2", "V6.3",
-    "V6.4", "V6.5", "V6.6", "V7.0",
+    "V6.4", "V6.5", "V6.6", "V7.0", "V8.0",
 )
 
 
@@ -27,6 +27,8 @@ _MILESTONES = {
     "relevant_context": "V6.5",
     "staged_feedback_repair": "V6.6",
     "agentic_benchmark": "V7.0",
+    "benchmark_observability": "V8.0",
+    "adaptive_model_routing": "V8.0",
 }
 
 
@@ -78,10 +80,12 @@ def _feature_labels(flags: dict[str, bool | int]) -> tuple[tuple[str, bool], ...
         ("kod indeksli akıllı bağlam seçimi", bool(flags["relevant_context"])),
         ("sandbox testinden sınırlı onarım döngüsü", bool(flags["staged_feedback_repair"])),
         ("ölçülebilir model-test-onarım benchmarkı", bool(flags["agentic_benchmark"])),
+        ("ilerleme, ETA ve iptal destekli benchmark", bool(flags["benchmark_observability"])),
+        ("başarısız structured görevlerde yedek model yönlendirmesi", bool(flags["adaptive_model_routing"])),
     )
 
 
-def build_release(version: str = "V7.0"):
+def build_release(version: str = "V8.0"):
     from main_v170 import build_application
 
     if version not in _RELEASES:
@@ -98,7 +102,8 @@ def build_release(version: str = "V7.0"):
             "Testler için Docker Linux motoru gereklidir."
         ),
         structured_timeout_seconds=180, structured_num_predict=2048,
-        architect_max_attempts=1, architect_fast_scoped_plans=True,
+        architect_max_attempts=2 if flags["adaptive_model_routing"] else 1,
+        architect_fast_scoped_plans=True,
         coding_agent_enabled=True, test_agent_enabled=True, security_agent_enabled=True,
         code_review_agent_enabled=True, orchestrator_enabled=True, task_system_enabled=True,
         project_memory_enabled=True, knowledge_rag_enabled=True, external_tools_enabled=True,
@@ -124,6 +129,7 @@ def build_release(version: str = "V7.0"):
         relevant_context_enabled=bool(flags["relevant_context"]),
         staged_feedback_repair_enabled=bool(flags["staged_feedback_repair"]),
         benchmark_chat_enabled=bool(flags["agentic_benchmark"]),
+        adaptive_model_routing_enabled=bool(flags["adaptive_model_routing"]),
         terminal_feature_level=int(flags["terminal_feature_level"]),
         project_edit_max_attempts=2 if flags["goal_driven_change"] else 1,
     )

@@ -1,0 +1,60 @@
+{
+  "schema": "boru.benchmark/v2",
+  "state": "cancelled",
+  "suite_sha256": "83b2b8ad0f0199c6a710c340c80c999372085172a7842af55f0a864657b85f80",
+  "progress": {
+    "completed": 1,
+    "total": 10
+  },
+  "configuration": {
+    "structured_attempts": 2,
+    "repair_attempts": 1,
+    "fallback_model": "qwen3.5:9b"
+  },
+  "scope": "bounded model-test-repair loop; clarification requires human quality review",
+  "summary": {
+    "qwen2.5-coder:7b": {
+      "attempted": 1,
+      "coding_passed": 1,
+      "coding_total": 1,
+      "coding_pass_rate": 1.0,
+      "model_calls": 2,
+      "structured_retries": 1,
+      "repair_attempts": 0,
+      "escalations": 0,
+      "human_interventions": 0,
+      "statuses": {
+        "passed": 1
+      },
+      "seconds": 60.794,
+      "average_seconds": 60.794
+    }
+  },
+  "results": [
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "addition",
+      "category": "bugfix",
+      "repeat": 1,
+      "status": "passed",
+      "detail": ".\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n",
+      "seconds": 60.794,
+      "input_characters": 122,
+      "output_characters": 280,
+      "model_calls": 2,
+      "structured_attempts": 2,
+      "structured_retries": 1,
+      "structured_errors": [
+        "Eylem ile içerik uyumsuz."
+      ],
+      "repair_attempts": 0,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 0,
+      "models_used": [
+        "qwen2.5-coder:7b"
+      ],
+      "escalations": 0
+    }
+  ]
+}

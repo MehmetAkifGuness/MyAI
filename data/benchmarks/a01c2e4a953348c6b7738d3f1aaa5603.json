@@ -1,0 +1,60 @@
+{
+  "schema": "boru.benchmark/v2",
+  "state": "completed",
+  "suite_sha256": "cede62fa29602e8723fc909266cb9da6747ce314e82b2a5e93d32eff05c48540",
+  "progress": {
+    "completed": 1,
+    "total": 1
+  },
+  "configuration": {
+    "structured_attempts": 2,
+    "repair_attempts": 1,
+    "fallback_model": "qwen3.5:9b"
+  },
+  "scope": "bounded model-test-repair loop; clarification requires human quality review",
+  "summary": {
+    "qwen2.5-coder:7b": {
+      "attempted": 1,
+      "coding_passed": 1,
+      "coding_total": 1,
+      "coding_pass_rate": 1.0,
+      "model_calls": 2,
+      "structured_retries": 0,
+      "repair_attempts": 0,
+      "escalations": 1,
+      "human_interventions": 0,
+      "statuses": {
+        "passed": 1
+      },
+      "seconds": 93.111,
+      "average_seconds": 93.111
+    }
+  },
+  "results": [
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "mean",
+      "category": "bugfix",
+      "repeat": 1,
+      "status": "passed",
+      "detail": ".\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n",
+      "seconds": 93.111,
+      "input_characters": 294,
+      "output_characters": 633,
+      "model_calls": 2,
+      "structured_attempts": 2,
+      "structured_retries": 0,
+      "structured_errors": [],
+      "repair_attempts": 0,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 0,
+      "models_used": [
+        "qwen2.5-coder:7b",
+        "qwen3.5:9b"
+      ],
+      "escalations": 1,
+      "initial_status": "unexpected_clarification"
+    }
+  ]
+}

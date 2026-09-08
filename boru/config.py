@@ -21,6 +21,7 @@ class AppSettings:
     memory_embedding_model: str = "qwen3-embedding:0.6b"
     memory_semantic_min_similarity: float = 0.55
     memory_subject_identity_min_similarity: float = 0.84
+    fallback_model_name: str = ""
 
     @classmethod
     def from_env(cls) -> "AppSettings":
@@ -29,6 +30,11 @@ class AppSettings:
         model_name = os.getenv(
             "BORU_MODEL",
             defaults.model_name,
+        ).strip()
+
+        fallback_model_name = os.getenv(
+            "BORU_FALLBACK_MODEL",
+            defaults.fallback_model_name,
         ).strip()
 
         assistant_name = os.getenv(
@@ -171,6 +177,7 @@ class AppSettings:
 
         return cls(
             model_name=model_name,
+            fallback_model_name=fallback_model_name,
             assistant_name=assistant_name,
             history_turns=history_turns,
             context_turns=context_turns,

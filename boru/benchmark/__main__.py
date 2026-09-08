@@ -13,6 +13,7 @@ def main():
     parser = argparse.ArgumentParser(description="Börü bağımsız kodlama/model karşılaştırması")
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--model", action="append", help="Ollama model adı; karşılaştırma için tekrarlayın")
+    parser.add_argument("--fallback-model", help="Başarısız ana model sonucunda kullanılacak Ollama modeli")
     parser.add_argument("--case", action="append", help="Yalnızca belirtilen görev kimliği")
     parser.add_argument("--limit", type=int, default=3)
     parser.add_argument("--repeats", type=int, choices=range(1, 4), default=1)
@@ -36,8 +37,15 @@ def main():
         parser.error("Rapor dosyası zaten var; farklı bir yol seçin.")
     models = {name: OllamaChatModel(name, structured_timeout_seconds=180, structured_num_predict=2048)
               for name in dict.fromkeys(args.model)}
+    fallback_model = (
+        (args.fallback_model, OllamaChatModel(
+            args.fallback_model, structured_timeout_seconds=180, structured_num_predict=2048
+        ))
+        if args.fallback_model else None
+    )
     report = CodingBenchmark(DockerSandboxExecutor, repair_attempts=args.repair_attempts).run(
-        models, cases, repeats=args.repeats, budget_seconds=args.budget_seconds)
+        models, cases, repeats=args.repeats, budget_seconds=args.budget_seconds,
+        fallback_model=fallback_model)
     output = args.output or Path("data/benchmarks") / (uuid4().hex + ".json")
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("x", encoding="utf-8") as stream:

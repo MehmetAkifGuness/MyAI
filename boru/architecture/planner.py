@@ -7,6 +7,7 @@ from boru.architecture.cache import ArchitecturePlanCache, ProjectStatFingerprin
 from boru.architecture.models import ArchitecturePlan, ArchitectureRequest, ArchitectureStep
 from boru.contracts import ChatModel
 from boru.models import ChatMessage
+from boru.modeling import structured_model_for_attempt
 from boru.performance import PerformanceMonitor
 from boru.tools.edit_contracts import SmartEditWorkspace
 from boru.tools.edit_models import EditSource
@@ -272,7 +273,8 @@ class LLMArchitectAgent:
             )
             try:
                 previous_output = self._generate(
-                    (ChatMessage("system", self._SYSTEM_PROMPT), ChatMessage("user", prompt))
+                    (ChatMessage("system", self._SYSTEM_PROMPT), ChatMessage("user", prompt)),
+                    attempt,
                 )
             except Exception as error:
                 if self._is_timeout_error(error):
@@ -465,11 +467,12 @@ class LLMArchitectAgent:
             sources.append(self._workspace.read_edit_source(path))
             selected.add(path)
 
-    def _generate(self, messages: Sequence[ChatMessage]) -> str:
-        structured = getattr(self._chat_model, "generate_structured", None)
+    def _generate(self, messages: Sequence[ChatMessage], attempt: int = 1) -> str:
+        model = structured_model_for_attempt(self._chat_model, attempt)
+        structured = getattr(model, "generate_structured", None)
         if callable(structured):
             return structured(messages, self._SCHEMA)
-        return self._chat_model.generate(messages)
+        return model.generate(messages)
 
     def _build_prompt(self, request, available, sources) -> str:
         catalog = "\n".join(f"- {path}" for path in available)

@@ -215,7 +215,7 @@ class AgentRetryAndReleaseTests(unittest.TestCase):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
             build_release()
             flags = builder.call_args.kwargs
-            self.assertEqual(flags["application_version"], "V7.0")
+            self.assertEqual(flags["application_version"], "V8.0")
             self.assertTrue(flags["reliable_structured_calls_enabled"])
             self.assertTrue(flags["relevant_context_enabled"])
             self.assertTrue(flags["staged_feedback_repair_enabled"])

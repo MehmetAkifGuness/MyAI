@@ -1,5 +1,7 @@
 import hashlib
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from time import monotonic
@@ -25,6 +27,16 @@ SCHEMA = {
 }
 
 
+@dataclass(frozen=True, slots=True)
+class BenchmarkProgress:
+    completed: int
+    total: int
+    current_model: str = ""
+    current_case: str = ""
+    repeat: int = 0
+    last_status: str = ""
+
+
 class CodingBenchmark:
     """A single model proposal per fresh fixture, with independent hidden tests."""
 
@@ -37,26 +49,95 @@ class CodingBenchmark:
         self._structured_attempts = structured_attempts
         self._repair_attempts = repair_attempts
 
-    def run(self, models, cases, *, repeats=1, budget_seconds=1800):
+    def run(
+        self,
+        models,
+        cases,
+        *,
+        repeats=1,
+        budget_seconds=1800,
+        fallback_model=None,
+        progress_callback: Callable[[BenchmarkProgress], None] | None = None,
+        cancel_requested: Callable[[], bool] | None = None,
+    ):
         if not models or not cases or not 1 <= repeats <= 3 or not 0 < budget_seconds <= 7200:
             raise ValueError("Model/görev gerekli; tekrar 1-3, süre en fazla 7200 saniye olmalı.")
         rows = []
         started = self._clock()
+        total = len(models) * len(cases) * repeats
+        fallback_name = fallback_model[0] if fallback_model else ""
         for repeat in range(1, repeats + 1):
             for case in cases:
                 for name, model in models.items():
+                    if cancel_requested and cancel_requested():
+                        return self._report(rows, cases, "cancelled", total, fallback_name)
                     if self._clock() - started >= budget_seconds:
-                        return self._report(rows, cases, "budget_exhausted")
+                        return self._report(rows, cases, "budget_exhausted", total, fallback_name)
+                    if progress_callback:
+                        progress_callback(BenchmarkProgress(
+                            len(rows), total, name, case.identifier, repeat
+                        ))
                     row = self._case(model, case)
+                    row["models_used"] = [name]
+                    row["escalations"] = 0
+                    if (
+                        fallback_model
+                        and fallback_model[0] != name
+                        and self._should_escalate(row["status"])
+                        and not (cancel_requested and cancel_requested())
+                    ):
+                        initial_status = row["status"]
+                        fallback_name, fallback = fallback_model
+                        if progress_callback:
+                            progress_callback(BenchmarkProgress(
+                                len(rows), total, fallback_name, case.identifier, repeat,
+                                initial_status,
+                            ))
+                        fallback_row = self._case(fallback, case)
+                        row = self._merge_escalation(
+                            row, fallback_row, fallback_name, initial_status
+                        )
                     rows.append({"model": name, "case": case.identifier, "category": case.category,
                                  "repeat": repeat, **row})
-        return self._report(rows, cases, "completed")
+                    if progress_callback:
+                        progress_callback(BenchmarkProgress(
+                            len(rows), total, row["models_used"][-1], case.identifier,
+                            repeat, row["status"]
+                        ))
+        return self._report(rows, cases, "completed", total, fallback_name)
+
+    @staticmethod
+    def _should_escalate(status: str) -> bool:
+        return status in {
+            "unexpected_clarification", "missing_clarification", "repair_abandoned",
+            "failed", "model_error", "validation_error",
+        }
+
+    @staticmethod
+    def _merge_escalation(primary, fallback, fallback_name, initial_status):
+        summed = {
+            key: primary[key] + fallback[key]
+            for key in (
+                "seconds", "input_characters", "output_characters", "model_calls",
+                "structured_attempts", "structured_retries", "repair_attempts",
+            )
+        }
+        return {
+            **fallback,
+            **summed,
+            "seconds": round(summed["seconds"], 3),
+            "structured_errors": [*primary["structured_errors"], *fallback["structured_errors"]],
+            "models_used": [*primary["models_used"], fallback_name],
+            "escalations": 1,
+            "initial_status": initial_status,
+        }
 
     def _case(self, model, case):
         started = self._clock()
         phase = "model"
         output_characters = 0
         structured_attempts = 0
+        structured_retries = 0
         structured_errors = []
         model_calls = 0
         repair_attempts_used = 0
@@ -68,6 +149,7 @@ class CodingBenchmark:
             )
             model_calls += generation.attempts
             structured_attempts += generation.attempts
+            structured_retries += max(0, generation.attempts - 1)
             structured_errors.extend(generation.errors)
             output_characters += generation.output_characters
             action, files, question = generation.value
@@ -92,6 +174,7 @@ class CodingBenchmark:
                     )
                     model_calls += generation.attempts
                     structured_attempts += generation.attempts
+                    structured_retries += max(0, generation.attempts - 1)
                     structured_errors.extend(generation.errors)
                     output_characters += generation.output_characters
                     action, files, question = generation.value
@@ -102,6 +185,7 @@ class CodingBenchmark:
         except StructuredGenerationError as error:
             model_calls += error.attempts
             structured_attempts += error.attempts
+            structured_retries += max(0, error.attempts - 1)
             structured_errors.extend(error.errors)
             output_characters += error.output_characters
             status, detail = error.kind + "_error", str(error)[:1000]
@@ -111,9 +195,12 @@ class CodingBenchmark:
         return {"status": status, "detail": detail, "seconds": round(self._clock() - started, 3),
                 "input_characters": len(prompt), "output_characters": output_characters,
                 "model_calls": model_calls, "structured_attempts": structured_attempts,
+                "structured_retries": structured_retries,
                 "structured_errors": structured_errors, "repair_attempts": repair_attempts_used,
                 "tokens": None, "cost": None,
-                "human_interventions": 1 if status == "clarification_requested" else 0}
+                "human_interventions": 1 if status in {
+                    "clarification_requested", "unexpected_clarification", "repair_abandoned"
+                } else 0}
 
     @staticmethod
     def _messages(prompt, *, repair=False):
@@ -187,7 +274,7 @@ class CodingBenchmark:
                 return "passed", outcome.output[-1500:]
             return "failed", outcome.output[-1500:]
 
-    def _report(self, rows, cases, state):
+    def _report(self, rows, cases, state, planned_total=None, fallback_model=""):
         content = [{"id": c.identifier, "prompt": c.prompt, "sources": c.sources,
                     "checks": c.checks, "action": c.action} for c in cases]
         fingerprint = hashlib.sha256(json.dumps(content, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
@@ -200,16 +287,19 @@ class CodingBenchmark:
                 "attempted": len(selected), "coding_passed": passed, "coding_total": len(coding),
                 "coding_pass_rate": round(passed / len(coding), 4) if coding else None,
                 "model_calls": sum(r["model_calls"] for r in selected),
-                "structured_retries": sum(max(0, r["structured_attempts"] - 1 - r["repair_attempts"])
-                                          for r in selected),
+                "structured_retries": sum(r["structured_retries"] for r in selected),
                 "repair_attempts": sum(r["repair_attempts"] for r in selected),
+                "escalations": sum(r.get("escalations", 0) for r in selected),
                 "human_interventions": sum(r["human_interventions"] for r in selected),
                 "statuses": {status: sum(r["status"] == status for r in selected)
                              for status in sorted({r["status"] for r in selected})},
                 "seconds": round(sum(r["seconds"] for r in selected), 3),
+                "average_seconds": round(sum(r["seconds"] for r in selected) / len(selected), 3),
             }
         return {"schema": "boru.benchmark/v2", "state": state, "suite_sha256": fingerprint,
+                "progress": {"completed": len(rows), "total": planned_total or len(rows)},
                 "configuration": {"structured_attempts": self._structured_attempts,
-                                  "repair_attempts": self._repair_attempts},
+                                  "repair_attempts": self._repair_attempts,
+                                  "fallback_model": fallback_model or None},
                 "scope": "bounded model-test-repair loop; clarification requires human quality review",
                 "summary": summary, "results": rows}
