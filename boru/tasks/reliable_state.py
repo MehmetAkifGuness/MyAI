@@ -48,6 +48,22 @@ class ReliableTaskPlanState(PersistentTaskPlanState):
             self.validate_execution()
             return super().start(task_id)
 
+    def ensure_attempt_available(self, task_id):
+        with self._lock:
+            self.validate_execution()
+            task = self.get_task(task_id)
+            if self.remaining_attempts(task_id) == 0:
+                raise ValueError("[RETRY_LIMIT] Task başına en fazla 3 deneme; yeni plan gerekli.")
+            if any(self.get_task(key).status is not TaskStatus.COMPLETED for key in task.dependencies):
+                raise ValueError("Task bağımlılıkları tamamlanmadı.")
+
+    def remaining_attempts(self, task_id):
+        with self._lock:
+            self.validate_execution()
+            self.get_task(task_id)
+            used = dict(self._execution.attempts).get(task_id, 0)
+            return max(0, self.MAX_ATTEMPTS - used)
+
     def transition(self, task_id, status, note="", *, refresh_sources=False):
         with self._lock:
             self._repository.ensure_writable()

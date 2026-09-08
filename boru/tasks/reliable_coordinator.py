@@ -9,11 +9,12 @@ from boru.tasks.workflow_guard import GuardedTaskWorkflow
 class ReliableTaskCoordinator:
     """Recovery, inspection and explicit retry commands around the task workflow."""
 
-    def __init__(self, coordinator, state, repository, *, evaluator=None):
+    def __init__(self, coordinator, state, repository, *, evaluator=None, repair=None):
         self._coordinator = coordinator
         self._state = state
         self._repository = repository
         self._evaluator = evaluator
+        self._repair = repair
         self._restore_pending = False
         self._lock = RLock()
 
@@ -27,6 +28,9 @@ class ReliableTaskCoordinator:
                 return self._resolve(message)
             except (OSError, RuntimeError, ValueError) as error:
                 return f"GÖREV İŞLEMİ DURDU\n{error}"
+            finally:
+                if self._repair is not None and not self.has_pending:
+                    self._repair.clear()
 
     def _resolve(self, message):
         normalized = " ".join(message.strip().casefold().split())
@@ -41,6 +45,10 @@ class ReliableTaskCoordinator:
             return read_command()
         if self._coordinator.has_pending:
             return self._coordinator.resolve(message)
+        if self._repair is not None:
+            match = re.fullmatch(r"task (teşhis|onar):\s*(task-[1-9]\d*)", normalized)
+            if match:
+                return self._repair.run(match.group(2).upper(), repair=match.group(1) == "onar")
         if normalized == "checkpoint geri yükle":
             response = self._repository.prepare_restore()
             self._restore_pending = True
@@ -63,23 +71,32 @@ class ReliableTaskCoordinator:
         task = self._state.get_task(task_id)
         if task.status is not TaskStatus.FAILED:
             raise ValueError("Yalnızca failed task yeniden denenebilir.")
-        self._state.validate_execution()
+        self._state.ensure_attempt_available(task_id)
         if "[CHANGES_APPLIED]" in task.note and self._evaluator is not None:
             return self._retry_applied_change(task)
         self._state.reset(task_id)
         return self._coordinator.resolve(f"task çalıştır: {task_id}")
 
     def _retry_applied_change(self, task):
-        report = self._evaluator.evaluate(task.files)
+        # Keep the applied marker in both checkpoints if the process stops mid-retry.
+        self._state.transition(task.task_id, TaskStatus.PENDING, task.note)
+        self._state.transition(task.task_id, TaskStatus.RUNNING, task.note)
+        try:
+            report = self._evaluator.evaluate(task.files)
+            self._state.validate_execution()
+            if not self._evaluator.is_current(report):
+                raise ValueError("[SOURCE_DRIFT] Doğrulama kanıtı güncel değil.")
+        except (OSError, RuntimeError, ValueError):
+            self._state.transition(task.task_id, TaskStatus.FAILED, task.note)
+            raise
         if report.verdict is not Verdict.PASS:
+            self._state.transition(task.task_id, TaskStatus.FAILED, task.note)
             return (
                 "TASK YENİDEN DENEME\nDurum: DOĞRULAMA BAŞARISIZ\n"
                 "Kod daha önce uygulandı; aynı patch yeniden uygulanmadı. "
                 "Test sözleşmesini veya hedefi inceleyip yeni plan oluşturun.\n\n"
                 + report.render()
             )
-        self._state.reset(task.task_id)
-        self._state.start(task.task_id)
         completed = self._state.transition(
             task.task_id,
             TaskStatus.COMPLETED,

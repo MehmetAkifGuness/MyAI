@@ -15,6 +15,9 @@ class AutonomyAction(str, Enum):
     ARCHIVE = "archive"
     LIMITS = "limits"
     HELP = "help"
+    DIAGNOSE = "diagnose"
+    REPAIR = "repair"
+    HEALTH = "health"
 
 
 @dataclass(frozen=True, slots=True)

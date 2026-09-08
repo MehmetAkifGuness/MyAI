@@ -37,6 +37,10 @@ class RuleBasedAssignmentEditProposalPreparer:
         r"\s*[;,]?\s*(?:yalnızca|sadece)\s+bu\s+dosya(?:yı|da)\s+kapsa\s*$",
         re.IGNORECASE,
     )
+    _VALUE_CONTEXT_PREFIX = re.compile(
+        r"^(?:test\s+beklentisine|testin\s+beklentisine|beklentiye)\s+göre\s+",
+        re.IGNORECASE,
+    )
 
     def __init__(
         self,
@@ -74,6 +78,9 @@ class RuleBasedAssignmentEditProposalPreparer:
             "",
             requested_value,
             count=1,
+        ).strip()
+        requested_value = self._VALUE_CONTEXT_PREFIX.sub(
+            "", requested_value, count=1
         ).strip()
 
         source = self._workspace.read_edit_source(

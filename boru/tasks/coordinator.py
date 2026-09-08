@@ -6,6 +6,7 @@ from boru.tasks.models import TaskAction, TaskItem, TaskPlan, TaskStatus
 from boru.tasks.parser import RuleBasedTaskCommandParser
 from boru.tasks.state import InMemoryTaskPlanState
 from boru.tasks.journal_reporting import render_task_journal
+from boru.tasks.plan_reporting import render_plan
 
 
 class TaskPlanCoordinator:
@@ -110,15 +111,24 @@ class TaskPlanCoordinator:
             task_id=next_task.task_id,
         )
 
-    def _start_task(self, task_id: str) -> str:
+    def prepare_repair(self, task_id: str, evidence: str) -> str:
+        with self._lock:
+            if self.has_pending:
+                raise ValueError("Önce etkin öneriyi tamamlayın veya iptal edin.")
+            self._plan_run_active = False
+            self._state.reset(task_id)
+            return self._start_task(task_id, evidence=evidence)
+
+    def _start_task(self, task_id: str, *, evidence: str = "") -> str:
         try:
             item = self._state.start(task_id)
         except (OSError, RuntimeError, ValueError) as error:
             return f"Task başlatılamadı: {error}"
 
-        response = self._workflow.resolve(
-            f"ajan görevi: {self._task_prompt(item)}"
-        )
+        prompt = self._task_prompt(item)
+        if evidence:
+            prompt += "\n\nONARIM_KANITI:\n" + evidence
+        response = self._workflow.resolve(f"ajan görevi: {prompt}")
         if self._workflow.has_pending:
             self._active_task_id = item.task_id
             return f"TASK DURUMU\n{item.task_id}: running\n\n{response}"
@@ -130,6 +140,11 @@ class TaskPlanCoordinator:
                 item.task_id,
                 TaskStatus.COMPLETED,
                 "Hedef zaten sağlandı; doğrulamalar başarıyla tamamlandı.",
+            )
+        elif overall == "İNCELEME GEREKLİ":
+            updated = self._state.transition(
+                item.task_id, TaskStatus.BLOCKED,
+                "Test, güvenlik veya review kanıtı insan incelemesi gerektiriyor.",
             )
         else:
             updated = self._state.transition(
@@ -178,26 +193,26 @@ class TaskPlanCoordinator:
         return self._continue_plan(updated, task_response)
 
     def _continue_plan(self, updated: TaskItem, task_response: str) -> str:
-        if updated.status is not TaskStatus.COMPLETED:
-            self._plan_run_active = False
-            return self._render_plan_run("DURDU", task_response, task_id=updated.task_id)
         plan = self._state.get_plan()
-        if plan is None or all(item.status is TaskStatus.COMPLETED for item in plan.tasks):
-            self._plan_run_active = False
-            return self._render_plan_run("TAMAMLANDI", task_response)
-        next_task = self._next_ready_task(plan)
-        if next_task is None:
-            self._plan_run_active = False
-            return self._render_plan_run("DURDU", task_response)
-        next_response = self._start_task(next_task.task_id)
-        if not self._workflow.has_pending:
-            self._plan_run_active = False
-            return self._render_plan_run("DURDU", task_response + "\n\n" + next_response)
-        return self._render_plan_run(
-            "SONRAKİ ADIM ONAY BEKLİYOR",
-            task_response + "\n\n" + next_response,
-            task_id=next_task.task_id,
-        )
+        # A synchronous no-op still completes a real task. Bound progress by the plan.
+        for _ in range(len(plan.tasks) + 1 if plan else 1):
+            if updated.status is not TaskStatus.COMPLETED:
+                break
+            plan = self._state.get_plan()
+            if plan and all(item.status is TaskStatus.COMPLETED for item in plan.tasks):
+                self._plan_run_active = False
+                return self._render_plan_run("TAMAMLANDI", task_response)
+            next_task = self._next_ready_task(plan) if plan else None
+            if next_task is None:
+                break
+            task_response += "\n\n" + self._start_task(next_task.task_id)
+            if self._workflow.has_pending:
+                return self._render_plan_run(
+                    "SONRAKİ ADIM ONAY BEKLİYOR", task_response, task_id=next_task.task_id,
+                )
+            updated = self._state.get_task(next_task.task_id)
+        self._plan_run_active = False
+        return self._render_plan_run("DURDU", task_response, task_id=updated.task_id)
 
     def _reset_task(self, task_id: str) -> str:
         try:
@@ -256,33 +271,7 @@ class TaskPlanCoordinator:
         return "\n".join(lines)
 
     def _render_plan(self, plan: TaskPlan, header: str) -> str:
-        checkpoint_path = getattr(self._state, "checkpoint_path", None)
-        storage = (
-            f"kalıcı checkpoint ({checkpoint_path})"
-            if checkpoint_path is not None
-            else "yalnızca bu uygulama oturumu"
-        )
-        lines = [
-            header,
-            f"Hedef: {plan.objective}",
-            f"Özet: {plan.summary}",
-            f"Saklama: {storage}",
-            f"İlerleme: {sum(item.status is TaskStatus.COMPLETED for item in plan.tasks)}"
-            f"/{len(plan.tasks)} tamamlandı",
-        ]
-        for item in plan.tasks:
-            dependencies = ", ".join(item.dependencies) or "yok"
-            files = ", ".join(item.files) or "belirtilmedi"
-            lines.extend((
-                "",
-                f"- {item.task_id} [{item.status.value}] {item.title}",
-                f"  {item.description}",
-                f"  Dosyalar: {files}",
-                f"  Bağımlılık: {dependencies}",
-            ))
-            if item.note:
-                lines.append(f"  Not: {item.note}")
-        return "\n".join(lines)
+        return render_plan(plan, header, getattr(self._state, "checkpoint_path", None))
 
     def _task_prompt(self, item: TaskItem) -> str:
         prompt = item.description

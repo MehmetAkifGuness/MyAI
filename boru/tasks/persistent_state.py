@@ -110,7 +110,11 @@ class PersistentTaskPlanState(InMemoryTaskPlanState):
         tasks = []
         recovered = []
         for item in self._plan.tasks:
-            if item.status is TaskStatus.RUNNING:
+            if item.status in {TaskStatus.PENDING, TaskStatus.RUNNING} and "[CHANGES_APPLIED]" in item.note:
+                note = item.note + " Yeniden başlatma sonrası uygulanmış değişiklik yeniden doğrulanmalıdır."
+                item = replace(item, status=TaskStatus.FAILED, note=note)
+                recovered.append(item)
+            elif item.status is TaskStatus.RUNNING:
                 note = "Yeniden başlatma sonrası onay bekleyen öneri yeniden hazırlanmalıdır."
                 item = replace(item, status=TaskStatus.PENDING, note=note)
                 recovered.append(item)

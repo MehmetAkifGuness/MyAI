@@ -17,6 +17,11 @@ class AutonomousDevelopmentCoordinator:
         return self._tasks.has_pending
 
     def resolve(self, message):
+        commands = tuple(line.strip() for line in message.splitlines() if line.strip())
+        if len(commands) > 1 and all(self._parser.is_intent(line) for line in commands):
+            if len(commands) > 8:
+                return self._render("REDDEDİLDİ", "Tek mesajda en fazla 8 otonom komut çalıştırılabilir.")
+            return "\n\n".join(self.resolve(line) for line in commands)
         command = self._parser.parse(message)
         if command is None:
             if self._parser.is_intent(message):
@@ -37,6 +42,9 @@ class AutonomousDevelopmentCoordinator:
             AutonomyAction.ARCHIVE: self._archive,
             AutonomyAction.LIMITS: self._limits,
             AutonomyAction.HELP: lambda: self._parser.usage(),
+            AutonomyAction.DIAGNOSE: lambda: self._task_action("teşhis", command.value),
+            AutonomyAction.REPAIR: lambda: self._task_action("onar", command.value),
+            AutonomyAction.HEALTH: lambda: self._render("SAĞLIK", self._tasks.resolve("plan sağlığı")),
         }
         return handlers[command.action]()
 
@@ -104,7 +112,19 @@ class AutonomousDevelopmentCoordinator:
             response = self._evaluator.validate_paths(paths)
         except (OSError, RuntimeError, ValueError) as error:
             return self._render("DOĞRULANAMADI", str(error))
-        status = "GEÇTİ" if "Durum: GEÇTİ" in response else "İNCELEME GEREKLİ"
+        section = response.partition("ÖZ DEĞERLENDİRME RAPORU\n")[2]
+        status = "GEÇTİ" if section.startswith("Durum: GEÇTİ\n") or section == "Durum: GEÇTİ" else "İNCELEME GEREKLİ"
+        return self._render(status, response)
+
+    def _task_action(self, action, value):
+        task_id = value.strip().upper()
+        if re.fullmatch(r"TASK-[1-9]\d*", task_id) is None:
+            return self._render("REDDEDİLDİ", "Task kimliği TASK-N biçiminde olmalıdır.")
+        if self.has_pending:
+            return self._render("ONAY BEKLİYOR", "Önce etkin öneriyi tamamlayın veya duraklatın.")
+        response = self._tasks.resolve(f"task {action}: {task_id}")
+        status = "ONAY BEKLİYOR" if self.has_pending else (
+            "TEŞHİS" if response and response.startswith("TASK TEŞHİSİ") else "DURDU")
         return self._render(status, response)
 
     def _summary(self):
@@ -153,7 +173,9 @@ class AutonomousDevelopmentCoordinator:
     def _execution_status(self, response):
         if self._tasks.has_pending:
             return "ONAY BEKLİYOR"
-        if response and "Durum: TAMAMLANDI" in response:
+        status = next((line.partition(":")[2].strip() for line in (response or "").splitlines()
+                       if line.startswith("Durum:")), "")
+        if status == "TAMAMLANDI":
             return "TAMAMLANDI"
         return "DURDU"
 

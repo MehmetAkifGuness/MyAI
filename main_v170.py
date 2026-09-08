@@ -208,6 +208,7 @@ from boru.tasks.workflow_guard import GuardedTaskWorkflow
 from boru.sandbox.terminal import SandboxTerminalCoordinator
 from boru.sandbox.history import TerminalHistory
 from boru.autonomy import AutonomousDevelopmentCoordinator
+from boru.tasks.repair import RepairProposalGuard, TaskRepairController
 from boru.ui import (
     ChatAppUI,
 )
@@ -403,10 +404,12 @@ def build_application(
         raise ValueError("Terminal özellikleri sandbox terminal gerektirir.")
     if autonomous_development_enabled and not reliable_tasks_enabled:
         raise ValueError("Otonom geliştirme güvenilir görev yürütme gerektirir.")
-    if type(autonomy_feature_level) is not int or not 0 <= autonomy_feature_level <= 10:
-        raise ValueError("Otonomi özellik seviyesi 0-10 arasında olmalıdır.")
+    if type(autonomy_feature_level) is not int or not 0 <= autonomy_feature_level <= 13:
+        raise ValueError("Otonomi özellik seviyesi 0-13 arasında olmalıdır.")
     if autonomy_feature_level and not autonomous_development_enabled:
         raise ValueError("Otonomi özellikleri otonom geliştirme akışını gerektirir.")
+    if autonomy_feature_level >= 11 and not evaluation_enabled:
+        raise ValueError("Task teşhisi ve onarımı kanıt değerlendiricisi gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1030,6 +1033,7 @@ def build_application(
         )
     )
 
+    repair_guard = RepairProposalGuard(evaluator) if autonomy_feature_level >= 11 else None
     coding_coordinator = None
     if coding_agent_enabled:
         coding_coordinator = ControlledCodingCoordinator(
@@ -1045,6 +1049,7 @@ def build_application(
             security_reviewer=security_agent,
             code_reviewer=code_review_agent,
             quality_evaluator=evaluator,
+            proposal_guard=repair_guard,
         )
 
     coding_operation = coding_coordinator
@@ -1096,11 +1101,17 @@ def build_application(
             planned_execution_enabled=planned_task_execution_enabled,
         )
         if reliable_tasks_enabled:
+            repair = (
+                TaskRepairController(task_state, coding_operation, evaluator,
+                                     RelatedTestDiscovery(project_root), repair_guard)
+                if repair_guard is not None else None
+            )
             coding_operation = ReliableTaskCoordinator(
                 coding_operation,
                 task_state,
                 task_repository,
                 evaluator=evaluator,
+                repair=repair,
             )
         if autonomous_development_enabled:
             coding_operation = AutonomousDevelopmentCoordinator(

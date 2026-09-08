@@ -8,7 +8,7 @@ _RELEASES = (
     "V3.1", "V3.2", "V3.3", "V3.4", "V3.5", "V3.6", "V3.7", "V3.8",
     "V3.9", "V4.0",
     "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7", "V4.8",
-    "V4.9", "V5.0",
+    "V4.9", "V5.0", "V5.1", "V5.2", "V6.0",
 )
 
 
@@ -31,7 +31,7 @@ def _release_flags(version: str) -> dict[str, bool | int]:
         for name, milestone in _MILESTONES.items()
     }
     flags["terminal_feature_level"] = min(9, max(0, position - _RELEASES.index("V3.0")))
-    flags["autonomy_feature_level"] = min(10, max(0, position - _RELEASES.index("V4.0")))
+    flags["autonomy_feature_level"] = min(13, max(0, position - _RELEASES.index("V4.0")))
     return flags
 
 
@@ -64,10 +64,13 @@ def _feature_labels(flags: dict[str, bool | int]) -> tuple[tuple[str, bool], ...
         ("birleşik görev özeti", autonomy >= 8),
         ("plan arşivi ve sınır raporu", autonomy >= 9),
         ("denetimli otonom geliştirme kontrol merkezi", autonomy >= 10),
+        ("güncel task teşhisi ve kaynak/test kanıtı", autonomy >= 11),
+        ("testleri koruyan onaylı task onarımı", autonomy >= 12),
+        ("çok adımlı ilerleme ve sınırlı yeniden doğrulama", autonomy >= 13),
     )
 
 
-def build_release(version: str = "V5.0"):
+def build_release(version: str = "V6.0"):
     from main_v170 import build_application
 
     if version not in _RELEASES:

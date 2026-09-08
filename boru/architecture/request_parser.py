@@ -32,7 +32,7 @@ class RuleBasedArchitectureRequestParser:
         return self.parse_task(match.group("task"))
 
     def parse_task(self, task: str) -> ArchitectureRequest:
-        scope_source = task.partition("\n\nDOĞRULAMA_KANITI:")[0]
+        scope_source = task.partition("\n\nDOĞRULAMA_KANITI:")[0].partition("\n\nONARIM_KANITI:")[0]
         file_scope = ()
         marker = self._SCOPE_MARKER.search(scope_source)
         if marker is not None:

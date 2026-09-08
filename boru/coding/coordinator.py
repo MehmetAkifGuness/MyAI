@@ -1,3 +1,4 @@
+import ast
 from threading import RLock
 
 from boru.architecture.contracts import ArchitecturePlanner
@@ -88,6 +89,7 @@ class ControlledCodingCoordinator:
                 project_request = self._project_request(request, architecture_plan)
                 proposal = self._prepare_proposal(request, architecture_plan, project_request)
                 self._validate_scope(architecture_plan, proposal)
+                self._validate_python_syntax(proposal)
                 if self._proposal_guard is not None:
                     self._proposal_guard(proposal)
             except RequestedStateAlreadySatisfied:
@@ -115,6 +117,8 @@ class ControlledCodingCoordinator:
         plan: ArchitecturePlan,
         project_request: ProjectEditRequest,
     ) -> ProjectEditProposal | None:
+        if "\n\nONARIM_KANITI:\n" in request.task:
+            return None
         if (
             self._deterministic_edit_parser is None
             or self._deterministic_edit_preparer is None
@@ -186,8 +190,26 @@ class ControlledCodingCoordinator:
                 + ", ".join(sorted(outside))
             )
 
+    @staticmethod
+    def _validate_python_syntax(proposal: ProjectEditProposal) -> None:
+        candidates = (
+            *((edit.path, edit.updated_content) for edit in proposal.edits),
+            *((creation.path, creation.content) for creation in proposal.creations),
+        )
+        for path, content in candidates:
+            if not path.casefold().endswith(".py"):
+                continue
+            try:
+                ast.parse(content, filename=path)
+            except SyntaxError as error:
+                raise ValueError(
+                    f"Coding Agent geçersiz Python önerdi: {path}:{error.lineno or 1}."
+                ) from error
+
     def _apply(self, session: CodingSession) -> str:
         try:
+            if self._proposal_guard is not None:
+                self._proposal_guard(session.proposal)
             outcome = self._proposal_applier.apply_project_edit(session.proposal)
         except Exception as error:
             return f"Coding Agent değişikliği uygulanamadı: {error}"

@@ -37,6 +37,22 @@ class RecordingFallback:
 class DeterministicAssignmentSmartEditTests(
     unittest.TestCase
 ):
+    def test_test_expectation_qualifier_is_not_written_as_python(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "a.py").write_text("VALUE = 3\n", encoding="utf-8")
+            preparer = RuleBasedAssignmentEditProposalPreparer(
+                workspace=SafeEditWorkspace(root)
+            )
+            request = RuleBasedSmartEditRequestParser().parse(
+                "a.py içindeki VALUE değerini test beklentisine göre 2 yap"
+            )
+
+            proposal = preparer.prepare_smart_edit(request)  # type: ignore[arg-type]
+
+            self.assertEqual(proposal.updated_content.splitlines(), ["VALUE = 2"])
+            self.assertNotIn("test beklentisine", proposal.updated_content)
+
     def test_user_case_changes_quoted_assignment_without_llm(
         self,
     ) -> None:

@@ -70,6 +70,9 @@ class RetryState:
     def validate_execution(self):
         return None
 
+    def ensure_attempt_available(self, task_id):
+        self.get_task(task_id)
+
     def health(self):
         return "PLAN SAĞLIĞI\nDurum: GEÇERLİ"
 
@@ -123,6 +126,9 @@ class ReportEvaluator:
         if paths != ("a.py",):
             raise AssertionError(paths)
         return self.report
+
+    def is_current(self, report):
+        return report is self.report
 
 
 class SupervisedAutonomyTests(unittest.TestCase):
@@ -256,9 +262,9 @@ class AppliedChangeRetryTests(unittest.TestCase):
 
 
 class ReleaseV500Tests(unittest.TestCase):
-    def test_default_release_is_v50_with_full_supervised_autonomy(self):
+    def test_v50_release_keeps_full_supervised_autonomy(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            self.assertEqual(build_release(), "app")
+            self.assertEqual(build_release("V5.0"), "app")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V5.0")
             self.assertEqual(flags["autonomy_feature_level"], 10)

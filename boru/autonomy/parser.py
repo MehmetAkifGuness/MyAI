@@ -19,12 +19,17 @@ class RuleBasedAutonomyCommandParser:
         AutonomyAction.ARCHIVE: 9,
         AutonomyAction.LIMITS: 9,
         AutonomyAction.HELP: 1,
+        AutonomyAction.DIAGNOSE: 11,
+        AutonomyAction.REPAIR: 12,
+        AutonomyAction.HEALTH: 13,
     }
     _VALUE_COMMANDS = (
         (AutonomyAction.DEVELOP, ("geliştir", "gelistir", "geliştr", "gelistr")),
         (AutonomyAction.PLAN, ("planla", "planl")),
         (AutonomyAction.RETRY, ("yeniden dene", "tekrar dene")),
         (AutonomyAction.VERIFY, ("doğrula", "dogrula", "doğrla")),
+        (AutonomyAction.DIAGNOSE, ("teşhis", "teshis")),
+        (AutonomyAction.REPAIR, ("onar",)),
     )
     _PLAIN_COMMANDS = (
         (AutonomyAction.CONTINUE, ("devam et", "devam")),
@@ -35,11 +40,12 @@ class RuleBasedAutonomyCommandParser:
         (AutonomyAction.ARCHIVE, ("arşivle", "arsivle")),
         (AutonomyAction.LIMITS, ("sınırlar", "sinirlar")),
         (AutonomyAction.HELP, ("yardım", "yardim")),
+        (AutonomyAction.HEALTH, ("sağlık", "saglik")),
     )
 
     def __init__(self, feature_level: int = 0) -> None:
-        if type(feature_level) is not int or not 0 <= feature_level <= 10:
-            raise ValueError("Otonomi özellik seviyesi 0-10 arasında olmalıdır.")
+        if type(feature_level) is not int or not 0 <= feature_level <= 13:
+            raise ValueError("Otonomi özellik seviyesi 0-13 arasında olmalıdır.")
         self.feature_level = feature_level
 
     def parse(self, message: str) -> AutonomyCommand | None:
@@ -119,6 +125,12 @@ class RuleBasedAutonomyCommandParser:
             commands.extend(("otonom arşivle", "otonom sınırlar"))
         if self.feature_level >= 10:
             commands.append("otonom denetimli geliştir: hedef")
+        if self.feature_level >= 11:
+            commands.append("otonom teşhis: TASK-1")
+        if self.feature_level >= 12:
+            commands.append("otonom onar: TASK-1")
+        if self.feature_level >= 13:
+            commands.append("otonom sağlık")
         return "Biçimler: " + "; ".join(f"'{item}'" for item in commands) + "."
 
     def _labels(self, labels: tuple[str, ...]) -> tuple[str, ...]:

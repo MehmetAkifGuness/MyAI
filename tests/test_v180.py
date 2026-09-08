@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 
 from boru.architecture import ArchitecturePlan, ArchitectureStep
@@ -112,6 +113,22 @@ class CodingParserTests(unittest.TestCase):
 
 
 class CodingCoordinatorTests(unittest.TestCase):
+    def test_invalid_python_proposal_is_rejected_before_approval(self):
+        proposal = edit_proposal()
+        invalid = replace(
+            proposal,
+            edits=(replace(proposal.edits[0], updated_content="VALUE = invalid prose\n"),),
+        )
+        instance, _, _, applier = coordinator(proposal=invalid)
+
+        response = instance.resolve(
+            "kodla: a.py içinde VALUE değerini yalnızca bu dosyada 2 yap"
+        )
+
+        self.assertIn("geçersiz Python", response or "")
+        self.assertFalse(instance.has_pending)
+        self.assertEqual(applier.proposals, [])
+
     def test_stages_architect_scoped_diff_without_applying(self):
         instance, architect, preparer, applier = coordinator()
 
