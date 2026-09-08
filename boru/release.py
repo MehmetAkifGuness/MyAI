@@ -8,7 +8,7 @@ _RELEASES = (
     "V3.1", "V3.2", "V3.3", "V3.4", "V3.5", "V3.6", "V3.7", "V3.8",
     "V3.9", "V4.0",
     "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7", "V4.8",
-    "V4.9", "V5.0", "V5.1", "V5.2", "V6.0",
+    "V4.9", "V5.0", "V5.1", "V5.2", "V6.0", "V6.1", "V6.2", "V6.3",
 )
 
 
@@ -21,6 +21,7 @@ _MILESTONES = {
     "checkpoint_migration": "V2.2", "reliable_tasks": "V2.3",
     "sandbox_terminal": "V3.0", "advanced_terminal": "V3.1",
     "autonomous_development": "V4.0",
+    "staged_coding": "V6.3",
 }
 
 
@@ -67,10 +68,11 @@ def _feature_labels(flags: dict[str, bool | int]) -> tuple[tuple[str, bool], ...
         ("güncel task teşhisi ve kaynak/test kanıtı", autonomy >= 11),
         ("testleri koruyan onaylı task onarımı", autonomy >= 12),
         ("çok adımlı ilerleme ve sınırlı yeniden doğrulama", autonomy >= 13),
+        ("ana dosyaya yazmadan önce geçici kopyada doğrulama", bool(flags["staged_coding"])),
     )
 
 
-def build_release(version: str = "V6.0"):
+def build_release(version: str = "V6.3"):
     from main_v170 import build_application
 
     if version not in _RELEASES:
@@ -108,6 +110,7 @@ def build_release(version: str = "V6.0"):
         sandbox_terminal_enabled=bool(flags["sandbox_terminal"]),
         autonomous_development_enabled=bool(flags["autonomous_development"]),
         autonomy_feature_level=int(flags["autonomy_feature_level"]),
+        staged_coding_enabled=bool(flags["staged_coding"]),
         terminal_feature_level=int(flags["terminal_feature_level"]),
         project_edit_max_attempts=2 if flags["goal_driven_change"] else 1,
     )

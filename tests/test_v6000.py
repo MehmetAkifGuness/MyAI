@@ -274,7 +274,7 @@ class RevalidationBudgetTests(RepairFixture):
 class ReleaseTests(unittest.TestCase):
     def test_default_v60_and_previous_release_gates(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            build_release()
+            build_release("V6.0")
             self.assertEqual(builder.call_args.kwargs["application_version"], "V6.0")
             for version, level in (("V5.0", 10), ("V5.1", 11), ("V5.2", 12), ("V6.0", 13)):
                 build_release(version)

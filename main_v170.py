@@ -209,6 +209,7 @@ from boru.sandbox.terminal import SandboxTerminalCoordinator
 from boru.sandbox.history import TerminalHistory
 from boru.autonomy import AutonomousDevelopmentCoordinator
 from boru.tasks.repair import RepairProposalGuard, TaskRepairController
+from boru.coding.staged_applier import StagedCodingApplier
 from boru.ui import (
     ChatAppUI,
 )
@@ -361,6 +362,7 @@ def build_application(
     sandbox_terminal_enabled: bool = False,
     autonomous_development_enabled: bool = False,
     autonomy_feature_level: int = 0,
+    staged_coding_enabled: bool = False,
     terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
@@ -410,6 +412,8 @@ def build_application(
         raise ValueError("Otonomi özellikleri otonom geliştirme akışını gerektirir.")
     if autonomy_feature_level >= 11 and not evaluation_enabled:
         raise ValueError("Task teşhisi ve onarımı kanıt değerlendiricisi gerektirir.")
+    if staged_coding_enabled and not (coding_agent_enabled and sandbox_enabled and evaluation_enabled):
+        raise ValueError("Geçici kopya doğrulaması Coding, sandbox ve değerlendirme gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1034,6 +1038,14 @@ def build_application(
     )
 
     repair_guard = RepairProposalGuard(evaluator) if autonomy_feature_level >= 11 else None
+    def staged_evaluator(root):
+        return EvidenceEvaluator(root, DockerSandboxExecutor(root, sandbox_image),
+                                 max_paths=12 if batch_runtime_repair_enabled else 8)
+
+    coding_applier = (
+        StagedCodingApplier(project_root, staged_evaluator, project_edit_applier)
+        if staged_coding_enabled else project_edit_applier
+    )
     coding_coordinator = None
     if coding_agent_enabled:
         coding_coordinator = ControlledCodingCoordinator(
@@ -1042,7 +1054,7 @@ def build_application(
             ),
             architect=architect_agent,
             proposal_preparer=project_edit_preparer,
-            proposal_applier=project_edit_applier,
+            proposal_applier=coding_applier,
             deterministic_edit_parser=RuleBasedSmartEditRequestParser(),
             deterministic_edit_preparer=deterministic_assignment_preparer,
             regression_runner=test_agent,
@@ -1142,13 +1154,6 @@ def build_application(
     if improvement_enabled:
         if evaluator is None or coding_coordinator is None:
             raise ValueError("İyileştirme Coding, değerlendirme ve sandbox gerektirir.")
-        def staged_evaluator(root):
-            return EvidenceEvaluator(
-                root,
-                DockerSandboxExecutor(root, sandbox_image),
-                max_paths=12 if batch_runtime_repair_enabled else 8,
-            )
-
         improvement_applier = VerifiedImprovementApplier(project_root, staged_evaluator)
         improvement_coding = ControlledCodingCoordinator(
             parser=RuleBasedCodingRequestParser(architecture_request_parser),

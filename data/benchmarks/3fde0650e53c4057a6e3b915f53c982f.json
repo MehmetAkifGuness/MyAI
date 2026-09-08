@@ -1,0 +1,30 @@
+{
+  "schema": "boru.benchmark/v1",
+  "state": "completed",
+  "suite_sha256": "133ad5ec9abcff0291a59cb2a4bf9dac478ba7a8d2357da1a3f1926b68242e22",
+  "scope": "single_proposal_model_coding; clarification requires human quality review",
+  "summary": {
+    "qwen2.5-coder:7b": {
+      "attempted": 1,
+      "coding_passed": 0,
+      "coding_total": 1,
+      "seconds": 47.874
+    }
+  },
+  "results": [
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "addition",
+      "category": "bugfix",
+      "repeat": 1,
+      "status": "output_validation_error",
+      "detail": "Eylem ile içerik uyumsuz.",
+      "seconds": 47.874,
+      "input_characters": 122,
+      "output_characters": 151,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 0
+    }
+  ]
+}
