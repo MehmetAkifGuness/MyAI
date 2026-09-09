@@ -7,3 +7,6 @@ __pycache__/
 /data/task_project.lock
 /data/*.lock
 /data/terminal_history.json
+/data/repository_workspace.json
+/data/repository_audit.json
+/repositories/

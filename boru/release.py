@@ -9,7 +9,7 @@ _RELEASES = (
     "V3.9", "V4.0",
     "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7", "V4.8",
     "V4.9", "V5.0", "V5.1", "V5.2", "V6.0", "V6.1", "V6.2", "V6.3",
-    "V6.4", "V6.5", "V6.6", "V7.0", "V8.0",
+    "V6.4", "V6.5", "V6.6", "V7.0", "V8.0", "V9.0", "V10.0",
 )
 
 
@@ -29,6 +29,8 @@ _MILESTONES = {
     "agentic_benchmark": "V7.0",
     "benchmark_observability": "V8.0",
     "adaptive_model_routing": "V8.0",
+    "repository_intelligence": "V9.0",
+    "repository_workspace": "V10.0",
 }
 
 
@@ -82,10 +84,12 @@ def _feature_labels(flags: dict[str, bool | int]) -> tuple[tuple[str, bool], ...
         ("ölçülebilir model-test-onarım benchmarkı", bool(flags["agentic_benchmark"])),
         ("ilerleme, ETA ve iptal destekli benchmark", bool(flags["benchmark_observability"])),
         ("başarısız structured görevlerde yedek model yönlendirmesi", bool(flags["adaptive_model_routing"])),
+        ("güvenli GitHub içe aktarma ve gerçek repo zekâsı", bool(flags["repository_intelligence"])),
+        ("kalıcı ve izole repo çalışma alanı", bool(flags["repository_workspace"])),
     )
 
 
-def build_release(version: str = "V8.0"):
+def build_release(version: str = "V10.0"):
     from main_v170 import build_application
 
     if version not in _RELEASES:
@@ -130,6 +134,8 @@ def build_release(version: str = "V8.0"):
         staged_feedback_repair_enabled=bool(flags["staged_feedback_repair"]),
         benchmark_chat_enabled=bool(flags["agentic_benchmark"]),
         adaptive_model_routing_enabled=bool(flags["adaptive_model_routing"]),
+        repository_intelligence_enabled=bool(flags["repository_intelligence"]),
+        repository_workspace_enabled=bool(flags["repository_workspace"]),
         terminal_feature_level=int(flags["terminal_feature_level"]),
         project_edit_max_attempts=2 if flags["goal_driven_change"] else 1,
     )

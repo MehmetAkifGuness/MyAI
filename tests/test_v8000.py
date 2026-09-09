@@ -171,7 +171,7 @@ class V80ReleaseTests(unittest.TestCase):
     def test_v80_enables_routing_and_v70_does_not(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
             build_release()
-            self.assertEqual(builder.call_args.kwargs["application_version"], "V8.0")
+            self.assertEqual(builder.call_args.kwargs["application_version"], "V10.0")
             self.assertTrue(builder.call_args.kwargs["adaptive_model_routing_enabled"])
             build_release("V7.0")
             self.assertFalse(builder.call_args.kwargs["adaptive_model_routing_enabled"])

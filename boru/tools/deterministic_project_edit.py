@@ -1,0 +1,110 @@
+import re
+
+from boru.tools.edit_models import EditRequest
+from boru.tools.project_edit_models import ProjectEditProposal, ProjectEditRequest
+
+
+class DeterministicProjectEditNotApplicable(ValueError):
+    pass
+
+
+class RuleBasedStringAliasProjectEditPreparer:
+    """Ground a quoted command-alias request in existing Python source and tests."""
+
+    _REQUEST = re.compile(
+        r"[\"“](?P<alias>[^\"”\r\n]{2,120})[\"”]\s+"
+        r"(?:yazımını\s+)?[\"“](?P<canonical>[^\"”\r\n]{2,120})[\"”]\s+"
+        r"(?:ile\s+aynı|gibi)\s+kabul\s+et",
+        re.I,
+    )
+
+    def __init__(self, workspace):
+        self._workspace = workspace
+
+    def prepare_project_edit(self, request: ProjectEditRequest) -> ProjectEditProposal:
+        match = self._REQUEST.search(request.instruction)
+        if match is None:
+            raise DeterministicProjectEditNotApplicable()
+        alias = match.group("alias")
+        canonical = match.group("canonical")
+        if alias == canonical or not request.existing_file_scope:
+            raise DeterministicProjectEditNotApplicable()
+
+        edits = []
+        for path in request.existing_file_scope:
+            source = self._workspace.read_edit_source(path)
+            replacement = (
+                self._test_replacement(source.content, alias, canonical)
+                if self._is_test(path)
+                else self._source_replacement(source.content, alias, canonical)
+            )
+            if replacement is None:
+                continue
+            old_text, new_text = replacement
+            edits.append(self._workspace.prepare_exact_replacement(
+                EditRequest(path, old_text, new_text)
+            ))
+        if not edits:
+            raise DeterministicProjectEditNotApplicable()
+        return ProjectEditProposal(request.instruction, tuple(edits))
+
+    @staticmethod
+    def _source_replacement(content: str, alias: str, canonical: str):
+        quoted = re.escape(canonical)
+        pattern = re.compile(
+            rf"^(?P<indent>[ \t]*)if (?P<value>[A-Za-z_]\w*(?:\.[A-Za-z_]\w*)*) "
+            rf"== (?P<literal>[\"']{quoted}[\"']):(?P<trailing>[ \t]*)(?P<cr>\r?)$",
+            re.M,
+        )
+        matches = tuple(
+            match for match in pattern.finditer(content)
+            if match.group("literal")[0] == match.group("literal")[-1]
+        )
+        if len(matches) != 1:
+            return None
+        found = matches[0]
+        old_text = found.group(0)
+        quote = found.group("literal")[0]
+        new_text = (
+            f"{found.group('indent')}if {found.group('value')} in "
+            f"{{{quote}{canonical}{quote}, {quote}{alias}{quote}}}:"
+            f"{found.group('trailing')}{found.group('cr')}"
+        )
+        return old_text, new_text
+
+    @staticmethod
+    def _test_replacement(content: str, alias: str, canonical: str):
+        pattern = re.compile(
+            rf"\.resolve\(\s*(?P<quote>[\"']){re.escape(canonical)}(?P=quote)\s*\)"
+        )
+        matches = tuple(pattern.finditer(content))
+        if not matches:
+            return None
+        found = matches[0]
+        old_text = found.group(0)
+        quote = found.group("quote")
+        new_text = re.sub(
+            rf"{re.escape(quote + canonical + quote)}",
+            lambda _match: quote + alias + quote,
+            old_text,
+            count=1,
+        )
+        return old_text, new_text
+
+    @staticmethod
+    def _is_test(path: str) -> bool:
+        folded = path.replace("\\", "/").casefold()
+        name = folded.rsplit("/", 1)[-1]
+        return folded.startswith("tests/") or "/tests/" in folded or name.startswith("test_") or "_test." in name
+
+
+class FallbackProjectEditProposalPreparer:
+    def __init__(self, primary, fallback):
+        self._primary = primary
+        self._fallback = fallback
+
+    def prepare_project_edit(self, request: ProjectEditRequest) -> ProjectEditProposal:
+        try:
+            return self._primary.prepare_project_edit(request)
+        except DeterministicProjectEditNotApplicable:
+            return self._fallback.prepare_project_edit(request)

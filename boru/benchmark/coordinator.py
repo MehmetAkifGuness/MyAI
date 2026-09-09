@@ -55,7 +55,7 @@ class BenchmarkCoordinator:
         normalized = " ".join(message.casefold().strip().split())
         if normalized == "benchmark görevleri":
             return self._render_cases()
-        if normalized == "benchmark durumu":
+        if normalized in {"benchmark durumu", "benchmark durum"}:
             return self._render_status()
         if normalized == "benchmark iptal":
             return self._cancel_run()

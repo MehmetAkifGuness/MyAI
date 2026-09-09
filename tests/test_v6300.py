@@ -116,6 +116,38 @@ class StagedCodingTests(unittest.TestCase):
             self.applier.apply_project_edit(self.proposal())
         self.delegate.apply_project_edit.assert_not_called()
 
+    def test_preexisting_static_findings_do_not_block_unrelated_fix(self):
+        (self.root / "value.py").write_text(
+            "VALUE = 1\n\ndef legacy():\n    try:\n        return VALUE\n    except:\n        pass\n",
+            encoding="utf-8",
+        )
+        source = self.workspace.read_edit_source("value.py")
+        updated = source.content.replace("VALUE = 1", "VALUE = 2", 1)
+        proposal = ProjectEditProposal("change VALUE", (EditProposal(
+            source.path, updated, source.sha256, "diff", len(source.content), len(updated)
+        ),))
+
+        self.applier.apply_project_edit(proposal)
+
+        review = next(
+            check for check in self.applier.last_validation.checks
+            if check.name == "Code Review"
+        )
+        self.assertEqual(review.verdict.value, "GEÇTİ")
+        self.assertIn("Yeni bulgu yok", review.detail)
+
+    def test_new_static_finding_still_blocks_write(self):
+        source = self.workspace.read_edit_source("value.py")
+        updated = "VALUE = 2\n\ndef bad(items=[]):\n    return items\n"
+        proposal = ProjectEditProposal("change VALUE", (EditProposal(
+            source.path, updated, source.sha256, "diff", len(source.content), len(updated)
+        ),))
+
+        with self.assertRaisesRegex(ValueError, "Geçici kopya"):
+            self.applier.apply_project_edit(proposal)
+
+        self.delegate.apply_project_edit.assert_not_called()
+
     def test_source_drift_rejects(self):
         proposal = self.proposal()
         (self.root / "value.py").write_text("VALUE = 9\n")
@@ -147,7 +179,7 @@ class StagedCodingTests(unittest.TestCase):
     def test_release_gate(self):
         with patch.object(main_v170, "build_application") as builder:
             build_release()
-            self.assertEqual(builder.call_args.kwargs["application_version"], "V8.0")
+            self.assertEqual(builder.call_args.kwargs["application_version"], "V10.0")
             self.assertTrue(builder.call_args.kwargs["staged_coding_enabled"])
             build_release("V6.0")
             self.assertFalse(builder.call_args.kwargs["staged_coding_enabled"])

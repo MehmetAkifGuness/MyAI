@@ -44,6 +44,10 @@ class GitCommandPolicy:
             RuleBasedGitRequestParser.validate_path(request.target)
             arguments = ("restore", "--", request.target)
             risk = CommandRisk.REQUIRES_APPROVAL
+        elif request.kind is CommandKind.GIT_SWITCH_CREATE:
+            RuleBasedGitRequestParser.validate_branch_name(request.target)
+            arguments = ("switch", "-c", request.target)
+            risk = CommandRisk.REQUIRES_APPROVAL
         else:
             raise ValueError("Desteklenmeyen Git işlemi.")
 

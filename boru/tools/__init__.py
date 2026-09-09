@@ -207,6 +207,7 @@ from boru.tools.synthesis_pipeline import (
 from boru.tools.synthesizer import (
     LLMToolResultSynthesizer,
 )
+from boru.tools.shell_guard import ShellEnvironmentAssignmentGuard
 from boru.tools.operation_router import (
     ExclusiveOperationCoordinator,
     PendingAwareResolver,
@@ -347,6 +348,7 @@ __all__ = [
     "SmartEditRequestParser",
     "SmartEditWorkspace",
     "SafeWriteWorkspace",
+    "ShellEnvironmentAssignmentGuard",
     "ToolArgumentSchema",
     "ToolArgumentSpec",
     "ToolArgumentType",

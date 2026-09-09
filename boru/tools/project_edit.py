@@ -1,4 +1,5 @@
 import json
+import re
 from collections.abc import Sequence
 
 from boru.contracts import ChatModel
@@ -689,6 +690,7 @@ class LLMProjectEditProposalPreparer:
         max_creations: int = 4,
         max_creation_characters: int = 64 * 1024,
         max_attempts: int = 2,
+        max_source_characters: int = 80_000,
     ):
         if max_files < 1:
             raise ValueError(
@@ -731,6 +733,8 @@ class LLMProjectEditProposalPreparer:
             raise ValueError(
                 "max_attempts en az 1 olmalıdır."
             )
+        if max_source_characters < 4096:
+            raise ValueError("Project kaynak bağlamı en az 4096 karakter olmalıdır.")
 
         self._chat_model = (
             chat_model
@@ -784,6 +788,7 @@ class LLMProjectEditProposalPreparer:
         self._max_attempts = (
             max_attempts
         )
+        self._max_source_characters = max_source_characters
 
         self._composer = (
             GroundedMultiPatchComposer(
@@ -891,12 +896,14 @@ class LLMProjectEditProposalPreparer:
                 ),
             ]
 
-            raw_output = (
-                self._generate_patch_plan(
-                    messages,
-                    attempt,
-                )
-            )
+            try:
+                raw_output = self._generate_patch_plan(messages, attempt)
+            except Exception as error:
+                last_error = error
+                previous_output = ""
+                if attempt >= self._max_attempts:
+                    break
+                continue
 
             previous_output = (
                 raw_output
@@ -1069,8 +1076,8 @@ class LLMProjectEditProposalPreparer:
                     "Güvenlik nedeniyle işlem durduruldu."
                 )
 
-    @staticmethod
     def _build_prompt(
+        self,
         *,
         request: ProjectEditRequest,
         sources: Sequence[
@@ -1088,17 +1095,7 @@ class LLMProjectEditProposalPreparer:
             else "- yok"
         )
 
-        rendered_sources = (
-            "\n\n".join(
-                (
-                    f'<BORU_PROJECT_FILE path="{source.path}">\n'
-                    f"{source.content}\n"
-                    "</BORU_PROJECT_FILE>"
-                )
-                for source
-                in sources
-            )
-        )
+        rendered_sources = self._render_sources(request.instruction, sources)
 
         return (
             "PROJECT_TASK:\n"
@@ -1116,8 +1113,8 @@ class LLMProjectEditProposalPreparer:
             "JSON dışında hiçbir şey üretme."
         )
 
-    @staticmethod
     def _build_repair_prompt(
+        self,
         *,
         request: ProjectEditRequest,
         sources: Sequence[
@@ -1127,8 +1124,7 @@ class LLMProjectEditProposalPreparer:
         failure: str,
     ) -> str:
         return (
-            LLMProjectEditProposalPreparer
-            ._build_prompt(
+            self._build_prompt(
                 request=request,
                 sources=sources,
             )
@@ -1139,3 +1135,54 @@ class LLMProjectEditProposalPreparer:
             + "\n\nKapsam dışı yolu tekrarlama. ALLOWED_NEW_FILES '- yok' ise creates=[] kullan. "
             "Şimdi sadece geçerli patches ve creates listelerini içeren JSON nesnesi üret."
         )
+
+    def _render_sources(self, instruction: str, sources: Sequence[EditSource]) -> str:
+        total = sum(len(source.content) for source in sources)
+        budget = max(2048, self._max_source_characters // max(1, len(sources)))
+        return "\n\n".join(
+            f'<BORU_PROJECT_FILE path="{source.path}">\n'
+            f"{source.content if total <= self._max_source_characters else self._excerpt(source.content, instruction, budget)}\n"
+            "</BORU_PROJECT_FILE>"
+            for source in sources
+        )
+
+    @staticmethod
+    def _excerpt(content: str, instruction: str, budget: int) -> str:
+        if len(content) <= budget:
+            return content
+        lines = content.splitlines(keepends=True)
+        quoted = tuple(
+            value.casefold()
+            for value in re.findall(r"[\"']([^\"']{2,80})[\"']", instruction)
+        )
+        terms = tuple(dict.fromkeys(
+            (*quoted, *(term.casefold() for term in re.findall(r"[\w.-]{4,}", instruction)))
+        ))[:40]
+        selected = set(range(min(24, len(lines))))
+        scored = []
+        for index, line in enumerate(lines):
+            folded = line.casefold()
+            score = sum((10 if " " in term else 1) for term in terms if term in folded)
+            if score:
+                scored.append((score, index))
+        for _score, index in sorted(scored, key=lambda item: (-item[0], item[1])):
+            selected.update(range(max(0, index - 10), min(len(lines), index + 11)))
+            if sum(len(lines[item]) for item in selected) >= budget:
+                break
+        result = []
+        previous = -2
+        used = 0
+        for index in sorted(selected):
+            line = lines[index]
+            if used + len(line) > budget:
+                break
+            if index != previous + 1:
+                marker = "\n<BORU_OMITTED_LINES />\n"
+                if used + len(marker) > budget:
+                    break
+                result.append(marker)
+                used += len(marker)
+            result.append(line)
+            used += len(line)
+            previous = index
+        return "".join(result).rstrip()

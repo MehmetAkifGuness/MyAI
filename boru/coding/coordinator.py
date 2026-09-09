@@ -244,7 +244,15 @@ class ControlledCodingCoordinator:
             f"Coding Agent değişikliği uygulandı: {len(outcome.outcomes)} dosya\n{paths}"
         )
         changed_paths = tuple(item.relative_path for item in outcome.outcomes)
-        reports = self._validation_reports(changed_paths)
+        staged_report = getattr(self._proposal_applier, "last_validation", None)
+        if (
+            self._quality_evaluator is not None
+            and staged_report is not None
+            and self._quality_evaluator.is_current(staged_report)
+        ):
+            reports = (staged_report.workflow_report(),)
+        else:
+            reports = self._validation_reports(changed_paths)
         return "\n\n".join((response, *reports))
 
     def _render_already_satisfied(self, plan: ArchitecturePlan) -> str:

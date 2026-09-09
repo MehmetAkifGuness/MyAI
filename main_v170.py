@@ -179,6 +179,7 @@ from boru.tools import (
     SafeFilesystemOperationWorkspace,
     SafeProjectFileIndex,
     SafeWriteWorkspace,
+    ShellEnvironmentAssignmentGuard,
     BatchProjectEditApplier,
     ToolCoordinator,
     ToolExecutor,
@@ -214,6 +215,14 @@ from boru.tasks.repair import RepairProposalGuard, TaskRepairController
 from boru.coding.staged_applier import StagedCodingApplier
 from boru.benchmark import BenchmarkCoordinator
 from boru.benchmark.runner import CodingBenchmark
+from boru.repository import (
+    GitHubRepositoryImporter,
+    RepositoryAuditLog,
+    RepositoryCoordinator,
+    RepositoryInspector,
+    RepositoryWorkspaceState,
+    build_repository_workspace,
+)
 from boru.ui import (
     ChatAppUI,
 )
@@ -372,6 +381,8 @@ def build_application(
     staged_feedback_repair_enabled: bool = False,
     benchmark_chat_enabled: bool = False,
     adaptive_model_routing_enabled: bool = False,
+    repository_intelligence_enabled: bool = False,
+    repository_workspace_enabled: bool = False,
     terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
@@ -434,6 +445,9 @@ def build_application(
 
     if adaptive_model_routing_enabled and not reliable_structured_calls_enabled:
         raise ValueError("Uyarlamalı model yönlendirme structured yeniden deneme gerektirir.")
+
+    if repository_workspace_enabled and not (repository_intelligence_enabled and sandbox_enabled):
+        raise ValueError("Repo çalışma alanı repo zekâsı ve Docker sandbox gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1175,6 +1189,7 @@ def build_application(
             )
 
     operation_resolvers = [
+        ShellEnvironmentAssignmentGuard(),
         auto_fix_coordinator,
         controlled_write,
         git_coordinator,
@@ -1206,6 +1221,27 @@ def build_application(
                     name,
                     structured_timeout_seconds=structured_timeout_seconds,
                     structured_num_predict=structured_num_predict,
+                ),
+            ),
+        )
+    if repository_intelligence_enabled:
+        operation_resolvers.insert(
+            0,
+            RepositoryCoordinator(
+                project_root,
+                RepositoryInspector(),
+                GitHubRepositoryImporter(project_root),
+                workspace_factory=(
+                    (lambda root: build_repository_workspace(root, chat_model, sandbox_image))
+                    if repository_workspace_enabled else None
+                ),
+                workspace_state=(
+                    RepositoryWorkspaceState(project_root / "data" / "repository_workspace.json")
+                    if repository_workspace_enabled else None
+                ),
+                audit_log=(
+                    RepositoryAuditLog(project_root / "data" / "repository_audit.json")
+                    if repository_workspace_enabled else None
                 ),
             ),
         )

@@ -17,6 +17,10 @@ class RuleBasedGitRequestParser:
         (CommandKind.GIT_RESTORE, re.compile(r"^\s*git\s+(?:restore|geri\s+al)\s*:\s*(?P<value>.+?)\s*$", re.IGNORECASE)),
     )
     _COMMIT = re.compile(r"^\s*git\s+commit\s*:\s*(?P<value>.+?)\s*$", re.IGNORECASE)
+    _BRANCH_CREATE = re.compile(
+        r"^\s*git\s+(?:dal\s+oluştur|switch\s+-c)\s*:\s*(?P<value>.+?)\s*$",
+        re.IGNORECASE,
+    )
     _INTENT = re.compile(r"^\s*git\b", re.IGNORECASE)
     _SAFE_PATH = re.compile(r"^[A-Za-z0-9_./\\-]+$")
 
@@ -37,6 +41,12 @@ class RuleBasedGitRequestParser:
             message = commit_match.group("value").strip()
             self.validate_commit_message(message)
             return CommandRequest(CommandKind.GIT_COMMIT, message)
+
+        branch_match = self._BRANCH_CREATE.fullmatch(user_message)
+        if branch_match:
+            branch = branch_match.group("value").strip()
+            self.validate_branch_name(branch)
+            return CommandRequest(CommandKind.GIT_SWITCH_CREATE, branch)
 
         return None
 
@@ -63,3 +73,13 @@ class RuleBasedGitRequestParser:
             raise ValueError("Commit mesajı 1-200 karakter arasında olmalıdır.")
         if any(ord(character) < 32 for character in message):
             raise ValueError("Commit mesajı kontrol karakteri içeremez.")
+
+    @staticmethod
+    def validate_branch_name(name: str) -> None:
+        safe = re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]{0,127}", name)
+        segments = name.split("/")
+        if (
+            safe is None or ".." in name or "//" in name or name.endswith(("/", ".", ".lock"))
+            or any(not segment or segment.startswith(".") for segment in segments)
+        ):
+            raise ValueError("Git dal adı güvenli ve geçerli biçimde olmalıdır.")

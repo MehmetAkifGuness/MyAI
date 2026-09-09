@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import replace
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -24,6 +25,12 @@ class StagedCodingApplier:
         for edit in proposal.edits:
             if workspace.read_edit_source(edit.path).sha256 != edit.expected_sha256:
                 raise ValueError("Önizlemeden sonra kaynak değişmiş; öneri uygulanmadı.")
+        paths = tuple(dict.fromkeys(item.path for item in (*proposal.edits, *proposal.creations)))
+        baseline_evaluator = self._evaluator_factory(self._root)
+        existing_paths = tuple(edit.path for edit in proposal.edits)
+        baseline_findings = Counter(
+            baseline_evaluator.static_findings(existing_paths) if existing_paths else ()
+        )
         with TemporaryDirectory(prefix="boru-coding-") as directory:
             staged_root = Path(directory)
             baseline = SourceSnapshot(self._root).copy_to(staged_root)
@@ -35,12 +42,45 @@ class StagedCodingApplier:
             ))
             BatchProjectEditApplier(workspace=staged_workspace,
                                     creation_workspace=SafeWriteWorkspace(staged_root)).apply_project_edit(staged_proposal)
-            paths = tuple(dict.fromkeys(item.path for item in (*proposal.edits, *proposal.creations)))
             evaluator = self._evaluator_factory(staged_root)
             report = evaluator.evaluate(paths)
+            candidate_findings = Counter(evaluator.static_findings(paths))
+            new_findings = candidate_findings - baseline_findings
+            report = self._apply_static_delta(
+                report,
+                baseline_findings,
+                candidate_findings,
+                new_findings,
+            )
             self.last_validation = report
-            if report.verdict is not Verdict.PASS or not evaluator.is_current(report):
+            if report.verdict is not Verdict.PASS or new_findings or not evaluator.is_current(report):
                 raise ValueError("Geçici kopya doğrulaması geçmedi; ana kaynaklar değiştirilmedi.\n" + report.render())
             if SourceSnapshot(self._root).read_sources() != baseline:
                 raise ValueError("Doğrulama sırasında proje/test değişti; öneri uygulanmadı.")
             return self._delegate.apply_project_edit(proposal)
+
+    @staticmethod
+    def _apply_static_delta(report, baseline, candidate, new_findings):
+        checks = []
+        for check in report.checks:
+            if check.name not in {"Security", "Code Review"}:
+                checks.append(check)
+                continue
+            new_for_check = tuple(item for item in new_findings if item[0] == check.name)
+            if new_for_check:
+                checks.append(check)
+                continue
+            existing = sum(
+                count for item, count in candidate.items() if item[0] == check.name
+            )
+            if existing and check.verdict is Verdict.FAIL:
+                checks.append(replace(
+                    check,
+                    verdict=Verdict.PASS,
+                    detail=(
+                        f"Yeni bulgu yok; önceden var olan {existing} bulgu artırılmadı."
+                    ),
+                ))
+            else:
+                checks.append(check)
+        return replace(report, checks=tuple(checks))

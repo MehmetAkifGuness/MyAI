@@ -17,6 +17,7 @@ class CommandKind(str, Enum):
     GIT_ADD = "git_add"
     GIT_COMMIT = "git_commit"
     GIT_RESTORE = "git_restore"
+    GIT_SWITCH_CREATE = "git_switch_create"
 
 
 class CommandRisk(str, Enum):

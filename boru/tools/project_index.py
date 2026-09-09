@@ -49,6 +49,22 @@ class SafeProjectFileIndex:
         ".java",
         ".cs",
         ".sql",
+        ".go",
+        ".rs",
+        ".kt",
+        ".kts",
+        ".rb",
+        ".php",
+        ".swift",
+        ".sh",
+        ".lock",
+    }
+
+    _ALLOWED_NAMES = {
+        "dockerfile",
+        "makefile",
+        "license",
+        "notice",
     }
 
     def __init__(
@@ -136,7 +152,7 @@ class SafeProjectFileIndex:
 
             if child.is_dir():
                 if (
-                    name_folded.startswith(".")
+                    (name_folded.startswith(".") and name_folded != ".github")
                     or name_folded
                     in self._EXCLUDED_DIRECTORIES
                 ):
@@ -152,7 +168,10 @@ class SafeProjectFileIndex:
             if not child.is_file():
                 continue
 
-            if child.suffix.casefold() not in self._ALLOWED_SUFFIXES:
+            if (
+                child.suffix.casefold() not in self._ALLOWED_SUFFIXES
+                and name_folded not in self._ALLOWED_NAMES
+            ):
                 continue
 
             try:

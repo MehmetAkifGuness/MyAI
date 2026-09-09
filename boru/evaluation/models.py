@@ -50,7 +50,11 @@ class EvaluationReport:
             if check is None or check.verdict is Verdict.FAIL:
                 status = "BAŞARISIZ"
             elif check.verdict is Verdict.PASS:
-                status = success
+                status = (
+                    "YENİ BULGU YOK"
+                    if check.detail.startswith("Yeni bulgu yok;")
+                    else success
+                )
             elif name == "Test" and "İlişkili test bulunamadı" in check.detail:
                 status = "TEST BULUNAMADI"
             else:

@@ -14,7 +14,7 @@ class ControlledGitCoordinator:
     _USAGE = (
         "Desteklenen Git biçimleri: 'git durum', 'git fark', 'git dalları', "
         "'git geçmişi', 'git ekle: dosya', 'git commit: mesaj' ve "
-        "'git geri al: dosya'. Serbest Git argümanları çalıştırılmaz."
+        "'git geri al: dosya', 'git dal oluştur: ad'. Serbest Git argümanları çalıştırılmaz."
     )
 
     def __init__(

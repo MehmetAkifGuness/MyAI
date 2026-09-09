@@ -44,6 +44,16 @@ class EvidenceEvaluator:
         except (OSError, ValueError, RuntimeError) as error:
             return f"ÖZ DEĞERLENDİRME RAPORU\nDurum: KANIT YETERSİZ\n{error}"
 
+    def static_findings(self, paths: tuple[str, ...]) -> tuple[tuple, ...]:
+        findings = []
+        for name, scanner in (("Security", self._security), ("Code Review", self._review)):
+            report = scanner.scan(paths)
+            findings.extend(
+                (name, item.path, item.rule, int(item.severity), item.message)
+                for item in report.findings
+            )
+        return tuple(findings)
+
     def fingerprints(self, paths: tuple[str, ...]) -> tuple[tuple[str, str], ...]:
         return tuple((path, hashlib.sha256(self._reader.read_text_file(path).encode("utf-8")).hexdigest())
                      for path in paths)
