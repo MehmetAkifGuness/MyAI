@@ -1,5 +1,7 @@
+import ast
 import re
 
+from boru.tools.deterministic_edit import RequestedStateAlreadySatisfied
 from boru.tools.edit_models import EditRequest
 from boru.tools.project_edit_models import ProjectEditProposal, ProjectEditRequest
 
@@ -31,19 +33,29 @@ class RuleBasedStringAliasProjectEditPreparer:
             raise DeterministicProjectEditNotApplicable()
 
         edits = []
+        satisfied = 0
         for path in request.existing_file_scope:
             source = self._workspace.read_edit_source(path)
+            is_test = self._is_test(path)
             replacement = (
                 self._test_replacement(source.content, alias, canonical)
-                if self._is_test(path)
+                if is_test
                 else self._source_replacement(source.content, alias, canonical)
             )
             if replacement is None:
+                if (
+                    self._test_is_satisfied(source.content, alias)
+                    if is_test
+                    else self._source_is_satisfied(source.content, alias, canonical)
+                ):
+                    satisfied += 1
                 continue
             old_text, new_text = replacement
             edits.append(self._workspace.prepare_exact_replacement(
                 EditRequest(path, old_text, new_text)
             ))
+        if not edits and satisfied == len(request.existing_file_scope):
+            raise RequestedStateAlreadySatisfied()
         if not edits:
             raise DeterministicProjectEditNotApplicable()
         return ProjectEditProposal(request.instruction, tuple(edits))
@@ -90,6 +102,36 @@ class RuleBasedStringAliasProjectEditPreparer:
             count=1,
         )
         return old_text, new_text
+
+    @staticmethod
+    def _source_is_satisfied(content: str, alias: str, canonical: str) -> bool:
+        try:
+            tree = ast.parse(content)
+        except SyntaxError:
+            return False
+        required = {alias, canonical}
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Compare) or not any(
+                isinstance(operator, ast.In) for operator in node.ops
+            ):
+                continue
+            for comparator in node.comparators:
+                if not isinstance(comparator, (ast.Set, ast.List, ast.Tuple)):
+                    continue
+                values = {
+                    item.value
+                    for item in comparator.elts
+                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                }
+                if required <= values:
+                    return True
+        return False
+
+    @staticmethod
+    def _test_is_satisfied(content: str, alias: str) -> bool:
+        return re.search(
+            rf"\.resolve\(\s*([\"']){re.escape(alias)}\1\s*\)", content
+        ) is not None
 
     @staticmethod
     def _is_test(path: str) -> bool:

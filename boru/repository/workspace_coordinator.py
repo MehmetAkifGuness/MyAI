@@ -1,6 +1,7 @@
 import re
 from pathlib import Path
 
+from boru.repository.reasoning import RepositoryTaskBrief
 from boru.repository.state import RepositoryAuditLog, RepositoryWorkspaceState
 
 
@@ -9,6 +10,18 @@ class RepositoryWorkspaceCoordinator:
     _DEVELOP = re.compile(r"^\s*repo\s+(?:geliştir|gelistir)\s*:\s*(.+?)\s*$", re.I | re.S)
     _VERIFY = re.compile(r"^\s*repo\s+(?:doğrula|dogrula)\s*:\s*(.+?)\s*$", re.I)
     _GIT = re.compile(r"^\s*repo\s+git\s+(.+?)\s*$", re.I | re.S)
+    _SMART_ANALYZE = re.compile(
+        r"^\s*repo\s+(?:akıllı|akilli)\s+(?:analiz|incele)\s*:\s*(.+?)\s*$",
+        re.I | re.S,
+    )
+    _SMART_DEVELOP = re.compile(
+        r"^\s*repo\s+(?:akıllı|akilli)\s+(?:geliştir|gelistir)\s*:\s*(.+?)\s*$",
+        re.I | re.S,
+    )
+    _INPUT_PLACEHOLDER = re.compile(
+        r"^\s*(?:mesajınızı\s+yazın|mesajinizi\s+yazin)\s*(?:\.{3}|…)?\s*",
+        re.I,
+    )
 
     def __init__(self, locate, runtime_factory, state: RepositoryWorkspaceState, audit: RepositoryAuditLog):
         self._locate = locate
@@ -17,6 +30,7 @@ class RepositoryWorkspaceCoordinator:
         self._audit = audit
         self._runtime = None
         self._label: str | None = None
+        self._clarification_objective: str | None = None
         saved = state.load()
         if saved:
             try:
@@ -26,7 +40,9 @@ class RepositoryWorkspaceCoordinator:
 
     @property
     def has_pending(self) -> bool:
-        return bool(self._runtime and self._runtime.has_pending)
+        return self._clarification_objective is not None or bool(
+            self._runtime and self._runtime.has_pending
+        )
 
     def resolve(self, message: str) -> str | None:
         normalized = " ".join(message.casefold().strip().split()).rstrip(".!?")
@@ -43,6 +59,8 @@ class RepositoryWorkspaceCoordinator:
             result = self._runtime.git.resolve(message)
             self._audit.record("git_control", self._label or "", self._status(result))
             return result
+        if self._clarification_objective is not None:
+            return self._resolve_clarification(message)
 
         match = self._SELECT.fullmatch(message)
         if match:
@@ -53,6 +71,12 @@ class RepositoryWorkspaceCoordinator:
             return self._leave()
         if normalized in {"repo günlüğü", "repo gunlugu"}:
             return self._render_audit()
+        match = self._SMART_ANALYZE.fullmatch(message)
+        if match:
+            return self._smart_analyze(match.group(1))
+        match = self._SMART_DEVELOP.fullmatch(message)
+        if match:
+            return self._smart_develop(match.group(1))
         match = self._DEVELOP.fullmatch(message)
         if match:
             return self._develop(match.group(1))
@@ -100,6 +124,74 @@ class RepositoryWorkspaceCoordinator:
             return self._missing()
         self._audit.record("coding_requested", self._label or "", "request_received")
         return self._runtime.coding.resolve("kodla: " + objective)
+
+    def _smart_analyze(self, objective: str) -> str:
+        if self._runtime is None:
+            return self._missing()
+        try:
+            brief = self._runtime.analyze_task(objective)
+        except (OSError, RuntimeError, ValueError) as error:
+            return f"AKILLI GÖREV ANALİZİ\nDurum: BAŞARISIZ\n{error}"
+        self._audit.record("smart_analysis", self._label or "", brief.kind)
+        return brief.render()
+
+    def _smart_develop(self, objective: str) -> str:
+        if self._runtime is None:
+            return self._missing()
+        try:
+            brief = self._runtime.analyze_task(objective)
+        except (OSError, RuntimeError, ValueError) as error:
+            return f"AKILLI GÖREV ANALİZİ\nDurum: BAŞARISIZ\n{error}"
+        if brief.clarification:
+            self._clarification_objective = brief.objective
+            self._audit.record("clarification_requested", self._label or "", brief.kind)
+            return brief.render()
+        return self._start_smart_coding(brief)
+
+    def _resolve_clarification(self, message: str) -> str:
+        normalized = " ".join(message.casefold().strip().split())
+        if normalized in {"iptal", "vazgeç", "vazgec"}:
+            self._clarification_objective = None
+            return "AKILLI GÖREV ANALİZİ\nDurum: İPTAL EDİLDİ"
+        if normalized.startswith("repo "):
+            return (
+                "AKILLI GÖREV ANALİZİ\nDurum: NETLEŞTİRME GEREKLİ\n"
+                "Önce soruya yanıt verin veya 'iptal' yazın."
+            )
+        answer = self._INPUT_PLACEHOLDER.sub("", message, count=1).strip()
+        if not answer or len(answer) > 2000:
+            return "AKILLI GÖREV ANALİZİ\nDurum: NETLEŞTİRME GEREKLİ\nYanıt 1-2000 karakter olmalıdır."
+        objective = self._clarification_objective
+        self._clarification_objective = None
+        combined = f"{objective}\nKullanıcı açıklaması: {answer}"
+        try:
+            brief = self._runtime.analyze_task(combined, allow_clarification=False)
+        except (OSError, RuntimeError, ValueError) as error:
+            return f"AKILLI GÖREV ANALİZİ\nDurum: BAŞARISIZ\n{error}"
+        if not brief.paths:
+            return (
+                "AKILLI GÖREV ANALİZİ\nDurum: KANIT YETERSİZ\n"
+                "Verilen açıklamayla mevcut bir kod veya test dosyası eşleştirilemedi."
+            )
+        self._audit.record("clarification_received", self._label or "", brief.kind)
+        return self._start_smart_coding(brief)
+
+    def _start_smart_coding(self, brief: RepositoryTaskBrief) -> str:
+        self._audit.record("smart_coding_requested", self._label or "", brief.kind)
+        if not brief.edit_paths:
+            return (
+                brief.render()
+                + "\n\nCoding Agent başlatılmadı: güvenli düzenleme kapsamı bulunamadı."
+            )
+        objective = (
+            brief.objective
+            + "\nBORU_DOSYA_KAPSAMI: "
+            + ", ".join(brief.edit_paths)
+            + "\n\nDOĞRULAMA_KANITI:\n"
+            + brief.coding_context()
+        )
+        result = self._runtime.coding.resolve("kodla: " + objective)
+        return brief.render() + "\n\n" + (result or "Coding Agent yanıt vermedi.")
 
     def _verify(self, value: str) -> str:
         if self._runtime is None:

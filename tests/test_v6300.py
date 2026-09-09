@@ -179,7 +179,7 @@ class StagedCodingTests(unittest.TestCase):
     def test_release_gate(self):
         with patch.object(main_v170, "build_application") as builder:
             build_release()
-            self.assertEqual(builder.call_args.kwargs["application_version"], "V10.0")
+            self.assertEqual(builder.call_args.kwargs["application_version"], "V11.0")
             self.assertTrue(builder.call_args.kwargs["staged_coding_enabled"])
             build_release("V6.0")
             self.assertFalse(builder.call_args.kwargs["staged_coding_enabled"])

@@ -19,6 +19,7 @@ from boru.tools import LLMProjectEditProposalPreparer, SafeEditWorkspace
 from boru.tools.edit_models import EditSource
 from boru.tools.project_edit_models import ProjectEditRequest
 from boru.tools.deterministic_project_edit import (
+    RequestedStateAlreadySatisfied,
     FallbackProjectEditProposalPreparer,
     RuleBasedStringAliasProjectEditPreparer,
 )
@@ -183,7 +184,7 @@ class RepositoryWorkspaceTests(unittest.TestCase):
 
     def test_v100_enables_isolated_repository_workspace(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            build_release()
+            build_release("V10.0")
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V10.0")
             self.assertTrue(flags["repository_workspace_enabled"])
@@ -192,6 +193,33 @@ class RepositoryWorkspaceTests(unittest.TestCase):
 
 
 class ProjectEditReliabilityTests(unittest.TestCase):
+    def test_already_supported_alias_is_verified_without_model_fallback(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "coordinator.py").write_text(
+                'if normalized in {"benchmark durumu", "benchmark durum"}:\n'
+                '    return status\n',
+                encoding="utf-8",
+            )
+            (root / "test_coordinator.py").write_text(
+                'status = coordinator.resolve("benchmark durum")\n',
+                encoding="utf-8",
+            )
+            fallback = Mock()
+            preparer = FallbackProjectEditProposalPreparer(
+                RuleBasedStringAliasProjectEditPreparer(SafeEditWorkspace(root)),
+                fallback,
+            )
+
+            with self.assertRaises(RequestedStateAlreadySatisfied):
+                preparer.prepare_project_edit(ProjectEditRequest(
+                    '"benchmark durum" yazımını "benchmark durumu" ile aynı kabul et',
+                    ("coordinator.py", "test_coordinator.py"),
+                    (),
+                ))
+
+            fallback.prepare_project_edit.assert_not_called()
+
     def test_command_alias_edit_is_grounded_without_model(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

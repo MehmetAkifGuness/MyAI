@@ -39,6 +39,7 @@ from boru.tools.deterministic_project_edit import (
     FallbackProjectEditProposalPreparer,
     RuleBasedStringAliasProjectEditPreparer,
 )
+from boru.repository.reasoning import IntelligentRepositoryTaskAnalyzer, RepositoryTaskBrief
 
 
 @dataclass(slots=True)
@@ -48,6 +49,7 @@ class RepositoryWorkspaceRuntime:
     evaluator: EvidenceEvaluator
     git: ControlledGitCoordinator | None
     staged_applier: StagedCodingApplier | None = None
+    task_analyzer: IntelligentRepositoryTaskAnalyzer | None = None
 
     @property
     def has_pending(self) -> bool:
@@ -63,11 +65,19 @@ class RepositoryWorkspaceRuntime:
             return report.workflow_report()
         return self.evaluator.validate_paths(paths)
 
+    def analyze_task(self, objective: str, *, allow_clarification: bool = True) -> RepositoryTaskBrief:
+        if self.task_analyzer is None:
+            raise RuntimeError("Akıllı görev analizi bu sürümde etkin değil.")
+        return self.task_analyzer.analyze(
+            self.root, objective, allow_clarification=allow_clarification
+        )
+
 
 def build_repository_workspace(
     root: Path,
     chat_model,
     sandbox_image: str,
+    intelligent_task_intake_enabled: bool = False,
 ) -> RepositoryWorkspaceRuntime:
     """Build an isolated edit/test/review pipeline rooted at one repository."""
     root = root.resolve()
@@ -185,4 +195,5 @@ def build_repository_workspace(
                 allowed_risks=(CommandRisk.SAFE, CommandRisk.REQUIRES_APPROVAL),
             ),
         )
-    return RepositoryWorkspaceRuntime(root, coding, evaluator, git, staged_applier)
+    analyzer = IntelligentRepositoryTaskAnalyzer() if intelligent_task_intake_enabled else None
+    return RepositoryWorkspaceRuntime(root, coding, evaluator, git, staged_applier, analyzer)

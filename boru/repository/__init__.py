@@ -5,6 +5,7 @@ from boru.repository.models import RepositoryProfile, RepositoryTaskContext
 from boru.repository.state import RepositoryAuditLog, RepositoryWorkspaceState
 from boru.repository.workspace import RepositoryWorkspaceRuntime, build_repository_workspace
 from boru.repository.workspace_coordinator import RepositoryWorkspaceCoordinator
+from boru.repository.reasoning import IntelligentRepositoryTaskAnalyzer, RepositoryTaskBrief
 
 __all__ = [
     "GitHubRepositoryImporter",
@@ -18,4 +19,6 @@ __all__ = [
     "RepositoryWorkspaceRuntime",
     "RepositoryWorkspaceState",
     "build_repository_workspace",
+    "IntelligentRepositoryTaskAnalyzer",
+    "RepositoryTaskBrief",
 ]

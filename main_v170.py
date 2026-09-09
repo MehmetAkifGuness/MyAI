@@ -383,6 +383,7 @@ def build_application(
     adaptive_model_routing_enabled: bool = False,
     repository_intelligence_enabled: bool = False,
     repository_workspace_enabled: bool = False,
+    intelligent_task_intake_enabled: bool = False,
     terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
@@ -448,6 +449,8 @@ def build_application(
 
     if repository_workspace_enabled and not (repository_intelligence_enabled and sandbox_enabled):
         raise ValueError("Repo çalışma alanı repo zekâsı ve Docker sandbox gerektirir.")
+    if intelligent_task_intake_enabled and not repository_workspace_enabled:
+        raise ValueError("Akıllı görev anlama repo çalışma alanı gerektirir.")
 
     settings = (
         AppSettings.from_env()
@@ -1232,7 +1235,12 @@ def build_application(
                 RepositoryInspector(),
                 GitHubRepositoryImporter(project_root),
                 workspace_factory=(
-                    (lambda root: build_repository_workspace(root, chat_model, sandbox_image))
+                    (lambda root: build_repository_workspace(
+                        root,
+                        chat_model,
+                        sandbox_image,
+                        intelligent_task_intake_enabled=intelligent_task_intake_enabled,
+                    ))
                     if repository_workspace_enabled else None
                 ),
                 workspace_state=(

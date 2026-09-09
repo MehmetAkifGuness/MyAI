@@ -157,6 +157,8 @@ class NaturalLanguageImprovementCoordinator:
         "git ",
         "güvenlik ",
         "kod incele:",
+        "repo ",
+        "github repo ",
         "kodla:",
         "mimari planla:",
         "proje bilgisi ",
