@@ -45,7 +45,12 @@ class ChatAppUI(ctk.CTk):
         self.geometry("980x880")
         self.minsize(800, 700)
 
+        self._jarvis_overlay = None
+        self._hotkey_mgr = None
+
         self._build_ui(title)
+        self._setup_jarvis_hotkey()
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._process_ui_events()
 
         self._write_message("SİSTEM", startup_message)
@@ -123,6 +128,18 @@ class ChatAppUI(ctk.CTk):
             command=self._toggle_terminal,
         )
         self.terminal_toggle_btn.pack(side="left", padx=(0, 10))
+
+        self.jarvis_btn = ctk.CTkButton(
+            control_frame,
+            text="⚡ Jarvis (Ctrl+Shift+B)",
+            width=150,
+            height=28,
+            fg_color="#553c9a",
+            hover_color="#6b46c1",
+            font=("Segoe UI", 12, "bold"),
+            command=self._toggle_jarvis,
+        )
+        self.jarvis_btn.pack(side="left", padx=(0, 10))
 
         self.reset_button = ctk.CTkButton(
             control_frame,
@@ -281,6 +298,7 @@ class ChatAppUI(ctk.CTk):
         chips_frame.pack(fill="x", padx=16, pady=(4, 6))
 
         chips = [
+            ("⚡ Jarvis", "_toggle_jarvis_"),
             ("❓ Yardım", "yardım"),
             ("🧪 Test Üret", "test üret: "),
             ("🕸️ Bağımlılık", "bağımlılıklar: "),
@@ -473,6 +491,9 @@ class ChatAppUI(ctk.CTk):
         if cmd == "_toggle_terminal_":
             self._toggle_terminal()
             return
+        if cmd == "_toggle_jarvis_":
+            self._toggle_jarvis()
+            return
         self.input_box.delete(0, "end")
         self.input_box.insert(0, cmd)
         self.input_box.focus_set()
@@ -664,3 +685,79 @@ class ChatAppUI(ctk.CTk):
             "SİSTEM",
             "Kısa süreli konuşma geçmişi temizlendi. Kalıcı profil ve öğrenilen dersler korunuyor.",
         )
+
+    def _setup_jarvis_hotkey(self) -> None:
+        """Jarvis Overlay ve Global Hotkey yöneticisini başlatır."""
+        try:
+            from boru.hotkey import GlobalHotkeyManager, JarvisOverlayWindow
+
+            self._jarvis_overlay = JarvisOverlayWindow(
+                master=self,
+                on_submit_command=self._handle_jarvis_command,
+                on_voice_requested=self._handle_jarvis_voice,
+                on_open_main_ui=self.bring_to_front,
+            )
+            self._hotkey_mgr = GlobalHotkeyManager()
+            # Ctrl+Shift+B -> Jarvis Spotlight Overlay Aç/Kapat
+            self._hotkey_mgr.register("ctrl+shift+b", lambda: self.after(0, self._toggle_jarvis))
+            # Ctrl+Shift+J -> Doğrudan Sesli Bas-Konuş (Push-to-Talk)
+            self._hotkey_mgr.register("ctrl+shift+j", lambda: self.after(0, self._trigger_jarvis_push_to_talk))
+            self._hotkey_mgr.start()
+            self.log_terminal("✔ Jarvis Global Hotkey (Ctrl+Shift+B, Ctrl+Shift+J) aktif.", "success")
+        except Exception as e:
+            self.log_terminal(f"⚠️ Jarvis Hotkey başlatılamadı: {e}", "info")
+
+    def _toggle_jarvis(self) -> None:
+        if getattr(self, "_jarvis_overlay", None):
+            self._jarvis_overlay.toggle()
+
+    def _trigger_jarvis_push_to_talk(self) -> None:
+        if getattr(self, "_jarvis_overlay", None):
+            self._jarvis_overlay.show()
+            self._handle_jarvis_voice()
+
+    def _handle_jarvis_command(self, cmd: str) -> str:
+        """Jarvis Overlay üzerinden gelen komutları yürütür ve ana UI'a da yansıtır."""
+        self.log_terminal(f"❯ [JARVIS]: {cmd}", "cmd")
+        self._queue_message("👤 Sen (Jarvis)", cmd)
+        try:
+            reply = self._assistant.reply(cmd)
+            self._queue_message("🐺 Börü", reply)
+            if self._voice_output.enabled and reply:
+                self._voice_output.speak(reply)
+            return reply
+        except Exception as err:
+            self.log_terminal(f"❌ Jarvis komut hatası: {err}", "error")
+            raise err
+
+    def _handle_jarvis_voice(self) -> None:
+        """Jarvis mikrofonundan ses dinler ve overlay'e aktarır."""
+        if not getattr(self, "_jarvis_overlay", None):
+            return
+
+        self._jarvis_overlay.set_status("🎙️ Dinliyor...", "#ecc94b")
+
+        def _voice_worker():
+            try:
+                text = self._voice_input.listen_once(timeout=5.0, phrase_time_limit=10.0)
+                self.after(0, lambda: self._jarvis_overlay.set_input_text(text))
+                self.after(60, lambda: self._jarvis_overlay._handle_submit())
+            except Exception as e:
+                self.after(0, lambda: self._jarvis_overlay.set_status(f"❌ {e}", "#f56565"))
+
+        threading.Thread(target=_voice_worker, daemon=True).start()
+
+    def bring_to_front(self) -> None:
+        """Ana pencereyi masaüstünde tüm pencerelerin önüne getirir."""
+        self.deiconify()
+        self.lift()
+        self.attributes("-topmost", True)
+        self.after(100, lambda: self.attributes("-topmost", False))
+        self.focus_force()
+
+    def _on_close(self) -> None:
+        """Pencere kapatıldığında global hotkey dinleyicisini temizce durdurur."""
+        if getattr(self, "_hotkey_mgr", None):
+            self._hotkey_mgr.stop()
+        self.destroy()
+
