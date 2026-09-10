@@ -11,5 +11,14 @@ __all__ = [
     "locate_unique_fuzzy_slice",
     "match_command_prefix",
     "normalize_turkish",
+    "FreeFormIntentRouter",
+    "IntentRouteResult",
+    "RoutedIntent",
 ]
+
+from boru.nlu.intent_router import (
+    FreeFormIntentRouter,
+    IntentRouteResult,
+    RoutedIntent,
+)
 

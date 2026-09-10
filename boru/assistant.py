@@ -2,6 +2,7 @@ from collections.abc import Sequence
 
 from boru.context import ConversationContextBuilder
 from boru.context_reference_resolver import ConversationReferenceResolver
+from boru.nlu.intent_router import FreeFormIntentRouter
 from boru.contracts import (
     AssistantContextProvider,
     ChatModel,
@@ -55,6 +56,7 @@ class AssistantService:
             context_providers
         )
         self._reference_resolver = ConversationReferenceResolver()
+        self._intent_router = FreeFormIntentRouter()
 
     def reply(
         self,
@@ -71,11 +73,18 @@ class AssistantService:
             user_text
         )
 
+        # 1. Doğrudan orijinal metinle dene
         direct_answer = (
             self._resolve_direct_response(
                 user_text
             )
         )
+
+        # 2. Doğrudan çözülemediyse serbest doğal dil niyet yönlendiricisini dene
+        if direct_answer is None:
+            routed = self._intent_router.route(user_text)
+            if routed.transformed_message != user_text:
+                direct_answer = self._resolve_direct_response(routed.transformed_message)
 
         if direct_answer is not None:
             self._history.add_turn(
@@ -130,6 +139,11 @@ class AssistantService:
                 user_text
             )
         )
+
+        if direct_answer is None:
+            routed = self._intent_router.route(user_text)
+            if routed.transformed_message != user_text:
+                direct_answer = self._resolve_direct_response(routed.transformed_message)
 
         if direct_answer is not None:
             self._history.add_turn(
