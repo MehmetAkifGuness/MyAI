@@ -29,7 +29,7 @@ class JarvisOverlayWindow(ctk.CTkToplevel):
         self._on_voice = on_voice_requested
         self._on_open_main = on_open_main_ui
 
-        self.title("🐺 Börü Jarvis Quick Bar")
+        self.title("🐺 Börü Hızlı Komut")
         self.attributes("-topmost", True)
         self.overrideredirect(True)  # Çerçevesiz, şık yüzen pencere
         self.configure(fg_color="#10121a")
@@ -61,7 +61,7 @@ class JarvisOverlayWindow(ctk.CTkToplevel):
 
         title_label = ctk.CTkLabel(
             header,
-            text="🐺 BÖRÜ JARVIS",
+            text="🐺 BÖRÜ",
             font=("Segoe UI", 12, "bold"),
             text_color="#ecc94b",
         )
@@ -254,4 +254,9 @@ class JarvisOverlayWindow(ctk.CTkToplevel):
         self.hide()
         if self._on_open_main:
             self._on_open_main()
+
+
+# Geriye dönük uyumluluk için alias
+BoruOverlayWindow = JarvisOverlayWindow
+
 

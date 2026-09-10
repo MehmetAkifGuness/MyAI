@@ -34,6 +34,40 @@ def is_stop_phrase(text: str) -> bool:
     return False
 
 
+WAKE_WORDS = {
+    "börü",
+    "boru",
+    "hey börü",
+    "hey boru",
+    "ey börü",
+    "ey boru",
+    "alo börü",
+    "börü dinle",
+}
+
+
+def parse_wake_word(text: str) -> tuple[bool, str]:
+    """
+    Kullanıcının 'Börü' veya 'Hey Börü' deyip demediğini tespit eder.
+    Dönüş: (is_wake_word_detected, remaining_command)
+    Örnek:
+      'Börü' -> (True, '')
+      'Hey Börü nasılsın' -> (True, 'nasılsın')
+      'Python kodunu açıkla' -> (False, 'Python kodunu açıkla')
+    """
+    cleaned = text.strip()
+    low = cleaned.lower()
+
+    for w in sorted(WAKE_WORDS, key=len, reverse=True):
+        if low == w or low in (f"{w}!", f"{w}?", f"{w}."):
+            return True, ""
+        if low.startswith(w + " ") or low.startswith(w + ",") or low.startswith(w + ":"):
+            remaining = cleaned[len(w):].lstrip(" ,:!?.")
+            return True, remaining
+
+    return False, cleaned
+
+
 class ContinuousVoiceController:
     """
     Jarvis benzeri 'Hands-Free' (Dokunmadan) Kesintisiz Sesli Diyalog Kontrolcüsü.
@@ -139,6 +173,21 @@ class ContinuousVoiceController:
                     )
                     break
 
+                # Börü Uyandırma Kelimesi Kontrolü ("Börü" veya "Hey Börü ...")
+                is_wake, remaining_cmd = parse_wake_word(text)
+                if is_wake:
+                    if not remaining_cmd:
+                        self._set_status("🐺 Dinliyorum...", "#ecc94b")
+                        self._voice_output.speak(
+                            "Dinliyorum, buyrun!",
+                            async_mode=False,
+                            force=True,
+                        )
+                        time.sleep(0.3)
+                        continue
+                    else:
+                        text = remaining_cmd
+
                 # 1. Asistan Yanıtı Üret
                 self._set_status("⚡ Börü Düşünüyor...", "#3182ce")
                 try:
@@ -164,3 +213,4 @@ class ContinuousVoiceController:
                     self._on_dialogue_ended()
                 except Exception:
                     pass
+

@@ -30,6 +30,37 @@ class TestStopPhraseDetector:
         assert not is_stop_phrase("bugün hava nasıl")
 
 
+class TestWakeWordDetector:
+    def test_exact_wake_word(self):
+        from boru.voice.continuous_dialogue import parse_wake_word
+
+        is_wake, rem = parse_wake_word("Börü")
+        assert is_wake
+        assert rem == ""
+
+        is_wake, rem = parse_wake_word("Hey Börü!")
+        assert is_wake
+        assert rem == ""
+
+    def test_wake_word_with_command(self):
+        from boru.voice.continuous_dialogue import parse_wake_word
+
+        is_wake, rem = parse_wake_word("Börü bu fonksiyonu test et")
+        assert is_wake
+        assert rem == "bu fonksiyonu test et"
+
+        is_wake, rem = parse_wake_word("Hey Börü, git status çalıştır")
+        assert is_wake
+        assert rem == "git status çalıştır"
+
+    def test_no_wake_word(self):
+        from boru.voice.continuous_dialogue import parse_wake_word
+
+        is_wake, rem = parse_wake_word("pytest tests çalıştır")
+        assert not is_wake
+        assert rem == "pytest tests çalıştır"
+
+
 class TestContinuousVoiceController:
     def test_dialogue_single_interaction_and_stop(self):
         mock_input = MagicMock()
@@ -73,7 +104,7 @@ class TestContinuousVoiceController:
         controller.stop()
 
         assert len(replies_sent) >= 1
-        assert "Cevap: Börü bugün nasılsın" in replies_sent[0]
+        assert "Cevap: bugün nasılsın" in replies_sent[0]
         # Börü yanıtı seslendirdi mi?
         mock_output.speak.assert_called()
         assert not controller.is_active
@@ -94,3 +125,4 @@ class TestContinuousVoiceController:
         controller.start()
         time.sleep(0.4)
         assert not controller.is_active
+

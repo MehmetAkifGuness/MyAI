@@ -131,7 +131,7 @@ class ChatAppUI(ctk.CTk):
 
         self.jarvis_btn = ctk.CTkButton(
             control_frame,
-            text="⚡ Jarvis (Ctrl+Shift+B)",
+            text="⚡ Börü (Ctrl+Shift+B)",
             width=150,
             height=28,
             fg_color="#553c9a",
@@ -298,7 +298,7 @@ class ChatAppUI(ctk.CTk):
         chips_frame.pack(fill="x", padx=16, pady=(4, 6))
 
         chips = [
-            ("⚡ Jarvis", "_toggle_jarvis_"),
+            ("⚡ Börü", "_toggle_jarvis_"),
             ("❓ Yardım", "yardım"),
             ("🧪 Test Üret", "test üret: "),
             ("🕸️ Bağımlılık", "bağımlılıklar: "),
@@ -713,16 +713,16 @@ class ChatAppUI(ctk.CTk):
             # Ctrl+Shift+J -> Doğrudan Kesintisiz Hands-Free Sesli Sohbeti Başlat/Durdur
             self._hotkey_mgr.register("ctrl+shift+j", lambda: self.after(0, self._toggle_continuous_voice))
             self._hotkey_mgr.start()
-            self.log_terminal("✔ Jarvis Global Hotkey (Ctrl+Shift+B, Ctrl+Shift+J) & Hands-Free aktif.", "success")
+            self.log_terminal("✔ Börü Global Kısayolları (Ctrl+Shift+B, Ctrl+Shift+J) & Hands-Free aktif.", "success")
         except Exception as e:
-            self.log_terminal(f"⚠️ Jarvis Hotkey başlatılamadı: {e}", "info")
+            self.log_terminal(f"⚠️ Börü Kısayol sistemi başlatılamadı: {e}", "info")
 
     def _toggle_jarvis(self) -> None:
         if getattr(self, "_jarvis_overlay", None):
             self._jarvis_overlay.toggle()
 
     def _toggle_continuous_voice(self) -> None:
-        """Jarvis Hands-Free Kesintisiz Sesli Sohbet döngüsünü başlatır veya durdurur."""
+        """Börü Hands-Free Kesintisiz Sesli Sohbet döngüsünü başlatır veya durdurur."""
         if not getattr(self, "_continuous_voice", None):
             return
 
@@ -768,9 +768,9 @@ class ChatAppUI(ctk.CTk):
         self.after(0, lambda: self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78"))
 
     def _handle_jarvis_command(self, cmd: str) -> str:
-        """Jarvis Overlay üzerinden klavyeyle gönderilen komutları yürütür."""
-        self.log_terminal(f"❯ [JARVIS]: {cmd}", "cmd")
-        self._queue_message("👤 Sen (Jarvis)", cmd)
+        """Börü Overlay üzerinden klavyeyle gönderilen komutları yürütür."""
+        self.log_terminal(f"❯ [BÖRÜ]: {cmd}", "cmd")
+        self._queue_message("👤 Sen (Börü)", cmd)
         try:
             reply = self._assistant.reply(cmd)
             self._queue_message("🐺 Börü", reply)
@@ -778,7 +778,7 @@ class ChatAppUI(ctk.CTk):
                 self._voice_output.speak(reply)
             return reply
         except Exception as err:
-            self.log_terminal(f"❌ Jarvis komut hatası: {err}", "error")
+            self.log_terminal(f"❌ Börü komut hatası: {err}", "error")
             raise err
 
     def bring_to_front(self) -> None:

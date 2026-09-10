@@ -53,21 +53,75 @@ class VoiceOutputService:
 
     def _speak_sync(self, text: str) -> None:
         with self._lock:
+            # 1. Öncelik: Ultra Doğal Microsoft Neural Türkçe Sesi (tr-TR-AhmetNeural)
+            if self._speak_neural_sync(text):
+                return
+
+            # 2. Yedek: Yerel Windows SpeechSynthesizer
+            self._speak_sapi_sync(text)
+
+    def _speak_neural_sync(self, text: str) -> bool:
+        """Microsoft Neural Türkçe yapay zeka sesi ile insan doğallığında seslendirir."""
+        try:
+            import asyncio
+            import base64
+            import os
+            import tempfile
+            import edge_tts
+
+            with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
+                tmp_path = f.name
+
+            async def _generate():
+                communicate = edge_tts.Communicate(text, voice="tr-TR-AhmetNeural")
+                await communicate.save(tmp_path)
+
+            asyncio.run(_generate())
+
+            norm_path = tmp_path.replace("\\", "/")
+            word_count = len(text.split())
+            est_seconds = max(1.8, word_count * 0.38 + 0.8)
+
+            ps_script = f"""
+            Add-Type -AssemblyName PresentationCore
+            $player = New-Object System.Windows.Media.MediaPlayer
+            $player.Open([System.Uri]'{norm_path}')
+            $player.Play()
+            Start-Sleep -Milliseconds {int(est_seconds * 1000)}
+            $player.Close()
+            """
+            encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
+            subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=int(est_seconds + 10),
+            )
             try:
-                import base64
-                # Windows PowerShell SpeechSynthesizer ile seslendirme (-EncodedCommand ile UTF-16LE garantisi)
-                escaped = text.replace("'", "''").replace('"', '""')
-                ps_script = (
-                    "Add-Type -AssemblyName System.Speech; "
-                    "$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
-                    f"$synth.Speak('{escaped}')"
-                )
-                encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
-                subprocess.run(
-                    ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=20,
-                )
-            except Exception as e:
-                logger.debug(f"Seslendirme başarısız oldu: {e}")
+                os.remove(tmp_path)
+            except Exception:
+                pass
+            return True
+        except Exception as err:
+            logger.debug(f"Neural TTS kullanılamadı ({err}), yerel SAPI'ye geçiliyor.")
+            return False
+
+    def _speak_sapi_sync(self, text: str) -> None:
+        """Windows yerel SAPI ile seslendirme (Yedek motor)."""
+        try:
+            import base64
+            escaped = text.replace("'", "''").replace('"', '""')
+            ps_script = (
+                "Add-Type -AssemblyName System.Speech; "
+                "$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
+                f"$synth.Speak('{escaped}')"
+            )
+            encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
+            subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=20,
+            )
+        except Exception as e:
+            logger.debug(f"Yerel SAPI seslendirme hatası: {e}")
