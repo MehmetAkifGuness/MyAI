@@ -1,7 +1,7 @@
-- yazılan kelimeler yanlış olsa bile onları algılaması gerekecek 
+[X] - yazılan kelimeler yanlış olsa bile onları algılaması gerekecek (NLU Fuzzy Matcher & Toleranslı Komutlar TAMAMLANDI)
 
-- codex nasıl düzenleme yapıyorsa ondan daha iyi yapabilecek hale gelmesi gerekecek 
+[X] - codex nasıl düzenleme yapıyorsa ondan daha iyi yapabilecek hale gelmesi gerekecek (AST Semantik Kod Düzenleyici & Self-Healing Syntax Guards TAMAMLANDI)
 
-- yaptığımız ai modeli kendini sürekli gelişecek formata gelmesi gerekecek .
+[X] - yaptığımız ai modeli kendini sürekli gelişecek formata gelmesi gerekecek (Öz-İyileştirme & Reflection Memory Loop TAMAMLANDI)
 
-- 
+[X] - UI & Sesle Konuşma: Canlı kelime akışı (streaming), modern cyber arayüz ve çift yönlü mikrofon STT + sesli yanıt TTS (TAMAMLANDI)
