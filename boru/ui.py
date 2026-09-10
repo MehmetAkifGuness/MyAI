@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 import queue
 import re
+import subprocess
 import threading
 import time
 
@@ -16,8 +17,8 @@ ctk.set_default_color_theme("blue")
 
 class ChatAppUI(ctk.CTk):
     """
-    Modernleştirilmiş, Sol Dosya Ağacı ve Görsel Renkli Diff destekli
-    profesyonel Börü masaüstü arayüzü.
+    Modernleştirilmiş, Sol Dosya Ağacı, Canlı Konsol/Terminal ve
+    Görsel Renkli Diff destekli profesyonel Börü masaüstü arayüzü.
     """
 
     def __init__(
@@ -38,6 +39,7 @@ class ChatAppUI(ctk.CTk):
         self._status_after_id: str | None = None
         self._is_listening = False
         self._sidebar_visible = True
+        self._terminal_visible = False
 
         self.title(title)
         self.geometry("980x880")
@@ -108,7 +110,19 @@ class ChatAppUI(ctk.CTk):
             offvalue=False,
             progress_color="#3182ce",
         )
-        self.voice_toggle.pack(side="left", padx=(0, 12))
+        self.voice_toggle.pack(side="left", padx=(0, 10))
+
+        self.terminal_toggle_btn = ctk.CTkButton(
+            control_frame,
+            text="📟 Terminal",
+            width=85,
+            height=28,
+            fg_color="#2d3748",
+            hover_color="#4a5568",
+            font=("Segoe UI", 12),
+            command=self._toggle_terminal,
+        )
+        self.terminal_toggle_btn.pack(side="left", padx=(0, 10))
 
         self.reset_button = ctk.CTkButton(
             control_frame,
@@ -157,19 +171,19 @@ class ChatAppUI(ctk.CTk):
         self.file_scroll.pack(fill="both", expand=True, padx=4, pady=4)
         self._populate_file_tree()
 
-        # Sağ: Sohbet ve Diff Alanı
-        right_container = ctk.CTkFrame(self.main_body, fg_color="#13141c", corner_radius=12)
-        right_container.pack(side="left", fill="both", expand=True)
+        # Sağ: Sohbet, Diff ve Katlanabilir Terminal Alanı
+        self.right_container = ctk.CTkFrame(self.main_body, fg_color="#13141c", corner_radius=12)
+        self.right_container.pack(side="left", fill="both", expand=True)
 
         self.chat_box = ctk.CTkTextbox(
-            right_container,
+            self.right_container,
             state="disabled",
             wrap="word",
             font=("Segoe UI", 13),
             fg_color="transparent",
             text_color="#f7fafc",
         )
-        self.chat_box.pack(fill="both", expand=True, padx=12, pady=12)
+        self.chat_box.pack(fill="both", expand=True, padx=12, pady=(12, 6))
 
         # Renkli Diff Etiketleri Tanımla (Tkinter Text Tag'leri)
         self.chat_box.tag_config("diff_add", foreground="#48bb78", background="#1c2d20")
@@ -179,16 +193,101 @@ class ChatAppUI(ctk.CTk):
         self.chat_box.tag_config("sender_bot", foreground="#ecc94b", font=("Segoe UI", 13, "bold"))
         self.chat_box.tag_config("divider", foreground="#4a5568")
 
+        # Katlanabilir Canlı Konsol & Terminal Paneli (Varsayılan kapalı)
+        self.terminal_frame = ctk.CTkFrame(self.right_container, height=200, fg_color="#0d1117", corner_radius=10)
+        self.terminal_frame.pack_propagate(False)
+
+        term_header = ctk.CTkFrame(self.terminal_frame, fg_color="transparent", height=28)
+        term_header.pack(fill="x", padx=8, pady=(6, 2))
+
+        ctk.CTkLabel(
+            term_header,
+            text="📟 CANLI KONSOL & TEST TERMİNALİ",
+            font=("Segoe UI", 11, "bold"),
+            text_color="#58a6ff",
+        ).pack(side="left")
+
+        ctk.CTkButton(
+            term_header,
+            text="❌ Kapat",
+            width=55,
+            height=22,
+            font=("Segoe UI", 10),
+            fg_color="#30363d",
+            hover_color="#da3633",
+            command=self._toggle_terminal,
+        ).pack(side="right", padx=(4, 0))
+
+        ctk.CTkButton(
+            term_header,
+            text="🧹 Temizle",
+            width=60,
+            height=22,
+            font=("Segoe UI", 10),
+            fg_color="#21262d",
+            hover_color="#30363d",
+            command=self._clear_terminal,
+        ).pack(side="right")
+
+        self.terminal_box = ctk.CTkTextbox(
+            self.terminal_frame,
+            state="disabled",
+            wrap="none",
+            font=("Consolas", 11),
+            fg_color="#090d13",
+            text_color="#c9d1d9",
+        )
+        self.terminal_box.pack(fill="both", expand=True, padx=8, pady=(2, 4))
+        self.terminal_box.tag_config("term_cmd", foreground="#f0883e", font=("Consolas", 11, "bold"))
+        self.terminal_box.tag_config("term_success", foreground="#3fb950")
+        self.terminal_box.tag_config("term_error", foreground="#f85149")
+        self.terminal_box.tag_config("term_info", foreground="#58a6ff")
+        self.terminal_box.tag_config("term_dim", foreground="#8b949e")
+
+        term_cmd_bar = ctk.CTkFrame(self.terminal_frame, fg_color="transparent")
+        term_cmd_bar.pack(fill="x", padx=8, pady=(0, 6))
+
+        ctk.CTkLabel(
+            term_cmd_bar,
+            text="❯",
+            font=("Consolas", 12, "bold"),
+            text_color="#58a6ff",
+        ).pack(side="left", padx=(2, 6))
+
+        self.terminal_cmd_entry = ctk.CTkEntry(
+            term_cmd_bar,
+            placeholder_text="Komut çalıştır (örn: pytest tests/test_v01.py, git status)...",
+            font=("Consolas", 11),
+            height=26,
+            fg_color="#161b22",
+            border_color="#30363d",
+        )
+        self.terminal_cmd_entry.pack(side="left", fill="x", expand=True, padx=(0, 6))
+        self.terminal_cmd_entry.bind("<Return>", lambda _e: self._execute_terminal_command())
+
+        ctk.CTkButton(
+            term_cmd_bar,
+            text="Çalıştır",
+            width=65,
+            height=26,
+            font=("Segoe UI", 11),
+            fg_color="#238636",
+            hover_color="#2ea043",
+            command=self._execute_terminal_command,
+        ).pack(side="right")
+
         # ── 3. Hızlı Eylem Çipleri (Quick Action Chips) ────────────────
         chips_frame = ctk.CTkFrame(self, fg_color="transparent")
         chips_frame.pack(fill="x", padx=16, pady=(4, 6))
 
         chips = [
             ("❓ Yardım", "yardım"),
-            ("🌐 Web Durum", "web durum"),
+            ("🧪 Test Üret", "test üret: "),
+            ("📟 Terminal", "_toggle_terminal_"),
             ("🔧 İyileştir", "iyileştir: "),
             ("💻 Kodla", "kodla: "),
             ("📊 Değerlendir", "kendini değerlendir:"),
+            ("🌐 Web Durum", "web durum"),
         ]
 
         for label, cmd in chips:
@@ -262,6 +361,70 @@ class ChatAppUI(ctk.CTk):
             self._sidebar_visible = True
             self.toggle_sidebar_btn.configure(fg_color="#2d3748")
 
+    def _toggle_terminal(self) -> None:
+        if self._terminal_visible:
+            self.terminal_frame.pack_forget()
+            self._terminal_visible = False
+            self.terminal_toggle_btn.configure(fg_color="#2d3748")
+        else:
+            self.terminal_frame.pack(fill="x", padx=12, pady=(0, 10))
+            self._terminal_visible = True
+            self.terminal_toggle_btn.configure(fg_color="#3182ce")
+            self.terminal_cmd_entry.focus_set()
+
+    def _clear_terminal(self) -> None:
+        self.terminal_box.configure(state="normal")
+        self.terminal_box.delete("1.0", "end")
+        self.terminal_box.configure(state="disabled")
+
+    def log_terminal(self, message: str, level: str = "info") -> None:
+        """Arka plan iş parçacıklarından güvenle canlı terminal paneline log basar."""
+        self.after(0, self._append_terminal_log, message, level)
+
+    def _append_terminal_log(self, message: str, level: str) -> None:
+        tag = {
+            "cmd": "term_cmd",
+            "success": "term_success",
+            "error": "term_error",
+            "info": "term_info",
+        }.get(level, "term_dim")
+        self.terminal_box.configure(state="normal")
+        self.terminal_box.insert("end", f"{message}\n", tag)
+        self.terminal_box.see("end")
+        self.terminal_box.configure(state="disabled")
+
+    def _execute_terminal_command(self) -> None:
+        cmd = self.terminal_cmd_entry.get().strip()
+        if not cmd:
+            return
+        self.terminal_cmd_entry.delete(0, "end")
+        if not self._terminal_visible:
+            self._toggle_terminal()
+        threading.Thread(target=self._run_cmd_async, args=(cmd,), daemon=True).start()
+
+    def _run_cmd_async(self, cmd: str) -> None:
+        self.log_terminal(f"❯ {cmd}", "cmd")
+        try:
+            process = subprocess.Popen(
+                cmd,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                cwd=str(self._project_root),
+            )
+            if process.stdout:
+                for line in process.stdout:
+                    self.log_terminal(line.rstrip())
+            process.wait()
+            if process.returncode == 0:
+                self.log_terminal("✔ Başarılı (Çıkış kodu: 0)", "success")
+            else:
+                self.log_terminal(f"❌ Başarısız (Çıkış kodu: {process.returncode})", "error")
+        except Exception as err:
+            self.log_terminal(f"❌ Komut yürütülemedi: {err}", "error")
+
     def _populate_file_tree(self) -> None:
         """Proje kökündeki ilgili Python ve konfigürasyon dosyalarını listeler."""
         for widget in self.file_scroll.winfo_children():
@@ -305,6 +468,9 @@ class ChatAppUI(ctk.CTk):
         self.input_box.focus_set()
 
     def _insert_chip(self, cmd: str) -> None:
+        if cmd == "_toggle_terminal_":
+            self._toggle_terminal()
+            return
         self.input_box.delete(0, "end")
         self.input_box.insert(0, cmd)
         self.input_box.focus_set()
@@ -464,6 +630,7 @@ class ChatAppUI(ctk.CTk):
         ).start()
 
     def _generate_reply(self, message: str) -> None:
+        self.log_terminal(f"❯ [KULLANICI]: {message}", "cmd")
         try:
             stream_func = getattr(self._assistant, "reply_stream", None)
             full_response = ""
@@ -477,11 +644,14 @@ class ChatAppUI(ctk.CTk):
                 full_response = self._assistant.reply(message)
                 self._queue_message("🐺 Börü", full_response)
 
+            self.log_terminal(f"✔ Yanıt tamamlandı ({len(full_response)} karakter)", "success")
+
             # Sesli yanıt açıksa seslendir
             if self._voice_output.enabled and full_response:
                 self._voice_output.speak(full_response)
 
         except Exception as error:
+            self.log_terminal(f"❌ Hata: {error}", "error")
             self._queue_message("❌ Hata", f"Yanıt üretilemedi: {error}")
         finally:
             self._queue_busy(False)
