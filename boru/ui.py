@@ -283,6 +283,8 @@ class ChatAppUI(ctk.CTk):
         chips = [
             ("❓ Yardım", "yardım"),
             ("🧪 Test Üret", "test üret: "),
+            ("🕸️ Bağımlılık", "bağımlılıklar: "),
+            ("🔍 Sembol", "sembol ara: "),
             ("📟 Terminal", "_toggle_terminal_"),
             ("🔧 İyileştir", "iyileştir: "),
             ("💻 Kodla", "kodla: "),

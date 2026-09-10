@@ -14,6 +14,7 @@ from boru.improvement import (
 from boru.agent import GeneralAgentCoordinator, ReadOnlyToolAgent
 from boru.code_index import (
     CodeSearchTool,
+    DependencyGraphCoordinator,
     FileSymbolsTool,
     ImpactAnalysisTool,
     ProjectOverviewTool,
@@ -1449,6 +1450,7 @@ def build_application(
                 *([] if runtime_repair_enabled else [operation_coordinator]),
                 *([test_agent] if test_agent is not None else []),
                 AutoTestGeneratorCoordinator(test_runner=(test_agent.resolve if test_agent is not None else None)),
+                DependencyGraphCoordinator(project_root),
                 *([security_agent] if security_agent is not None else []),
                 *([code_review_agent] if code_review_agent is not None else []),
                 command_coordinator,

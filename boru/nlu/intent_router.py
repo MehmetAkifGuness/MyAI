@@ -18,6 +18,8 @@ class RoutedIntent(str, Enum):
     IMPROVEMENT = "IMPROVEMENT"
     TESTING = "TESTING"
     TEST_GENERATION = "TEST_GENERATION"
+    DEPENDENCY = "DEPENDENCY"
+    SYMBOL_SEARCH = "SYMBOL_SEARCH"
     RESEARCH = "RESEARCH"
     STATUS = "STATUS"
     GENERAL_CHAT = "GENERAL_CHAT"
@@ -41,6 +43,16 @@ class FreeFormIntentRouter:
     _FILE_REGEX = re.compile(
         r"\b(?P<path>[a-zA-Z0-9_\-\./\\]+\.(?:py|json|md|txt|html|css|js|sql|yaml|yml|toml))\b",
         re.IGNORECASE,
+    )
+
+    # Bağımlılık / Etki analizi niyetleri
+    _DEPENDENCY_PATTERNS = (
+        re.compile(r"(?:ba[ğg][ıi]ml[ıi]|etki\s+analiz|kimler\s+kullan)", re.IGNORECASE),
+    )
+
+    # Sembol arama niyetleri
+    _SYMBOL_SEARCH_PATTERNS = (
+        re.compile(r"(?:sembol\w*\s+ara|sembol\w*\s+bul|fonksiyon\w*\s+ara|s[ıi]n[ıi]f\w*\s+ara|nerede\s+tan[ıi]ml[ıi])", re.IGNORECASE),
     )
 
     # Test üretme niyetleri
@@ -81,10 +93,23 @@ class FreeFormIntentRouter:
                 original_message=raw,
             )
 
-        # Zaten açık bir komut ön eki varsa dokunma (örn: 'kodla:', 'iyileştir:', 'yardım', 'test üret:')
+        # Zaten açık bir komut ön eki varsa dokunma (örn: 'kodla:', 'iyileştir:', 'yardım', 'test üret:', 'bağımlılıklar:')
         colon_prefix = raw.partition(":")[0].strip().casefold()
-        if colon_prefix in {"kodla", "coding", "iyileştir", "iyilestir", "test ajanı", "test üret", "test uret", "test oluştur", "test yaz", "araştır", "web araştır"}:
-            intent = RoutedIntent.TEST_GENERATION if "üret" in colon_prefix or "yaz" in colon_prefix and "test" in colon_prefix else (RoutedIntent.CODING if "kod" in colon_prefix else RoutedIntent.IMPROVEMENT)
+        if colon_prefix in {
+            "kodla", "coding", "iyileştir", "iyilestir", "test ajanı", "test üret",
+            "test uret", "test oluştur", "test yaz", "araştır", "web araştır",
+            "bağımlılıklar", "bagimliliklar", "etki analizi", "sembol ara", "yeniden adlandır", "refactor",
+        }:
+            if "bağım" in colon_prefix or "etki" in colon_prefix:
+                intent = RoutedIntent.DEPENDENCY
+            elif "sembol" in colon_prefix:
+                intent = RoutedIntent.SYMBOL_SEARCH
+            elif "üret" in colon_prefix or ("yaz" in colon_prefix and "test" in colon_prefix):
+                intent = RoutedIntent.TEST_GENERATION
+            elif "kod" in colon_prefix or "refactor" in colon_prefix:
+                intent = RoutedIntent.CODING
+            else:
+                intent = RoutedIntent.IMPROVEMENT
             return IntentRouteResult(
                 intent=intent,
                 confidence=1.0,
@@ -94,7 +119,34 @@ class FreeFormIntentRouter:
 
         file_matches = self._FILE_REGEX.findall(raw)
 
-        # 1. Test Üretme niyeti kontrolü (Örn: 'boru/tools.py için test üret/yaz')
+        # 1. Bağımlılık / Etki Analizi niyeti kontrolü (Örn: 'boru/tools.py bağımlılıklarını göster')
+        for pattern in self._DEPENDENCY_PATTERNS:
+            if pattern.search(raw):
+                if file_matches:
+                    transformed = f"bağımlılıklar: {file_matches[0]}"
+                    return IntentRouteResult(
+                        intent=RoutedIntent.DEPENDENCY,
+                        confidence=0.93,
+                        transformed_message=transformed,
+                        original_message=raw,
+                    )
+
+        # 2. Sembol Arama niyeti kontrolü (Örn: 'normalize_turkish sembolünü ara')
+        for pattern in self._SYMBOL_SEARCH_PATTERNS:
+            if pattern.search(raw):
+                words = re.findall(r"[\w]+", raw, re.UNICODE)
+                ignore_prefixes = ("sembol", "ara", "bul", "nerede", "tanım", "tanim", "fonksiyon", "sınıf", "sinif", "metod", "için", "icin")
+                candidates = [w for w in words if not w.lower().startswith(ignore_prefixes)]
+                if candidates:
+                    transformed = f"sembol ara: {candidates[0]}"
+                    return IntentRouteResult(
+                        intent=RoutedIntent.SYMBOL_SEARCH,
+                        confidence=0.91,
+                        transformed_message=transformed,
+                        original_message=raw,
+                    )
+
+        # 3. Test Üretme niyeti kontrolü (Örn: 'boru/tools.py için test üret/yaz')
         for pattern in self._TEST_GENERATE_PATTERNS:
             if pattern.search(raw):
                 if file_matches:
