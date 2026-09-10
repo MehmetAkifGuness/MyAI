@@ -16,6 +16,7 @@ from boru.tools.edit_workspace import (
     WorkspaceEditError,
 )
 from boru.nlu.fuzzy_matcher import locate_unique_fuzzy_slice
+from boru.tools.ast_editor import AstSemanticEditor
 
 
 class RuleBasedSmartEditRequestParser:
@@ -324,11 +325,24 @@ class LLMSmartEditProposalPreparer:
                 continue
 
             try:
+                # Python dosyası ise sonuç içeriğini AST ile doğrula / self-heal et
+                new_text = payload.new_text
+                if request.path.casefold().endswith(".py"):
+                    full_updated = source.content.replace(payload.old_text, new_text, 1)
+                    if not AstSemanticEditor.verify_syntax(full_updated):
+                        healed_full = AstSemanticEditor.attempt_self_heal(full_updated)
+                        if AstSemanticEditor.verify_syntax(healed_full):
+                            # İyileştirilmiş koda göre new_text'i güncelle
+                            prefix = source.content[: source.content.find(payload.old_text)]
+                            suffix = source.content[source.content.find(payload.old_text) + len(payload.old_text) :]
+                            if healed_full.startswith(prefix) and healed_full.endswith(suffix):
+                                new_text = healed_full[len(prefix) : len(healed_full) - len(suffix)]
+
                 return self._workspace.prepare_exact_replacement(
                     EditRequest(
                         path=request.path,
                         old_text=payload.old_text,
-                        new_text=payload.new_text,
+                        new_text=new_text,
                     ),
                     expected_sha256=(
                         source.sha256

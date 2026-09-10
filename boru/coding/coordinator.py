@@ -1,6 +1,8 @@
 import ast
 from threading import RLock
 
+from boru.tools.ast_editor import AstSemanticEditor
+
 from boru.architecture.contracts import ArchitecturePlanner
 from boru.architecture.models import ArchitecturePlan
 from boru.coding.models import CodingRequest, CodingSession
@@ -205,12 +207,16 @@ class ControlledCodingCoordinator:
         for path, content in candidates:
             if not path.casefold().endswith(".py"):
                 continue
-            try:
-                ast.parse(content, filename=path)
-            except SyntaxError as error:
-                raise ValueError(
-                    f"Coding Agent geçersiz Python önerdi: {path}:{error.lineno or 1}."
-                ) from error
+            if not AstSemanticEditor.verify_syntax(content):
+                healed = AstSemanticEditor.attempt_self_heal(content)
+                if AstSemanticEditor.verify_syntax(healed):
+                    continue
+                try:
+                    ast.parse(content, filename=path)
+                except SyntaxError as error:
+                    raise ValueError(
+                        f"Coding Agent geçersiz Python önerdi: {path}:{error.lineno or 1}."
+                    ) from error
 
     def _apply(self, session: CodingSession) -> str:
         try:
