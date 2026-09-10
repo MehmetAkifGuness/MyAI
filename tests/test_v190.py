@@ -208,7 +208,7 @@ class ResultExecutor:
         )
 
 
-def test_agent(discovery, executor):
+def make_test_agent(discovery, executor):
     return SafeTestAgent(
         parser=RuleBasedTestAgentRequestParser(),
         discovery=discovery,
@@ -223,7 +223,7 @@ class TestAgentCoordinatorTests(unittest.TestCase):
         discovery = StaticDiscovery(("tests/test_service.py",))
         executor = ResultExecutor()
 
-        response = test_agent(discovery, executor).resolve("test ajanı: boru/service.py")
+        response = make_test_agent(discovery, executor).resolve("test ajanı: boru/service.py")
 
         self.assertIn("Durum: BAŞARILI", response or "")
         self.assertIn("1/1 test dosyası geçti", response or "")
@@ -235,7 +235,7 @@ class TestAgentCoordinatorTests(unittest.TestCase):
 
     def test_reports_failure_output(self):
         path = "tests/test_service.py"
-        response = test_agent(
+        response = make_test_agent(
             StaticDiscovery((path,)),
             ResultExecutor((path,)),
         ).run_for_paths(("boru/service.py",))
@@ -246,7 +246,7 @@ class TestAgentCoordinatorTests(unittest.TestCase):
     def test_does_not_fall_back_to_all_tests_when_none_are_related(self):
         executor = ResultExecutor()
 
-        response = test_agent(StaticDiscovery(), executor).run_for_paths(("a.py",))
+        response = make_test_agent(StaticDiscovery(), executor).run_for_paths(("a.py",))
 
         self.assertIn("Durum: TEST BULUNAMADI", response)
         self.assertEqual(executor.commands, [])

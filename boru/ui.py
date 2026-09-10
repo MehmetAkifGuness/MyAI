@@ -1,4 +1,7 @@
+import os
+from pathlib import Path
 import queue
+import re
 import threading
 import time
 
@@ -13,7 +16,8 @@ ctk.set_default_color_theme("blue")
 
 class ChatAppUI(ctk.CTk):
     """
-    Modernleştirilmiş, ses destekli Börü masaüstü arayüzü.
+    Modernleştirilmiş, Sol Dosya Ağacı ve Görsel Renkli Diff destekli
+    profesyonel Börü masaüstü arayüzü.
     """
 
     def __init__(
@@ -27,15 +31,17 @@ class ChatAppUI(ctk.CTk):
         self._assistant = assistant
         self._voice_input = VoiceInputService()
         self._voice_output = VoiceOutputService(enabled=False)
+        self._project_root = Path(".").resolve()
 
         self._ui_events: queue.Queue[tuple[str, tuple]] = queue.Queue()
         self._busy_started_at: float | None = None
         self._status_after_id: str | None = None
         self._is_listening = False
+        self._sidebar_visible = True
 
         self.title(title)
-        self.geometry("780x880")
-        self.minsize(650, 700)
+        self.geometry("980x880")
+        self.minsize(800, 700)
 
         self._build_ui(title)
         self._process_ui_events()
@@ -47,14 +53,26 @@ class ChatAppUI(ctk.CTk):
         header_frame = ctk.CTkFrame(self, fg_color="#1a1c23", corner_radius=12)
         header_frame.pack(fill="x", padx=16, pady=(16, 8))
 
-        # Sol taraf: Logo + Başlık + Canlı Gösterge
+        # Sol taraf: Sidebar Toggle + Logo + Başlık + Canlı Gösterge
         brand_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
         brand_frame.pack(side="left", padx=12, pady=10)
+
+        self.toggle_sidebar_btn = ctk.CTkButton(
+            brand_frame,
+            text="📂",
+            width=36,
+            height=32,
+            font=("Segoe UI Emoji", 14),
+            fg_color="#2d3748",
+            hover_color="#4a5568",
+            command=self._toggle_sidebar,
+        )
+        self.toggle_sidebar_btn.pack(side="left", padx=(0, 10))
 
         logo_label = ctk.CTkLabel(
             brand_frame,
             text="🐺",
-            font=("Segoe UI Emoji", 26),
+            font=("Segoe UI Emoji", 24),
         )
         logo_label.pack(side="left", padx=(0, 8))
 
@@ -64,7 +82,7 @@ class ChatAppUI(ctk.CTk):
         title_label = ctk.CTkLabel(
             title_info_frame,
             text=title,
-            font=("Segoe UI", 16, "bold"),
+            font=("Segoe UI", 15, "bold"),
             text_color="#e2e8f0",
         )
         title_label.pack(anchor="w")
@@ -104,12 +122,47 @@ class ChatAppUI(ctk.CTk):
         )
         self.reset_button.pack(side="left")
 
-        # ── 2. Sohbet Alanı (Chat Box) ─────────────────────────────────
-        chat_container = ctk.CTkFrame(self, fg_color="#13141c", corner_radius=12)
-        chat_container.pack(fill="both", expand=True, padx=16, pady=8)
+        # ── 2. Ana Çalışma Alanı (Sidebar + Chat Alanı) ────────────────
+        self.main_body = ctk.CTkFrame(self, fg_color="transparent")
+        self.main_body.pack(fill="both", expand=True, padx=16, pady=4)
+
+        # Sol: Dosya Ağacı / Proje Gezgini Paneli
+        self.sidebar_frame = ctk.CTkFrame(self.main_body, width=220, fg_color="#181a20", corner_radius=12)
+        self.sidebar_frame.pack(side="left", fill="y", padx=(0, 10))
+        self.sidebar_frame.pack_propagate(False)
+
+        sidebar_title_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
+        sidebar_title_frame.pack(fill="x", padx=10, pady=(10, 6))
+
+        ctk.CTkLabel(
+            sidebar_title_frame,
+            text="PROJE DOSYALARI",
+            font=("Segoe UI", 11, "bold"),
+            text_color="#a0aec0",
+        ).pack(side="left")
+
+        refresh_btn = ctk.CTkButton(
+            sidebar_title_frame,
+            text="🔄",
+            width=28,
+            height=24,
+            font=("Segoe UI Emoji", 11),
+            fg_color="#2d3748",
+            hover_color="#4a5568",
+            command=self._populate_file_tree,
+        )
+        refresh_btn.pack(side="right")
+
+        self.file_scroll = ctk.CTkScrollableFrame(self.sidebar_frame, fg_color="transparent")
+        self.file_scroll.pack(fill="both", expand=True, padx=4, pady=4)
+        self._populate_file_tree()
+
+        # Sağ: Sohbet ve Diff Alanı
+        right_container = ctk.CTkFrame(self.main_body, fg_color="#13141c", corner_radius=12)
+        right_container.pack(side="left", fill="both", expand=True)
 
         self.chat_box = ctk.CTkTextbox(
-            chat_container,
+            right_container,
             state="disabled",
             wrap="word",
             font=("Segoe UI", 13),
@@ -117,6 +170,14 @@ class ChatAppUI(ctk.CTk):
             text_color="#f7fafc",
         )
         self.chat_box.pack(fill="both", expand=True, padx=12, pady=12)
+
+        # Renkli Diff Etiketleri Tanımla (Tkinter Text Tag'leri)
+        self.chat_box.tag_config("diff_add", foreground="#48bb78", background="#1c2d20")
+        self.chat_box.tag_config("diff_sub", foreground="#f56565", background="#3b1d1d")
+        self.chat_box.tag_config("diff_hdr", foreground="#63b3ed", font=("Segoe UI", 12, "bold"))
+        self.chat_box.tag_config("sender_user", foreground="#63b3ed", font=("Segoe UI", 13, "bold"))
+        self.chat_box.tag_config("sender_bot", foreground="#ecc94b", font=("Segoe UI", 13, "bold"))
+        self.chat_box.tag_config("divider", foreground="#4a5568")
 
         # ── 3. Hızlı Eylem Çipleri (Quick Action Chips) ────────────────
         chips_frame = ctk.CTkFrame(self, fg_color="transparent")
@@ -191,6 +252,58 @@ class ChatAppUI(ctk.CTk):
         )
         self.status_label.pack(pady=(0, 8))
 
+    def _toggle_sidebar(self) -> None:
+        if self._sidebar_visible:
+            self.sidebar_frame.pack_forget()
+            self._sidebar_visible = False
+            self.toggle_sidebar_btn.configure(fg_color="#1a202c")
+        else:
+            self.sidebar_frame.pack(side="left", fill="y", padx=(0, 10), before=self.main_body.winfo_children()[1])
+            self._sidebar_visible = True
+            self.toggle_sidebar_btn.configure(fg_color="#2d3748")
+
+    def _populate_file_tree(self) -> None:
+        """Proje kökündeki ilgili Python ve konfigürasyon dosyalarını listeler."""
+        for widget in self.file_scroll.winfo_children():
+            widget.destroy()
+
+        try:
+            items: list[tuple[str, str]] = []
+            for root, dirs, files in os.walk(self._project_root):
+                # .git, __pycache__, .pytest_cache atla
+                dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
+                rel_dir = os.path.relpath(root, self._project_root)
+                for file in files:
+                    if file.endswith((".py", ".json", ".txt", ".md")):
+                        rel_path = file if rel_dir == "." else os.path.join(rel_dir, file).replace("\\", "/")
+                        items.append((file, rel_path))
+
+            items.sort(key=lambda x: x[1])
+            for filename, rel_path in items[:60]:
+                btn = ctk.CTkButton(
+                    self.file_scroll,
+                    text=f"📄 {rel_path}",
+                    anchor="w",
+                    height=24,
+                    font=("Consolas", 11),
+                    fg_color="transparent",
+                    hover_color="#232734",
+                    text_color="#cbd5e0",
+                    command=lambda p=rel_path: self._select_file(p),
+                )
+                btn.pack(fill="x", pady=1)
+        except Exception:
+            pass
+
+    def _select_file(self, path: str) -> None:
+        """Tıklanan dosya adını giriş kutusuna akıllıca ekler."""
+        current = self.input_box.get()
+        if not current:
+            self.input_box.insert(0, f"{path} dosyasını incele")
+        else:
+            self.input_box.insert("end", f" {path}")
+        self.input_box.focus_set()
+
     def _insert_chip(self, cmd: str) -> None:
         self.input_box.delete(0, "end")
         self.input_box.insert(0, cmd)
@@ -259,15 +372,32 @@ class ChatAppUI(ctk.CTk):
         self.after(40, self._process_ui_events)
 
     def _write_message(self, sender: str, message: str) -> None:
+        """Mesajları renkli diff ve formatlama desteğiyle yazar."""
         self.chat_box.configure(state="normal")
-        divider = "─" * 45
-        self.chat_box.insert("end", f"\n{sender}\n{message}\n{divider}\n")
+        divider = "─" * 50
+
+        sender_tag = "sender_user" if "Sen" in sender else "sender_bot"
+        self.chat_box.insert("end", f"\n{sender}\n", sender_tag)
+
+        # Eğer mesaj bir diff içeriyorsa satır satır renklendir
+        for line in message.splitlines(keepends=True):
+            if line.startswith("+") and not line.startswith("+++"):
+                self.chat_box.insert("end", line, "diff_add")
+            elif line.startswith("-") and not line.startswith("---"):
+                self.chat_box.insert("end", line, "diff_sub")
+            elif line.startswith("@@"):
+                self.chat_box.insert("end", line, "diff_hdr")
+            else:
+                self.chat_box.insert("end", line)
+
+        self.chat_box.insert("end", f"\n{divider}\n", "divider")
         self.chat_box.see("end")
         self.chat_box.configure(state="disabled")
 
     def _stream_start(self, sender: str) -> None:
         self.chat_box.configure(state="normal")
-        self.chat_box.insert("end", f"\n{sender}\n")
+        sender_tag = "sender_user" if "Sen" in sender else "sender_bot"
+        self.chat_box.insert("end", f"\n{sender}\n", sender_tag)
         self.chat_box.see("end")
         self.chat_box.configure(state="disabled")
 
@@ -279,8 +409,8 @@ class ChatAppUI(ctk.CTk):
 
     def _stream_end(self) -> None:
         self.chat_box.configure(state="normal")
-        divider = "─" * 45
-        self.chat_box.insert("end", f"\n{divider}\n")
+        divider = "─" * 50
+        self.chat_box.insert("end", f"\n{divider}\n", "divider")
         self.chat_box.see("end")
         self.chat_box.configure(state="disabled")
 
