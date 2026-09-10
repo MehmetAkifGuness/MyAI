@@ -182,7 +182,7 @@ class RepositoryGitAndReleaseTests(unittest.TestCase):
 
     def test_v90_enables_repository_intelligence(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            build_release()
+            build_release('V11.0')
             self.assertEqual(builder.call_args.kwargs["application_version"], "V11.0")
             self.assertTrue(builder.call_args.kwargs["repository_intelligence_enabled"])
             build_release("V8.0")

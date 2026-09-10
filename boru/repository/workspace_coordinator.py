@@ -52,7 +52,7 @@ class RepositoryWorkspaceCoordinator:
         ):
             return "REPO ÇALIŞMA ALANI\nDurum: DURDU\nBekleyen işlem varken repo değiştirilemez."
         if self._runtime and self._runtime.coding.has_pending:
-            result = self._runtime.coding.resolve(message)
+            result = self._runtime.resolve_coding(message)
             self._audit.record("coding_control", self._label or "", self._status(result))
             return result
         if self._runtime and self._runtime.git and self._runtime.git.has_pending:
@@ -71,6 +71,8 @@ class RepositoryWorkspaceCoordinator:
             return self._leave()
         if normalized in {"repo günlüğü", "repo gunlugu"}:
             return self._render_audit()
+        if normalized in {'repo zeka durumu', 'repo zekâ durumu'}:
+            return self._runtime.intelligence_status() if self._runtime else self._missing()
         match = self._SMART_ANALYZE.fullmatch(message)
         if match:
             return self._smart_analyze(match.group(1))
@@ -123,7 +125,7 @@ class RepositoryWorkspaceCoordinator:
         if self._runtime is None:
             return self._missing()
         self._audit.record("coding_requested", self._label or "", "request_received")
-        return self._runtime.coding.resolve("kodla: " + objective)
+        return self._runtime.resolve_coding("kodla: " + objective)
 
     def _smart_analyze(self, objective: str) -> str:
         if self._runtime is None:
@@ -139,7 +141,7 @@ class RepositoryWorkspaceCoordinator:
         if self._runtime is None:
             return self._missing()
         try:
-            brief = self._runtime.analyze_task(objective)
+            brief = self._runtime.analyze_task(objective, run_tests=True)
         except (OSError, RuntimeError, ValueError) as error:
             return f"AKILLI GÖREV ANALİZİ\nDurum: BAŞARISIZ\n{error}"
         if brief.clarification:
@@ -165,9 +167,12 @@ class RepositoryWorkspaceCoordinator:
         self._clarification_objective = None
         combined = f"{objective}\nKullanıcı açıklaması: {answer}"
         try:
-            brief = self._runtime.analyze_task(combined, allow_clarification=False)
+            brief = self._runtime.analyze_task(combined, allow_clarification=False, run_tests=True)
         except (OSError, RuntimeError, ValueError) as error:
             return f"AKILLI GÖREV ANALİZİ\nDurum: BAŞARISIZ\n{error}"
+        if brief.clarification:
+            self._clarification_objective = brief.objective
+            return brief.render()
         if not brief.paths:
             return (
                 "AKILLI GÖREV ANALİZİ\nDurum: KANIT YETERSİZ\n"
@@ -190,7 +195,7 @@ class RepositoryWorkspaceCoordinator:
             + "\n\nDOĞRULAMA_KANITI:\n"
             + brief.coding_context()
         )
-        result = self._runtime.coding.resolve("kodla: " + objective)
+        result = self._runtime.resolve_coding("kodla: " + objective, brief=brief)
         return brief.render() + "\n\n" + (result or "Coding Agent yanıt vermedi.")
 
     def _verify(self, value: str) -> str:

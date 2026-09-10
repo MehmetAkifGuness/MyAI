@@ -1,6 +1,7 @@
 import json
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -145,6 +146,7 @@ class FeedbackRepairTests(unittest.TestCase):
         architect.plan = Mock(return_value=plan)
         first = edit_proposal()
         second = edit_proposal()
+        first = replace(first, edits=(replace(first.edits[0], updated_content='VALUE = 3\n'),))
         preparer = Mock()
         preparer.prepare_project_edit.side_effect = [first, second]
         failed_report = EvaluationReport(
@@ -213,7 +215,7 @@ class AgentRetryAndReleaseTests(unittest.TestCase):
 
     def test_v70_enables_integrated_package_and_v63_does_not(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            build_release()
+            build_release('V11.0')
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V11.0")
             self.assertTrue(flags["reliable_structured_calls_enabled"])

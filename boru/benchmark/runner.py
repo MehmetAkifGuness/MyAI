@@ -2,7 +2,7 @@ import hashlib
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from tempfile import TemporaryDirectory
 from time import monotonic
 
@@ -160,6 +160,7 @@ class CodingBenchmark:
                 status, detail = "missing_clarification", "Belirsiz görevde kod önerildi."
             else:
                 phase = "sandbox"
+                files = {**dict(case.sources), **files}
                 status, detail = self._test(case, files)
                 for repair in range(1, self._repair_attempts + 1):
                     if status != "failed":
@@ -177,10 +178,11 @@ class CodingBenchmark:
                     structured_retries += max(0, generation.attempts - 1)
                     structured_errors.extend(generation.errors)
                     output_characters += generation.output_characters
-                    action, files, question = generation.value
+                    action, repaired_files, question = generation.value
                     if action != "edit":
                         status, detail = "repair_abandoned", question
                         break
+                    files = {**files, **repaired_files}
                     status, detail = self._test(case, files)
         except StructuredGenerationError as error:
             model_calls += error.attempts
@@ -258,11 +260,16 @@ class CodingBenchmark:
         with TemporaryDirectory(prefix="boru-benchmark-") as directory:
             root = Path(directory)
             for path, content in {**dict(case.sources), **files}.items():
-                (root / path).write_text(content, encoding="utf-8", newline="\n")
+                relative = PurePosixPath(path)
+                if relative.is_absolute() or '..' in relative.parts or '\\' in path or ':' in path:
+                    raise ValueError('Benchmark fixture yolu güvenli değil.')
+                destination = root / path
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                destination.write_text(content, encoding="utf-8", newline="\n")
             checks = "\n".join("        " + line for line in case.checks)
             tests = "import unittest\nimport subject\n\nclass Acceptance(unittest.TestCase):\n    def test_contract(self):\n" + checks + "\n"
             (root / "acceptance_test.py").write_text(tests, encoding="utf-8", newline="\n")
-            baseline = {path.name: path.read_bytes() for path in root.iterdir()}
+            baseline = {path.relative_to(root).as_posix(): path.read_bytes() for path in root.rglob('*') if path.is_file()}
             spec = SafeCommandPolicy().build(CommandRequest(CommandKind.UNITTEST, "acceptance_test.py"))
             outcome = self._executor_factory(root).execute(spec)
             summary = TestOutputParser().parse(outcome)
@@ -295,6 +302,9 @@ class CodingBenchmark:
                              for status in sorted({r["status"] for r in selected})},
                 "seconds": round(sum(r["seconds"] for r in selected), 3),
                 "average_seconds": round(sum(r["seconds"] for r in selected) / len(selected), 3),
+                'first_pass_count': sum(r['status'] == 'passed' and not r['repair_attempts'] and not r.get('escalations') and not r['structured_retries'] for r in coding),
+                'recovered_count': sum(r['status'] == 'passed' and bool(r['repair_attempts'] or r.get('escalations') or r['structured_retries']) for r in coding),
+                'clarification_correct': sum(r['status'] == 'clarification_requested' for r in selected),
             }
         return {"schema": "boru.benchmark/v2", "state": state, "suite_sha256": fingerprint,
                 "progress": {"completed": len(rows), "total": planned_total or len(rows)},

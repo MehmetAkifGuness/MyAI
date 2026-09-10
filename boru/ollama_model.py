@@ -24,6 +24,7 @@ class OllamaChatModel:
         structured_num_predict: int = 384,
         keep_alive: str = "10m",
         performance_monitor: PerformanceMonitor | None = None,
+        structured_thinking: bool | None = None,
     ):
         cleaned_model_name = model_name.strip()
         if not cleaned_model_name:
@@ -55,6 +56,7 @@ class OllamaChatModel:
         self._structured_num_predict = structured_num_predict
         self._keep_alive = keep_alive.strip()
         self._performance_monitor = performance_monitor
+        self._structured_thinking = structured_thinking
         self._lock = RLock()
 
     @staticmethod
@@ -92,6 +94,8 @@ class OllamaChatModel:
 
         if response_format is not None:
             options["format"] = response_format
+            if self._structured_thinking is not None:
+                options['think'] = self._structured_thinking
             options["options"] = {
                 "temperature": 0,
                 "num_predict": self._structured_num_predict,

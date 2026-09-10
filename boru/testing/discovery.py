@@ -34,7 +34,12 @@ class RelatedTestDiscovery:
             source_evidence.append((normalized, self._symbols(target)))
 
         scored: list[tuple[int, str]] = []
-        for candidate in self._test_candidates():
+        candidates = set(self._test_candidates())
+        for relative in normalized_sources:
+            name = Path(relative).name
+            if name.startswith('test_') or name.endswith('_test.py'):
+                candidates.add(self._resolver.resolve(relative))
+        for candidate in candidates:
             relative = candidate.relative_to(self._resolver.root).as_posix()
             score = self._score(relative, candidate, source_evidence)
             if score > 0:
@@ -54,6 +59,9 @@ class RelatedTestDiscovery:
                 if candidate.is_file() and self._resolver.is_visible_child(candidate):
                     candidates.append(candidate)
         for candidate in self._resolver.root.glob("*_test.py"):
+            if candidate.is_file() and self._resolver.is_visible_child(candidate):
+                candidates.append(candidate)
+        for candidate in self._resolver.root.glob('test_*.py'):
             if candidate.is_file() and self._resolver.is_visible_child(candidate):
                 candidates.append(candidate)
         return tuple(sorted(set(candidates), key=lambda path: path.as_posix().casefold()))

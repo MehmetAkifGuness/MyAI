@@ -11,7 +11,12 @@ class CodingCase:
     action: str = "edit"
 
 
-def catalog():
+def catalog(suite='basic'):
+    if suite == 'repo':
+        from boru.benchmark.repository_cases import repository_catalog
+        return repository_catalog()
+    if suite != 'basic':
+        raise ValueError('Benchmark paketi basic veya repo olmalıdır.')
     specs = (
         ("addition", "add negatif sayılar dahil toplama yapmalı.", "def add(a, b):\n    return a - b\n",
          ("self.assertEqual(subject.add(2, 3), 5)", "self.assertEqual(subject.add(-3, 1), -2)")),

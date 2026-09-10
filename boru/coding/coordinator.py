@@ -256,7 +256,9 @@ class ControlledCodingCoordinator:
         return "\n\n".join((response, *reports))
 
     def _render_already_satisfied(self, plan: ArchitecturePlan) -> str:
-        paths = plan.existing_files
+        paths = tuple(dict.fromkeys((
+            *plan.existing_files, *getattr(self._proposal_applier, 'validation_paths', ()),
+        )))
         response = (
             "Coding Agent değişikliği gerekmiyor: hedef kaynakta zaten sağlanıyor.\n"
             "Doğrulanan dosyalar:\n- " + "\n- ".join(paths)

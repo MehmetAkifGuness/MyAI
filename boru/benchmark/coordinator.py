@@ -20,6 +20,7 @@ class BenchmarkRequest:
     budget_seconds: int = 1800
     repair_attempts: int = 1
     fallback_model: str = ""
+    suite: str = 'basic'
 
 
 class BenchmarkCoordinator:
@@ -29,6 +30,7 @@ class BenchmarkCoordinator:
     _USAGE = (
         "Biçimler: 'benchmark görevleri'; 'benchmark çalıştır: model | limit=5'; "
         "'benchmark durumu'; 'benchmark iptal'. Yedek model: '| yedek=model'. "
+        "Çoklu dosya paketi: '| paket=repo'; 'benchmark repo görevleri'. "
         "İsterseniz güvenli 'python -B -m boru.benchmark "
         "--model MODEL --limit 5' biçimini de kullanabilirsiniz."
     )
@@ -55,6 +57,8 @@ class BenchmarkCoordinator:
         normalized = " ".join(message.casefold().strip().split())
         if normalized == "benchmark görevleri":
             return self._render_cases()
+        if normalized == 'benchmark repo görevleri':
+            return '\n'.join(['REPO BENCHMARK GÖREVLERİ', *(c.identifier for c in catalog('repo'))])
         if normalized in {"benchmark durumu", "benchmark durum"}:
             return self._render_status()
         if normalized == "benchmark iptal":
@@ -88,7 +92,7 @@ class BenchmarkCoordinator:
 
     def _run(self, request: BenchmarkRequest) -> None:
         try:
-            cases = catalog()
+            cases = catalog(request.suite)
             if request.case_ids:
                 cases = tuple(case for case in cases if case.identifier in request.case_ids)
             cases = cases[: request.limit]
@@ -186,9 +190,13 @@ class BenchmarkCoordinator:
         models = tuple(item.strip() for item in pieces[0].split(",") if item.strip())
         values = {"limit": 3, "repeats": 1, "budget_seconds": 1800, "repair_attempts": 1}
         fallback_model = ""
+        suite = 'basic'
         aliases = {"limit": "limit", "tekrar": "repeats", "süre": "budget_seconds", "onarım": "repair_attempts"}
         for piece in pieces[1:]:
             key, separator, value = piece.partition("=")
+            if separator and key.casefold() == 'paket':
+                suite = value.strip()
+                continue
             if separator and key.casefold() == "yedek":
                 fallback_model = value.strip()
                 continue
@@ -198,20 +206,21 @@ class BenchmarkCoordinator:
                 values[aliases[key.casefold()]] = int(value)
             except ValueError as error:
                 raise ValueError(f"Benchmark ayarı tam sayı olmalıdır: {piece}") from error
-        return cls._validated(models=models, fallback_model=fallback_model, **values)
+        return cls._validated(models=models, fallback_model=fallback_model, suite=suite, **values)
 
     @classmethod
     def _parse_flags(cls, parts: list[str]) -> BenchmarkRequest:
         models: list[str] = []
         cases: list[str] = []
         fallback_model = ""
+        suite = 'basic'
         values = {"limit": 3, "repeats": 1, "budget_seconds": 1800, "repair_attempts": 1}
         names = {"--limit": "limit", "--repeats": "repeats", "--budget-seconds": "budget_seconds",
                  "--repair-attempts": "repair_attempts"}
         index = 0
         while index < len(parts):
             flag = parts[index].casefold()
-            if flag not in {"--model", "--fallback-model", "--case", *names} or index + 1 >= len(parts):
+            if flag not in {"--model", "--fallback-model", "--case", '--suite', *names} or index + 1 >= len(parts):
                 raise ValueError(f"İzin verilmeyen veya eksik benchmark seçeneği: {parts[index]}")
             value = parts[index + 1]
             if flag == "--model":
@@ -220,6 +229,8 @@ class BenchmarkCoordinator:
                 fallback_model = value
             elif flag == "--case":
                 cases.append(value)
+            elif flag == '--suite':
+                suite = value
             else:
                 try:
                     values[names[flag]] = int(value)
@@ -227,16 +238,16 @@ class BenchmarkCoordinator:
                     raise ValueError(f"Sayısal benchmark değeri geçersiz: {value}") from error
             index += 2
         return cls._validated(
-            models=tuple(models), fallback_model=fallback_model, case_ids=tuple(cases), **values
+            models=tuple(models), fallback_model=fallback_model, case_ids=tuple(cases), suite=suite, **values
         )
 
     @classmethod
     def _validated(
         cls, *, models, fallback_model="", case_ids=(), limit, repeats,
-        budget_seconds, repair_attempts
+        budget_seconds, repair_attempts, suite='basic'
     ):
         models = tuple(dict.fromkeys(models))
-        known = {case.identifier for case in catalog()}
+        known = {case.identifier for case in catalog(suite)}
         if not models or len(models) > 4 or not all(cls._MODEL.fullmatch(name) for name in models):
             raise ValueError("1-4 geçerli Ollama model adı gereklidir.")
         if fallback_model and not cls._MODEL.fullmatch(fallback_model):
@@ -255,6 +266,7 @@ class BenchmarkCoordinator:
             budget_seconds=budget_seconds,
             repair_attempts=repair_attempts,
             fallback_model=fallback_model,
+            suite=suite,
         )
 
     @staticmethod

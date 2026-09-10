@@ -26,6 +26,7 @@ class RepositoryCoordinator:
         "'repo içe aktar: https://github.com/owner/repo'; 'repo sınırlar'; "
         "'repo seç: yol'; 'repo durum'; 'repo geliştir: hedef'; "
         "'repo akıllı analiz: hedef'; 'repo akıllı geliştir: hedef'; "
+        "'repo zeka durumu'; "
         "'repo doğrula: dosya.py'; 'repo git durum'; 'repo günlüğü'."
     )
 

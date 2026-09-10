@@ -384,6 +384,7 @@ def build_application(
     repository_intelligence_enabled: bool = False,
     repository_workspace_enabled: bool = False,
     intelligent_task_intake_enabled: bool = False,
+    deep_reasoning_enabled: bool = False,
     terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
@@ -451,6 +452,8 @@ def build_application(
         raise ValueError("Repo çalışma alanı repo zekâsı ve Docker sandbox gerektirir.")
     if intelligent_task_intake_enabled and not repository_workspace_enabled:
         raise ValueError("Akıllı görev anlama repo çalışma alanı gerektirir.")
+    if deep_reasoning_enabled and not intelligent_task_intake_enabled:
+        raise ValueError('Derin araştırma akıllı görev anlama gerektirir.')
 
     settings = (
         AppSettings.from_env()
@@ -462,6 +465,7 @@ def build_application(
 
     primary_chat_model = OllamaChatModel(
             settings.model_name,
+            structured_thinking=False if deep_reasoning_enabled and settings.model_name.startswith('qwen3') else None,
             request_timeout_seconds=180,
             structured_timeout_seconds=structured_timeout_seconds,
             structured_num_predict=structured_num_predict,
@@ -475,6 +479,7 @@ def build_application(
             primary_chat_model,
             OllamaChatModel(
                 settings.fallback_model_name,
+                structured_thinking=False if deep_reasoning_enabled and settings.fallback_model_name.startswith('qwen3') else None,
                 request_timeout_seconds=180,
                 structured_timeout_seconds=structured_timeout_seconds,
                 structured_num_predict=structured_num_predict,
@@ -1222,6 +1227,7 @@ def build_application(
                 ),
                 model_factory=lambda name: OllamaChatModel(
                     name,
+                    structured_thinking=False if deep_reasoning_enabled and name.startswith('qwen3') else None,
                     structured_timeout_seconds=structured_timeout_seconds,
                     structured_num_predict=structured_num_predict,
                 ),
@@ -1240,6 +1246,8 @@ def build_application(
                         chat_model,
                         sandbox_image,
                         intelligent_task_intake_enabled=intelligent_task_intake_enabled,
+                        deep_reasoning_enabled=deep_reasoning_enabled,
+                        experience_directory=project_root / 'data' / 'verified_experience',
                     ))
                     if repository_workspace_enabled else None
                 ),

@@ -215,9 +215,9 @@ class IntelligentTaskAnalyzerTests(unittest.TestCase):
 
             self.assertIn("Bekleyen işlem", result)
 
-    def test_v110_is_default_and_enables_intelligent_intake(self):
+    def test_v110_enables_intelligent_intake(self):
         with patch.object(main_v170, "build_application", return_value="app") as builder:
-            build_release()
+            build_release('V11.0')
 
             flags = builder.call_args.kwargs
             self.assertEqual(flags["application_version"], "V11.0")

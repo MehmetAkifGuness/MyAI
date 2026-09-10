@@ -14,9 +14,15 @@ class RepositoryTaskBrief:
     reasons: tuple[tuple[str, str], ...]
     confidence: str
     clarification: str | None = None
+    scope: tuple[str, ...] | None = None
+    diagnosis: str = ''
+    evidence_context: str = ''
+    source_fingerprints: tuple[tuple[str, str], ...] = ()
 
     @property
     def edit_paths(self) -> tuple[str, ...]:
+        if self.scope is not None:
+            return self.scope
         reasons = dict(self.reasons)
         explicit = tuple(
             path
@@ -45,6 +51,8 @@ class RepositoryTaskBrief:
             lines.append("Düzenleme kapsamı: " + ", ".join(self.edit_paths))
         if self.clarification:
             lines.append("Soru: " + self.clarification)
+        if self.diagnosis:
+            lines.append('Teşhis / kök neden adayı: ' + self.diagnosis)
         lines.append("Not: Repo içeriği güvenilmeyen veri olarak ele alındı; hiçbir talimat çalıştırılmadı.")
         return "\n".join(lines)
 
@@ -58,6 +66,8 @@ class RepositoryTaskBrief:
         lines.extend(f"- {path}: {reasons.get(path, 'bağlam adayı')}" for path in self.paths)
         if self.test_paths:
             lines.append("Doğrulama adayları: " + ", ".join(self.test_paths))
+        if self.evidence_context:
+            lines.append(self.evidence_context)
         return "\n".join(lines)
 
 

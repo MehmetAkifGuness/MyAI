@@ -1,3 +1,4 @@
+import hashlib
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
@@ -8,6 +9,7 @@ from boru.sandbox.snapshot import SourceSnapshot
 from boru.tools.edit_workspace import SafeEditWorkspace
 from boru.tools.project_transaction import BatchProjectEditApplier
 from boru.tools.write_workspace import SafeWriteWorkspace
+from boru.tools.workspace import ReadOnlyWorkspace
 
 
 class StagedCodingApplier:
@@ -18,16 +20,23 @@ class StagedCodingApplier:
         self._evaluator_factory = evaluator_factory
         self._delegate = delegate
         self.last_validation = None
+        self.validation_paths = ()
+        self.context_fingerprints = ()
 
     def apply_project_edit(self, proposal):
         self.last_validation = None
+        reader = ReadOnlyWorkspace(self._root)
+        for path, digest in self.context_fingerprints:
+            if hashlib.sha256(reader.read_text_file(path).encode('utf-8')).hexdigest() != digest:
+                raise ValueError('Araştırma/onay sonrasında kanıt dosyası değişti: ' + path)
         workspace = SafeEditWorkspace(self._root)
         for edit in proposal.edits:
             if workspace.read_edit_source(edit.path).sha256 != edit.expected_sha256:
                 raise ValueError("Önizlemeden sonra kaynak değişmiş; öneri uygulanmadı.")
-        paths = tuple(dict.fromkeys(item.path for item in (*proposal.edits, *proposal.creations)))
+        changed_paths = tuple(dict.fromkeys(item.path for item in (*proposal.edits, *proposal.creations)))
+        paths = tuple(dict.fromkeys((*changed_paths, *self.validation_paths)))
         baseline_evaluator = self._evaluator_factory(self._root)
-        existing_paths = tuple(edit.path for edit in proposal.edits)
+        existing_paths = tuple(dict.fromkeys((*(edit.path for edit in proposal.edits), *self.validation_paths)))
         baseline_findings = Counter(
             baseline_evaluator.static_findings(existing_paths) if existing_paths else ()
         )

@@ -40,6 +40,9 @@ from boru.tools.deterministic_project_edit import (
     RuleBasedStringAliasProjectEditPreparer,
 )
 from boru.repository.reasoning import IntelligentRepositoryTaskAnalyzer, RepositoryTaskBrief
+from boru.modeling.task_routing import TaskModelRouter, RoutedProjectPreparer
+from boru.repository.investigation import InvestigatingTaskAnalyzer
+from boru.repository.experience import VerifiedTaskExperience
 
 
 @dataclass(slots=True)
@@ -49,7 +52,9 @@ class RepositoryWorkspaceRuntime:
     evaluator: EvidenceEvaluator
     git: ControlledGitCoordinator | None
     staged_applier: StagedCodingApplier | None = None
-    task_analyzer: IntelligentRepositoryTaskAnalyzer | None = None
+    task_analyzer: IntelligentRepositoryTaskAnalyzer | InvestigatingTaskAnalyzer | None = None
+    experience: VerifiedTaskExperience | None = None
+    model_router: TaskModelRouter | None = None
 
     @property
     def has_pending(self) -> bool:
@@ -65,12 +70,31 @@ class RepositoryWorkspaceRuntime:
             return report.workflow_report()
         return self.evaluator.validate_paths(paths)
 
-    def analyze_task(self, objective: str, *, allow_clarification: bool = True) -> RepositoryTaskBrief:
+    def analyze_task(self, objective: str, *, allow_clarification: bool = True, run_tests: bool = False) -> RepositoryTaskBrief:
         if self.task_analyzer is None:
             raise RuntimeError("Akıllı görev analizi bu sürümde etkin değil.")
-        return self.task_analyzer.analyze(
-            self.root, objective, allow_clarification=allow_clarification
-        )
+        options = {'run_tests': run_tests} if isinstance(self.task_analyzer, InvestigatingTaskAnalyzer) else {}
+        return self.task_analyzer.analyze(self.root, objective, allow_clarification=allow_clarification, **options)
+
+    def resolve_coding(self, message: str, *, brief: RepositoryTaskBrief | None = None) -> str | None:
+        if message.startswith('kodla:') and self.staged_applier:
+            self.staged_applier.validation_paths = brief.test_paths if brief else ()
+            self.staged_applier.context_fingerprints = brief.source_fingerprints if brief else ()
+        result = self.coding.resolve(message)
+        if self.experience is not None and not self.coding.has_pending:
+            report = self.staged_applier.last_validation if self.staged_applier and result and 'değişikliği uygulandı' in result else None
+            report = report or self.evaluator.latest
+            if result and ('değişikliği uygulandı' in result or 'değişikliği gerekmiyor' in result):
+                try:
+                    self.experience.record(report, self.evaluator, self.model_router.last_route)
+                except (OSError, ValueError, RuntimeError):
+                    result += '\nDeneyim kaydı saklanamadı; doğrulama sonucu değişmedi.'
+        return result
+
+    def intelligence_status(self):
+        if self.model_router is None:
+            return 'Derin araştırma bu sürümde etkin değil.'
+        return self.model_router.describe() + f'\nDoğrulanmış deneyim: {len(self.experience.read()) if self.experience else 0}'
 
 
 def build_repository_workspace(
@@ -78,6 +102,8 @@ def build_repository_workspace(
     chat_model,
     sandbox_image: str,
     intelligent_task_intake_enabled: bool = False,
+    deep_reasoning_enabled: bool = False,
+    experience_directory: Path | None = None,
 ) -> RepositoryWorkspaceRuntime:
     """Build an isolated edit/test/review pipeline rooted at one repository."""
     root = root.resolve()
@@ -118,6 +144,14 @@ def build_repository_workspace(
         max_attempts=3,
         max_source_characters=12_000,
     )
+    router = TaskModelRouter(chat_model) if deep_reasoning_enabled else None
+    if router:
+        model_proposal_preparer = RoutedProjectPreparer(router, lambda model: LLMProjectEditProposalPreparer(
+            chat_model=model, file_index=edit_index, file_selector=edit_selector,
+            workspace=edit_workspace, creation_validator=write_workspace,
+            max_files=4, max_patches_per_file=4, max_total_patches=12,
+            max_attempts=3, max_source_characters=24_000,
+        ))
     proposal_preparer = FallbackProjectEditProposalPreparer(
         RuleBasedStringAliasProjectEditPreparer(edit_workspace),
         model_proposal_preparer,
@@ -181,7 +215,7 @@ def build_repository_workspace(
         security_reviewer=security,
         code_reviewer=review,
         quality_evaluator=evaluator,
-        max_staged_repairs=1,
+        max_staged_repairs=2 if deep_reasoning_enabled else 1,
     )
     git = None
     if (root / ".git").is_dir():
@@ -196,4 +230,11 @@ def build_repository_workspace(
             ),
         )
     analyzer = IntelligentRepositoryTaskAnalyzer() if intelligent_task_intake_enabled else None
-    return RepositoryWorkspaceRuntime(root, coding, evaluator, git, staged_applier, analyzer)
+    experience = None
+    if deep_reasoning_enabled:
+        if experience_directory is not None:
+            import hashlib
+            key = hashlib.sha256(str(root).encode()).hexdigest()
+            experience = VerifiedTaskExperience(root, experience_directory / (key + '.json'))
+        analyzer = InvestigatingTaskAnalyzer(router, evaluator, experience)
+    return RepositoryWorkspaceRuntime(root, coding, evaluator, git, staged_applier, analyzer, experience, router)

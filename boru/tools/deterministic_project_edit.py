@@ -15,8 +15,8 @@ class RuleBasedStringAliasProjectEditPreparer:
 
     _REQUEST = re.compile(
         r"[\"“](?P<alias>[^\"”\r\n]{2,120})[\"”]\s+"
-        r"(?:yazımını\s+)?[\"“](?P<canonical>[^\"”\r\n]{2,120})[\"”]\s+"
-        r"(?:ile\s+aynı|gibi)\s+kabul\s+et",
+        r"(?:yazım(?:ı|ını)\s+)?[\"“](?P<canonical>[^\"”\r\n]{2,120})[\"”]\s+"
+        r"(?:ile\s+aynı|gibi)\s+(?:kabul\s+et|çalışmalı|çalışsın)\b",
         re.I,
     )
 
@@ -24,7 +24,8 @@ class RuleBasedStringAliasProjectEditPreparer:
         self._workspace = workspace
 
     def prepare_project_edit(self, request: ProjectEditRequest) -> ProjectEditProposal:
-        match = self._REQUEST.search(request.instruction)
+        instruction = request.instruction.partition('\n\nDOĞRULAMA_KANITI:')[0].partition('\n\nARCHITECT_SUMMARY:')[0]
+        match = self._REQUEST.search(instruction)
         if match is None:
             raise DeterministicProjectEditNotApplicable()
         alias = match.group("alias")
@@ -86,6 +87,8 @@ class RuleBasedStringAliasProjectEditPreparer:
 
     @staticmethod
     def _test_replacement(content: str, alias: str, canonical: str):
+        if RuleBasedStringAliasProjectEditPreparer._test_is_satisfied(content, alias):
+            return None
         pattern = re.compile(
             rf"\.resolve\(\s*(?P<quote>[\"']){re.escape(canonical)}(?P=quote)\s*\)"
         )
