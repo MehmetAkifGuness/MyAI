@@ -433,6 +433,7 @@ class ChatAppUI(ctk.CTk):
                 text=True,
                 bufsize=1,
                 cwd=str(self._project_root),
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
             )
             if process.stdout:
                 for line in process.stdout:

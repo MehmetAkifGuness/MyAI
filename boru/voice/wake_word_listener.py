@@ -6,6 +6,7 @@ import time
 from typing import Callable, Optional
 
 from boru.voice.continuous_dialogue import parse_wake_word
+from boru.voice.listener import patch_speech_recognition_windows_console
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +45,7 @@ class BackgroundWakeWordListener:
     def _ensure_init(self) -> bool:
         try:
             import speech_recognition as sr
+            patch_speech_recognition_windows_console()
 
             if self._recognizer is None:
                 self._recognizer = sr.Recognizer()

@@ -93,8 +93,11 @@ class VoiceOutputService:
                     pygame.mixer.init()
                 pygame.mixer.music.load(tmp_path)
                 pygame.mixer.music.play()
+                # Ses sürücüsünün oynatmaya başladığından emin olmak için minik bir eşzamanlama payı
+                time.sleep(0.08)
                 while pygame.mixer.music.get_busy():
                     time.sleep(0.04)
+                pygame.mixer.music.stop()
                 pygame.mixer.music.unload()
                 played_via_pygame = True
             except Exception as pygame_err:
@@ -104,7 +107,7 @@ class VoiceOutputService:
             if not played_via_pygame:
                 norm_path = tmp_path.replace("\\", "/")
                 # Ortalama süre tahmini (Türkçe'de ~11 karakter/saniye)
-                est_seconds = max(2.5, len(text) / 10.5 + 1.5)
+                est_seconds = max(3.0, len(text) / 10.0 + 2.0)
                 ps_script = f"""
                 Add-Type -AssemblyName PresentationCore
                 $player = New-Object System.Windows.Media.MediaPlayer
@@ -119,6 +122,7 @@ class VoiceOutputService:
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     timeout=int(est_seconds + 10),
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
                 )
 
             try:
@@ -146,6 +150,7 @@ class VoiceOutputService:
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=20,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
             )
         except Exception as e:
             logger.debug(f"Yerel SAPI seslendirme hatası: {e}")

@@ -44,6 +44,15 @@ class VoiceServiceTests(unittest.TestCase):
         self.assertEqual(result, "merhaba börü nasılsın")
         mock_recognizer.recognize_google.assert_called_once()
 
+    def test_patch_speech_recognition_windows_console(self):
+        from unittest.mock import patch
+        import os
+        from boru.voice.listener import patch_speech_recognition_windows_console
+        import speech_recognition as sr
+
+        patch_speech_recognition_windows_console()
+        self.assertTrue(getattr(sr.AudioData, "_boru_silent_patched", False))
+
 
 if __name__ == "__main__":
     unittest.main()
