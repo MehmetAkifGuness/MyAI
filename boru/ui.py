@@ -688,10 +688,10 @@ class ChatAppUI(ctk.CTk):
         )
 
     def _setup_jarvis_hotkey(self) -> None:
-        """Jarvis Overlay, Global Hotkey ve Kesintisiz Sesli Sohbet yöneticisini başlatır."""
+        """Börü Overlay, Global Hotkey, Sesli Sohbet ve Arka Plan Uyandırma dinleyicisini başlatır."""
         try:
             from boru.hotkey import GlobalHotkeyManager, JarvisOverlayWindow
-            from boru.voice import ContinuousVoiceController
+            from boru.voice import BackgroundWakeWordListener, ContinuousVoiceController
 
             self._continuous_voice = ContinuousVoiceController(
                 voice_input=self._voice_input,
@@ -708,18 +708,53 @@ class ChatAppUI(ctk.CTk):
                 on_open_main_ui=self.bring_to_front,
             )
             self._hotkey_mgr = GlobalHotkeyManager()
-            # Ctrl+Shift+B -> Jarvis Spotlight Overlay Aç/Kapat
+            # Ctrl+Shift+B -> Börü Spotlight Overlay Aç/Kapat
             self._hotkey_mgr.register("ctrl+shift+b", lambda: self.after(0, self._toggle_jarvis))
             # Ctrl+Shift+J -> Doğrudan Kesintisiz Hands-Free Sesli Sohbeti Başlat/Durdur
             self._hotkey_mgr.register("ctrl+shift+j", lambda: self.after(0, self._toggle_continuous_voice))
             self._hotkey_mgr.start()
-            self.log_terminal("✔ Börü Global Kısayolları (Ctrl+Shift+B, Ctrl+Shift+J) & Hands-Free aktif.", "success")
+
+            # Arka planda sürekli 'Börü' / 'Hey Börü' sesli uyandırma dinleyicisi
+            self._wake_listener = BackgroundWakeWordListener(
+                on_wake_word=self._on_background_wake_word,
+                recognizer=getattr(self._voice_input, "_recognizer", None),
+                microphone=getattr(self._voice_input, "_microphone", None),
+            )
+            self._wake_listener.start()
+
+            self.log_terminal("✔ Börü (Ctrl+Shift+B, Ctrl+Shift+J) & Sesli Uyandırma ('Börü') aktif.", "success")
         except Exception as e:
-            self.log_terminal(f"⚠️ Börü Kısayol sistemi başlatılamadı: {e}", "info")
+            self.log_terminal(f"⚠️ Börü Kısayol veya Uyandırma başlatılamadı: {e}", "info")
 
     def _toggle_jarvis(self) -> None:
         if getattr(self, "_jarvis_overlay", None):
             self._jarvis_overlay.toggle()
+
+    def _on_background_wake_word(self, remaining_cmd: str) -> None:
+        """Kullanıcı arka planda 'Börü' dediğinde tetiklenir."""
+        self.log_terminal(f"🐺 'Börü' uyandırma kelimesi algılandı! Komut: '{remaining_cmd}'", "success")
+        self.after(0, self._handle_wake_up_trigger, remaining_cmd)
+
+    def _handle_wake_up_trigger(self, remaining_cmd: str) -> None:
+        """Uyandırma gerçekleştiğinde overlay'i açar ve sesli diyaloğu başlatır."""
+        if getattr(self, "_jarvis_overlay", None):
+            self._jarvis_overlay.show()
+            self._jarvis_overlay.set_mic_active(True)
+
+        if not remaining_cmd:
+            def _greet_and_listen():
+                self._voice_output.speak("Dinliyorum, buyrun!", async_mode=False, force=True)
+                if getattr(self, "_continuous_voice", None):
+                    self._continuous_voice.start()
+
+            threading.Thread(target=_greet_and_listen, daemon=True).start()
+        else:
+            def _execute_and_listen():
+                self._handle_continuous_voice_speech(remaining_cmd)
+                if getattr(self, "_continuous_voice", None):
+                    self._continuous_voice.start()
+
+            threading.Thread(target=_execute_and_listen, daemon=True).start()
 
     def _toggle_continuous_voice(self) -> None:
         """Börü Hands-Free Kesintisiz Sesli Sohbet döngüsünü başlatır veya durdurur."""
@@ -730,8 +765,12 @@ class ChatAppUI(ctk.CTk):
             self._continuous_voice.stop()
             if getattr(self, "_jarvis_overlay", None):
                 self._jarvis_overlay.set_mic_active(False)
+            if getattr(self, "_wake_listener", None):
+                self._wake_listener.resume()
             self.log_terminal("🛑 Kesintisiz sesli sohbet sonlandırıldı.", "info")
         else:
+            if getattr(self, "_wake_listener", None):
+                self._wake_listener.pause()
             if getattr(self, "_jarvis_overlay", None):
                 self._jarvis_overlay.show()
                 self._jarvis_overlay.set_mic_active(True)
@@ -765,7 +804,12 @@ class ChatAppUI(ctk.CTk):
         if getattr(self, "_jarvis_overlay", None):
             self.after(0, lambda: self._jarvis_overlay.set_mic_active(False))
             self.after(0, lambda: self._jarvis_overlay.set_status("🟢 Hazır", "#48bb78"))
+            # Eğer ana pencere küçültülmüş/gizliyse overlay'i 1.5 sn sonra geri gizle
+            if not self.winfo_viewable():
+                self.after(1500, self._jarvis_overlay.hide)
         self.after(0, lambda: self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78"))
+        if getattr(self, "_wake_listener", None):
+            self._wake_listener.resume()
 
     def _handle_jarvis_command(self, cmd: str) -> str:
         """Börü Overlay üzerinden klavyeyle gönderilen komutları yürütür."""
