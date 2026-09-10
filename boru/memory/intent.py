@@ -53,6 +53,9 @@ class RuleBasedMemoryIntentDetector:
         re.IGNORECASE,
     )
 
+    def __init__(self, conversation_history=None):
+        self._conversation_history = conversation_history
+
     def is_memory_relevant(
         self,
         user_message: str,
@@ -63,6 +66,12 @@ class RuleBasedMemoryIntentDetector:
 
         if not normalized:
             return False
+
+        if self._conversation_history is not None and self._conversation_history.snapshot():
+            explicit_memory = re.search(r'\b(?:hafızan\w*|hafızam\w*|kalıcı|önceki oturum)\b', normalized, re.I)
+            recent_reference = re.search(r'\b(?:az önce|biraz önce|demin|bu sohbet|son mesaj|bir önceki)\b', normalized, re.I)
+            if not explicit_memory and recent_reference:
+                return False
 
         return any(
             pattern.search(normalized)

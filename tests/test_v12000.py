@@ -287,7 +287,7 @@ class ExperienceAndRoutingTests(unittest.TestCase):
 
     def test_v12_release_enables_bundle(self):
         with patch.object(main_v170, 'build_application') as builder:
-            build_release()
+            build_release('V12.0')
             self.assertEqual(builder.call_args.kwargs['application_version'], 'V12.0')
             self.assertTrue(builder.call_args.kwargs['deep_reasoning_enabled'])
             build_release('V11.0')

@@ -22,6 +22,7 @@ class AppSettings:
     memory_semantic_min_similarity: float = 0.55
     memory_subject_identity_min_similarity: float = 0.84
     fallback_model_name: str = ""
+    chat_model_name: str = ""
 
     @classmethod
     def from_env(cls) -> "AppSettings":
@@ -177,6 +178,7 @@ class AppSettings:
 
         return cls(
             model_name=model_name,
+            chat_model_name=os.getenv('BORU_CHAT_MODEL', '').strip(),
             fallback_model_name=fallback_model_name,
             assistant_name=assistant_name,
             history_turns=history_turns,

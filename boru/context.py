@@ -15,6 +15,7 @@ class ConversationContextBuilder:
         self,
         max_turns: int = 10,
         max_characters: int = 12_000,
+        max_turn_characters: int | None = None,
     ):
         if max_turns < 1:
             raise ValueError("max_turns en az 1 olmalıdır.")
@@ -26,6 +27,9 @@ class ConversationContextBuilder:
 
         self._max_turns = max_turns
         self._max_characters = max_characters
+        if max_turn_characters is not None and max_turn_characters < 1:
+            raise ValueError('max_turn_characters pozitif olmalıdır.')
+        self._max_turn_characters = max_turn_characters
 
     def build(
         self,
@@ -60,6 +64,9 @@ class ConversationContextBuilder:
             turn = candidates[
                 index:index + self.MESSAGES_PER_TURN
             ]
+            if self._max_turn_characters is not None:
+                cap = min(self._max_turn_characters, max(2, self._max_characters // 2))
+                turn = self._bounded_turn(turn, cap)
 
             turn_character_count = sum(
                 len(message.content)
@@ -86,3 +93,19 @@ class ConversationContextBuilder:
             for turn in selected_turns
             for message in turn
         ]
+
+    @staticmethod
+    def _bounded_turn(turn, cap):
+        if sum(len(m.content) for m in turn) <= cap:
+            return turn
+        result = []
+        for message in turn:
+            limit = cap // 2
+            content = message.content
+            if len(content) > limit:
+                marker = '\n[bağlam kısaltıldı]\n'
+                space = max(0, limit - len(marker))
+                content = content[:space // 2] + marker + (content[-(space - space // 2):] if space else '')
+                content = content[:limit]
+            result.append(ChatMessage(message.role, content))
+        return result

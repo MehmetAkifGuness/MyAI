@@ -385,6 +385,8 @@ def build_application(
     repository_workspace_enabled: bool = False,
     intelligent_task_intake_enabled: bool = False,
     deep_reasoning_enabled: bool = False,
+    web_research_enabled: bool = False,
+    conversation_quality_enabled: bool = False,
     terminal_feature_level: int = 0,
     project_edit_max_attempts: int = 2,
 ) -> ChatAppUI:
@@ -500,6 +502,7 @@ def build_application(
 
     context_builder = (
         ConversationContextBuilder(
+            max_turn_characters=4000 if conversation_quality_enabled else None,
             max_turns=(
                 settings.context_turns
             ),
@@ -550,7 +553,7 @@ def build_application(
         )
 
     memory_intent_detector = (
-        RuleBasedMemoryIntentDetector()
+        RuleBasedMemoryIntentDetector(history if conversation_quality_enabled else None)
     )
 
     (
@@ -1318,6 +1321,9 @@ def build_application(
         )
     if coding_operation is not None:
         operation_resolvers.insert(0, coding_operation)
+    if web_research_enabled:
+        from boru.web import WebResearchCoordinator
+        operation_resolvers.insert(0, WebResearchCoordinator(chat_model))
     operation_coordinator = ExclusiveOperationCoordinator(operation_resolvers)
 
     performance_coordinator = (
@@ -1368,17 +1374,26 @@ def build_application(
             chat_model=chat_model,
         )
 
+    conversation_model = chat_model
+    if conversation_quality_enabled:
+        from boru.conversation_quality import ConversationalChatModel, build_conversation_model
+        conversation_model = build_conversation_model(
+            settings.chat_model_name or settings.model_name,
+            fallback_name='' if settings.chat_model_name else settings.fallback_model_name,
+            performance_monitor=performance_monitor,
+        )
+        conversation_model = ConversationalChatModel(conversation_model)
     assistant = (
         AssistantService(
             chat_model=(
-                chat_model
+                conversation_model
             ),
             conversation_history=(
                 history
             ),
             prompt_factory=(
                 SystemPromptFactory(
-                    settings.assistant_name
+                    settings.assistant_name, conversational=conversation_quality_enabled
                 )
             ),
             context_builder=(

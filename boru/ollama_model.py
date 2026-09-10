@@ -25,6 +25,9 @@ class OllamaChatModel:
         keep_alive: str = "10m",
         performance_monitor: PerformanceMonitor | None = None,
         structured_thinking: bool | None = None,
+        chat_temperature: float | None = None,
+        chat_num_predict: int | None = None,
+        chat_thinking: bool | None = None,
     ):
         cleaned_model_name = model_name.strip()
         if not cleaned_model_name:
@@ -37,8 +40,15 @@ class OllamaChatModel:
             raise ValueError("Yapılandırılmış model çıktı sınırı pozitif olmalıdır.")
         if not keep_alive.strip():
             raise ValueError("Model keep_alive değeri boş olamaz.")
+        if chat_temperature is not None and (isinstance(chat_temperature, bool) or not 0 <= chat_temperature <= 2):
+            raise ValueError('Sohbet sıcaklığı 0 ile 2 arasında olmalıdır.')
+        if chat_num_predict is not None and (type(chat_num_predict) is not int or not 1 <= chat_num_predict <= 8192):
+            raise ValueError('Sohbet çıktı sınırı 1-8192 arasında tam sayı olmalıdır.')
+        if chat_thinking is not None and type(chat_thinking) is not bool:
+            raise ValueError('Sohbet düşünme ayarı bool olmalıdır.')
 
         self._model_name = cleaned_model_name
+        self._owned_clients = []
         if chat_client is None:
             client = ollama.Client(
                 timeout=request_timeout_seconds
@@ -48,6 +58,7 @@ class OllamaChatModel:
             structured_client = ollama.Client(
                 timeout=structured_timeout_seconds or request_timeout_seconds
             )
+            self._owned_clients = [client, structured_client]
             self._structured_chat_client = structured_client.chat
         else:
             self._chat_client = chat_client
@@ -57,6 +68,12 @@ class OllamaChatModel:
         self._keep_alive = keep_alive.strip()
         self._performance_monitor = performance_monitor
         self._structured_thinking = structured_thinking
+        self._chat_thinking = chat_thinking
+        self._chat_options = {}
+        if chat_temperature is not None:
+            self._chat_options['temperature'] = chat_temperature
+        if chat_num_predict is not None:
+            self._chat_options['num_predict'] = chat_num_predict
         self._lock = RLock()
 
     @staticmethod
@@ -100,6 +117,11 @@ class OllamaChatModel:
                 "temperature": 0,
                 "num_predict": self._structured_num_predict,
             }
+        else:
+            if self._chat_thinking is not None:
+                options['think'] = self._chat_thinking
+            if self._chat_options:
+                options['options'] = dict(self._chat_options)
 
         operation = "model.structured" if response_format is not None else "model.chat"
         started = monotonic()
@@ -127,6 +149,8 @@ class OllamaChatModel:
             raise RuntimeError("Ollama yanıtında message alanı bulunamadı.")
 
         content = self._field(response_message, "content", "")
+        if content and response_format is None and self._chat_options and self._field(response, 'done_reason') == 'length':
+            return str(content or '') + '\n\n[Yanıt çıktı sınırına ulaştı; tamamı üretilemedi.]'
         return str(content or "")
 
     def warmup(self) -> None:
@@ -138,3 +162,10 @@ class OllamaChatModel:
                 prompt="",
                 keep_alive=self._keep_alive,
             )
+
+    def close(self) -> None:
+        """Release only clients created by this adapter; injected clients remain caller-owned."""
+        with self._lock:
+            for client in self._owned_clients:
+                client.close()
+            self._owned_clients.clear()

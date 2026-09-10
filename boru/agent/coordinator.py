@@ -54,9 +54,12 @@ class GeneralAgentCoordinator:
         folded = " ".join(user_message.casefold().split())
         has_question = any(cue in folded for cue in cls._QUESTION_CUES)
         has_project_context = any(cue in folded for cue in cls._PROJECT_CUES)
-        has_location_question = "hangi dosya" in folded or "nerede" in folded
+        has_location_question = "hangi dosya" in folded
+        has_code_path = re.search(r'\b[\w./\\-]+\.(?:py|js|ts|java|cs|dart|go|rs)\b', user_message) is not None
+        has_symbol_context = any(cue in folded for cue in ('sınıfı', 'sınıfın', 'fonksiyonu', 'metodu', 'modülü', 'sembolü'))
         return has_question and (
-            cls._CODE_REFERENCE.search(user_message) is not None
+            has_code_path
+            or (has_symbol_context and cls._CODE_REFERENCE.search(user_message) is not None)
             or (has_location_question and cls._NAMED_REFERENCE.search(user_message) is not None)
             or has_project_context
         )

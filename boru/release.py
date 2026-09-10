@@ -9,7 +9,7 @@ _RELEASES = (
     "V3.9", "V4.0",
     "V4.1", "V4.2", "V4.3", "V4.4", "V4.5", "V4.6", "V4.7", "V4.8",
     "V4.9", "V5.0", "V5.1", "V5.2", "V6.0", "V6.1", "V6.2", "V6.3",
-    "V6.4", "V6.5", "V6.6", "V7.0", "V8.0", "V9.0", "V10.0", "V11.0", "V12.0",
+    "V6.4", "V6.5", "V6.6", "V7.0", "V8.0", "V9.0", "V10.0", "V11.0", "V12.0", "V13.0",
 )
 
 
@@ -33,6 +33,8 @@ _MILESTONES = {
     "repository_workspace": "V10.0",
     "intelligent_task_intake": "V11.0",
     "deep_reasoning": "V12.0",
+    "web_research": "V13.0",
+    "conversation_quality": "V13.0",
 }
 
 
@@ -90,10 +92,12 @@ def _feature_labels(flags: dict[str, bool | int]) -> tuple[tuple[str, bool], ...
         ("kalıcı ve izole repo çalışma alanı", bool(flags["repository_workspace"])),
         ("kanıtlı görev anlama ve hedefli netleştirme", bool(flags["intelligent_task_intake"])),
         ('kaynak okuyan araştırma döngüsü, görev bazlı model seçimi ve doğrulanmış deneyim', bool(flags['deep_reasoning'])),
+        ('güvenli web arama, sayfa okuma ve kaynaklı web yanıtları', bool(flags['web_research'])),
+        ('bağlamı takip eden gündelik sohbet ve yanıt kalite kontrolü', bool(flags['conversation_quality'])),
     )
 
 
-def build_release(version: str = "V12.0"):
+def build_release(version: str = "V13.0"):
     from main_v170 import build_application
 
     if version not in _RELEASES:
@@ -142,6 +146,8 @@ def build_release(version: str = "V12.0"):
         repository_workspace_enabled=bool(flags["repository_workspace"]),
         intelligent_task_intake_enabled=bool(flags["intelligent_task_intake"]),
         deep_reasoning_enabled=bool(flags['deep_reasoning']),
+        web_research_enabled=bool(flags['web_research']),
+        conversation_quality_enabled=bool(flags['conversation_quality']),
         terminal_feature_level=int(flags["terminal_feature_level"]),
         project_edit_max_attempts=2 if flags["goal_driven_change"] else 1,
     )
