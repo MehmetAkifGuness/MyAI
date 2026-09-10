@@ -2,9 +2,11 @@ import re
 
 from boru.architecture.request_parser import RuleBasedArchitectureRequestParser
 from boru.coding.models import CodingRequest
+from boru.nlu.fuzzy_matcher import match_command_prefix
 
 
 class RuleBasedCodingRequestParser:
+    _TRIGGERS = ("kodla", "coding", "kod değişikliği hazırla", "kodlama")
     _REQUEST = re.compile(
         r"^\s*(?:kodla|coding|kod\s+değişikliği\s+hazırla)\s*:\s*(?P<task>.+?)\s*$",
         re.IGNORECASE | re.DOTALL,
@@ -22,11 +24,22 @@ class RuleBasedCodingRequestParser:
 
     def parse(self, user_message: str) -> CodingRequest | None:
         match = self._REQUEST.fullmatch(user_message)
-        if match is None:
-            return None
-        return CodingRequest(
-            self._architecture_parser.parse_task(match.group("task"))
-        )
+        if match is not None:
+            return CodingRequest(
+                self._architecture_parser.parse_task(match.group("task"))
+            )
+
+        fuzzy = match_command_prefix(user_message, self._TRIGGERS)
+        if fuzzy is not None:
+            _, task = fuzzy
+            if task:
+                return CodingRequest(
+                    self._architecture_parser.parse_task(task)
+                )
+
+        return None
 
     def is_coding_intent(self, user_message: str) -> bool:
-        return self._INTENT.search(user_message) is not None
+        if self._INTENT.search(user_message) is not None:
+            return True
+        return match_command_prefix(user_message, self._TRIGGERS) is not None

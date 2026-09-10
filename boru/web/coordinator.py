@@ -2,6 +2,7 @@ import os
 import re
 from urllib.parse import urlsplit
 
+from boru.nlu.fuzzy_matcher import match_command_prefix
 from boru.web.answer import GroundedWebAnswer, safe_label
 from boru.web.content import document
 from boru.web.http import SafeWebClient, check_public_input
@@ -11,6 +12,7 @@ from boru.web.search import WebSearch, SearchHit
 class WebResearchCoordinator:
     _COMMAND = re.compile(r'^\s*(web ara|web oku|web araştır|internetten araştır)\s*:\s*(.*)$', re.I | re.S)
     _NATURAL = re.compile(r'^\s*(?:internetten|webden|web üzerinde)\s+(.+?)\s+(?:araştır|araştırır mısın|araştır ve açıkla)[?.!]*\s*$', re.I)
+    _TRIGGERS = ('web ara', 'web oku', 'web araştır', 'internetten araştır')
     HELP = ("WEB YARDIM\n'web ara: konu'; 'web oku: https://adres | soru'; "
             "'web araştır: soru'; 'internetten araştır: soru'; 'web durum'.\n"
             'Arama ve okuma salt-okunurdur. Sorgu arama sağlayıcısına gönderilir; yalnızca yazdığınız sorgu paylaşılır.')
@@ -31,8 +33,15 @@ class WebResearchCoordinator:
         match = self._COMMAND.match(message)
         natural = self._NATURAL.match(message) if match is None else None
         if match is None and natural is None:
-            return self.HELP if folded.startswith(('web ', 'internetten araştır')) else None
-        command, value = (match.group(1).casefold(), match.group(2).strip()) if match else ('web araştır', natural.group(1).strip())
+            fuzzy = match_command_prefix(message, self._TRIGGERS)
+            if fuzzy is not None:
+                command, value = fuzzy
+            elif folded.startswith(('web ', 'internetten araştır')):
+                return self.HELP
+            else:
+                return None
+        else:
+            command, value = (match.group(1).casefold(), match.group(2).strip()) if match else ('web araştır', natural.group(1).strip())
         try:
             check_public_input(value)
             if command == 'web oku':

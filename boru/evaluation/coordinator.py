@@ -15,9 +15,16 @@ class EvaluationCoordinator:
                 return "Değerlendirme güncel değil; kaynak veya test dosyaları değişti. Yeniden değerlendirin."
             return report.render()
         prefix, separator, value = text.partition(":")
-        if prefix.strip().casefold() not in {"kendini değerlendir", "öz değerlendir"}:
-            return None
-        if not separator or not value.strip():
+        eval_triggers = {"kendini değerlendir", "oz degerlendir", "kendini degerlendir", "öz değerlendir"}
+        if prefix.strip().casefold() not in eval_triggers:
+            from boru.nlu.fuzzy_matcher import match_command_prefix
+
+            fuzzy = match_command_prefix(text, tuple(eval_triggers))
+            if fuzzy is not None:
+                _, value = fuzzy
+            else:
+                return None
+        if not value.strip():
             return "Biçim: kendini değerlendir: boru/modul.py[, ikinci.py]"
         try:
             request = RuleBasedTestAgentRequestParser().parse("test ajanı: " + value)

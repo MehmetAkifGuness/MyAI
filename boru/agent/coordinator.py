@@ -1,9 +1,11 @@
 import re
 
 from boru.agent.contracts import AgentRunner
+from boru.nlu.fuzzy_matcher import match_command_prefix
 
 
 class GeneralAgentCoordinator:
+    _TRIGGERS = ("ajan", "kod tabanını araştır", "kod tabanını ara")
     _PATTERN = re.compile(r"^\s*(?:ajan|kod tabanını araştır)\s*:\s*(.*)$", re.IGNORECASE | re.DOTALL)
     _CODE_REFERENCE = re.compile(
         r"(?:\b[A-ZÇĞİÖŞÜ][A-Za-zÇĞİÖŞÜçğıöşü0-9_]*[A-ZÇĞİÖŞÜ][A-Za-zÇĞİÖŞÜçğıöşü0-9_]*\b|"
@@ -39,7 +41,11 @@ class GeneralAgentCoordinator:
         elif self._is_automatic_candidate(user_message):
             objective = user_message.strip()
         else:
-            return None
+            fuzzy = match_command_prefix(user_message, self._TRIGGERS)
+            if fuzzy is not None:
+                _, objective = fuzzy
+            else:
+                return None
         if not objective:
             return "Ajan hedefi eksik. Örnek: ajan: kullanıcı mesajı hangi sınıfta işleniyor?"
         try:

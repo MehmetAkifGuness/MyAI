@@ -43,10 +43,16 @@ class ImprovementCoordinator:
             return ("Son iyileştirmenin dosyaları önceki içeriğe döndürülecek. "
                     f"Onay: '{self._UNDO_APPROVE}'; vazgeçmek için 'iptal'.")
         prefix, separator, value = message.partition(":")
-        if prefix.strip().casefold() != "iyileştir":
-            return None
+        if prefix.strip().casefold() not in {"iyileştir", "iyilestir"}:
+            from boru.nlu.fuzzy_matcher import match_command_prefix
+
+            fuzzy = match_command_prefix(message, ("iyileştir", "iyilestir"))
+            if fuzzy is not None:
+                _, value = fuzzy
+            else:
+                return None
         paths_text, divider, objective = value.partition("|")
-        if not separator or not divider or not objective.strip():
+        if not divider or not objective.strip():
             return "Biçim: iyileştir: boru/dosya.py[, ikinci.py] | somut iyileştirme hedefi"
         return self._prepare(paths_text, objective)
 

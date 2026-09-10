@@ -15,6 +15,7 @@ from boru.tools.edit_models import (
 from boru.tools.edit_workspace import (
     WorkspaceEditError,
 )
+from boru.nlu.fuzzy_matcher import locate_unique_fuzzy_slice
 
 
 class RuleBasedSmartEditRequestParser:
@@ -306,6 +307,14 @@ class LLMSmartEditProposalPreparer:
                     source_content=source.content,
                     payload=payload,
                 )
+                if source.content.count(payload.old_text) != 1:
+                    fuzzy_slice = locate_unique_fuzzy_slice(source.content, payload.old_text)
+                    if fuzzy_slice is not None:
+                        payload = SmartEditPayload(
+                            old_text=source.content[fuzzy_slice[0] : fuzzy_slice[1]],
+                            new_text=payload.new_text,
+                            reason=payload.reason,
+                        )
             except Exception as error:
                 last_error = error
 
@@ -369,9 +378,10 @@ class LLMSmartEditProposalPreparer:
         )
 
         if occurrences == 0:
-            raise ValueError(
-                "Smart edit old_text gerçek dosya içeriğinde bulunamadı."
-            )
+            if locate_unique_fuzzy_slice(source_content, payload.old_text) is None:
+                raise ValueError(
+                    "Smart edit old_text gerçek dosya içeriğinde bulunamadı."
+                )
 
         if occurrences > 1:
             raise ValueError(

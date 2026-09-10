@@ -128,21 +128,27 @@ class SafeEditWorkspace:
             request.old_text
         )
 
-        if occurrences == 0:
-            raise WorkspaceEditError(
-                "Değiştirilecek eski içerik hedef dosyada bulunamadı."
+        if occurrences == 1:
+            updated = original.replace(
+                request.old_text,
+                request.new_text,
+                1,
             )
+        elif occurrences == 0:
+            from boru.nlu.fuzzy_matcher import locate_unique_fuzzy_slice
 
-        if occurrences > 1:
+            fuzzy_slice = locate_unique_fuzzy_slice(original, request.old_text)
+            if fuzzy_slice is not None:
+                start, end = fuzzy_slice
+                updated = original[:start] + request.new_text + original[end:]
+            else:
+                raise WorkspaceEditError(
+                    "Değiştirilecek eski içerik hedef dosyada bulunamadı."
+                )
+        else:
             raise WorkspaceEditError(
                 "Değiştirilecek eski içerik dosyada birden fazla kez bulundu; işlem belirsiz olduğu için reddedildi."
             )
-
-        updated = original.replace(
-            request.old_text,
-            request.new_text,
-            1,
-        )
 
         encoded = self._encode_text(
             updated,

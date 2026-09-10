@@ -110,8 +110,8 @@ def build_release(version: str = "V13.0"):
     return build_application(
         application_version=version,
         startup_message=(
-            f"Börü {version} hazır. {features} aktif. "
-            "Testler için Docker Linux motoru gereklidir."
+            f"Börü {version} hazır. Size bugün nasıl yardımcı olabilirim?\n"
+            "(Komut ve araç rehberi için 'yardım' veya 'web durum' yazabilirsiniz.)"
         ),
         structured_timeout_seconds=180, structured_num_predict=2048,
         architect_max_attempts=2 if flags["adaptive_model_routing"] else 1,
