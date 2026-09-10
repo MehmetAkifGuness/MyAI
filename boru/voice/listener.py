@@ -82,6 +82,9 @@ class VoiceInputService:
                 patch_speech_recognition_windows_console()
                 if self._recognizer is None:
                     self._recognizer = sr.Recognizer()
+                    self._recognizer.pause_threshold = 2.0  # Konuşma arası duraklamalarda cümleyi yarıda kesmemesi için
+                    self._recognizer.phrase_threshold = 0.2
+                    self._recognizer.non_speaking_duration = 0.8
                 if self._microphone is None:
                     self._microphone = sr.Microphone()
                 self._initialized = True
@@ -89,16 +92,19 @@ class VoiceInputService:
                 logger.error(f"Mikrofon veya SpeechRecognition başlatılamadı: {e}")
                 raise RuntimeError(f"Ses tanıma motoru başlatılamadı: {e}")
 
-    def listen_once(self, timeout: float = 5.0, phrase_time_limit: float = 10.0) -> str:
+    def listen_once(self, timeout: float = 8.0, phrase_time_limit: float = 30.0, adjust_noise: bool = False) -> str:
         """
         Mikrofonu dinler ve konuşulan metni Türkçe olarak döndürür.
+        phrase_time_limit 30 saniyeye çıkarıldı, pause_threshold 2.0 saniyeye ayarlandı;
+        böylece uzun ve duraklamalı cümleler asla yarıda kesilmez.
         """
         self._ensure_init()
         import speech_recognition as sr
 
         try:
             with self._microphone as source:
-                self._recognizer.adjust_for_ambient_noise(source, duration=0.4)
+                if adjust_noise:
+                    self._recognizer.adjust_for_ambient_noise(source, duration=0.3)
                 audio = self._recognizer.listen(
                     source,
                     timeout=timeout,

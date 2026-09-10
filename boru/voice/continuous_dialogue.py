@@ -164,7 +164,7 @@ class ContinuousVoiceController:
                 self._set_status("🎙️ Dinliyor (Konuşun)...", "#ecc94b")
 
                 try:
-                    text = self._voice_input.listen_once(timeout=8.0, phrase_time_limit=15.0)
+                    text = self._voice_input.listen_once(timeout=8.0, phrase_time_limit=30.0)
                     consecutive_timeouts = 0
                 except TimeoutError:
                     consecutive_timeouts += 1

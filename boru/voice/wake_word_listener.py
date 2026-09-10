@@ -51,6 +51,9 @@ class BackgroundWakeWordListener:
                 self._recognizer = sr.Recognizer()
                 self._recognizer.energy_threshold = 300
                 self._recognizer.dynamic_energy_threshold = True
+                self._recognizer.pause_threshold = 1.5
+                self._recognizer.phrase_threshold = 0.2
+                self._recognizer.non_speaking_duration = 0.6
 
             if self._microphone is None:
                 self._microphone = sr.Microphone()
@@ -78,7 +81,7 @@ class BackgroundWakeWordListener:
                 self._stop_listening_fn = self._recognizer.listen_in_background(
                     self._microphone,
                     self._audio_callback,
-                    phrase_time_limit=4.0,
+                    phrase_time_limit=10.0,
                 )
                 self._is_running = True
                 self._is_paused = False

@@ -117,11 +117,15 @@ class VoiceOutputService:
                 $player.Close()
                 """
                 encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startupinfo.wShowWindow = subprocess.SW_HIDE
                 subprocess.run(
                     ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     timeout=int(est_seconds + 10),
+                    startupinfo=startupinfo,
                     creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
                 )
 
@@ -145,11 +149,15 @@ class VoiceOutputService:
                 f"$synth.Speak('{escaped}')"
             )
             encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
             subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=20,
+                startupinfo=startupinfo,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
             )
         except Exception as e:
