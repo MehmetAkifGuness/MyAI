@@ -133,3 +133,4 @@ class BackgroundWakeWordListener:
         except Exception:
             # Gürültü, anlaşılamayan ses veya ağ zaman aşımı durumunda sessizce devam et
             pass
+

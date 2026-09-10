@@ -261,3 +261,4 @@ class ProjectDependencyGraph:
             total_files=len(changes),
             total_replacements=total_replacements,
         )
+

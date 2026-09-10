@@ -9,28 +9,53 @@ logger = logging.getLogger(__name__)
 
 STOP_PHRASES = {
     "kapat",
-    "tamamdır",
-    "tamam",
-    "teşekkürler",
-    "teşekkür ederim",
+    "börü kapat",
+    "sohbeti kapat",
+    "kendini kapat",
+    "sesli modu kapat",
+    "dinlemeyi durdur",
     "görüşürüz",
     "hoşça kal",
     "hoşçakal",
-    "sus",
-    "dur",
-    "iptal",
-    "çıkış",
-    "çık",
+    "bay bay",
+    "baybay",
+    "iyi günler",
+    "iyi akşamlar",
+    "iyi geceler",
+    "bu kadar yeterli",
+    "tamamdır teşekkürler",
+    "teşekkürler kapat",
+    "teşekkürler kapatabilirsin",
+    "teşekkürler",
+    "teşekkür ederim",
 }
 
 
 def is_stop_phrase(text: str) -> bool:
+    """
+    Kullanıcının diyaloğu sonlandırmak isteyip istemediğini kontrol eder.
+    'tamam', 'tamamdır' veya 'tamam şimdi şunu yapalım' gibi geçiş ifadeleri
+    diyaloğu KESİNLİKLE KAPATMAZ. Yalnızca net ve kısa kapatma/vedalaşma
+    cümleleri kabul edilir.
+    """
     cleaned = text.lower().strip().strip(".!?,")
+    words = cleaned.split()
+
+    # Kullanıcı 4 kelimeden uzun bir cümle kurmuşsa (örn: "tamam şimdi fonksiyonu test et") kapatma değildir
+    if len(words) > 4:
+        return False
+
+    # "tamam" veya "tamamdır" tek başına kapatma DEĞİLDİR; kullanıcı onay veriyordur
+    if cleaned in ("tamam", "tamamdır", "ok", "peki"):
+        return False
+
     if cleaned in STOP_PHRASES:
         return True
+
     for phrase in STOP_PHRASES:
-        if cleaned.startswith(phrase) or cleaned.endswith(phrase):
+        if cleaned == phrase or cleaned == f"börü {phrase}":
             return True
+
     return False
 
 

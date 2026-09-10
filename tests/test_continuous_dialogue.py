@@ -13,16 +13,21 @@ from boru.voice.continuous_dialogue import (
 class TestStopPhraseDetector:
     def test_exact_stop_phrases(self):
         assert is_stop_phrase("kapat")
-        assert is_stop_phrase("tamamdır")
-        assert is_stop_phrase("teşekkürler")
+        assert is_stop_phrase("börü kapat")
         assert is_stop_phrase("görüşürüz")
         assert is_stop_phrase("hoşça kal")
-        assert is_stop_phrase("dur")
+        assert is_stop_phrase("tamamdır teşekkürler")
+
+    def test_tamam_is_not_a_stop_phrase(self):
+        assert not is_stop_phrase("tamam")
+        assert not is_stop_phrase("tamamdır")
+        assert not is_stop_phrase("tamam şimdi kodu çalıştıralım")
+        assert not is_stop_phrase("tamam bunu anladım")
 
     def test_phrases_with_punctuation(self):
-        assert is_stop_phrase("Tamamdır!")
+        assert is_stop_phrase("Kapat!")
         assert is_stop_phrase("Teşekkürler.")
-        assert is_stop_phrase("Kapat lütfen.")
+        assert is_stop_phrase("Görüşürüz.")
 
     def test_normal_queries_are_not_stop_phrases(self):
         assert not is_stop_phrase("test üret: boru/ui.py")

@@ -197,3 +197,4 @@ class DependencyGraphCoordinator:
             "💡 Değişikliklerin doğruluğunu test etmek için `pytest` çalıştırabilirsiniz.",
         ])
         return "\n".join(lines)
+

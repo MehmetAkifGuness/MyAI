@@ -81,3 +81,4 @@ class TestBackgroundWakeWordListener:
         mock_rec.recognize_google.return_value = "Börü"
         listener._audio_callback(mock_rec, MagicMock())
         callback.assert_not_called()
+

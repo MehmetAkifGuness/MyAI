@@ -108,3 +108,4 @@ class TestGlobalHotkeyManager:
         # Başlatılmamış yöneticide stop çağırmak hata vermemelidir
         manager.stop()
         assert not manager.is_running
+
