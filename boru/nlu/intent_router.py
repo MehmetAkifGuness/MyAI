@@ -17,6 +17,7 @@ class RoutedIntent(str, Enum):
     CODING = "CODING"
     IMPROVEMENT = "IMPROVEMENT"
     TESTING = "TESTING"
+    TEST_GENERATION = "TEST_GENERATION"
     RESEARCH = "RESEARCH"
     STATUS = "STATUS"
     GENERAL_CHAT = "GENERAL_CHAT"
@@ -42,6 +43,11 @@ class FreeFormIntentRouter:
         re.IGNORECASE,
     )
 
+    # Test üretme niyetleri
+    _TEST_GENERATE_PATTERNS = (
+        re.compile(r"\b(?:test\s+üret|test\s+uret|test\s+oluştur|test\s+olustur|testlerini\s+yaz|testlerini\s+oluştur|test\s+yaz)\b", re.IGNORECASE),
+    )
+
     # Kodlama / Ekleme / Fonksiyon yazma niyetleri
     _CODING_PATTERNS = (
         re.compile(r"\b(?:kodla|kodunu\s+yaz|kodu\s+yaz|fonksiyon\s+yaz|fonksiyonu\s+ekle|yeni\s+fonksiyon|class\s+ekle|sınıf\s+ekle)\b", re.IGNORECASE),
@@ -57,7 +63,7 @@ class FreeFormIntentRouter:
 
     # Test çalıştırma niyetleri
     _TEST_PATTERNS = (
-        re.compile(r"\b(?:test\s+et|testleri\s+çalıştır|testleri\s+koş|test\s+ajanı|testlerini\s+yaz)\b", re.IGNORECASE),
+        re.compile(r"\b(?:test\s+et|testleri\s+çalıştır|testleri\s+koş|test\s+ajanı)\b", re.IGNORECASE),
     )
 
     # Durum / Kendini değerlendirme niyetleri
@@ -75,11 +81,12 @@ class FreeFormIntentRouter:
                 original_message=raw,
             )
 
-        # Zaten açık bir komut ön eki varsa dokunma (örn: 'kodla:', 'iyileştir:', 'yardım')
+        # Zaten açık bir komut ön eki varsa dokunma (örn: 'kodla:', 'iyileştir:', 'yardım', 'test üret:')
         colon_prefix = raw.partition(":")[0].strip().casefold()
-        if colon_prefix in {"kodla", "coding", "iyileştir", "iyilestir", "test ajanı", "araştır", "web araştır"}:
+        if colon_prefix in {"kodla", "coding", "iyileştir", "iyilestir", "test ajanı", "test üret", "test uret", "test oluştur", "test yaz", "araştır", "web araştır"}:
+            intent = RoutedIntent.TEST_GENERATION if "üret" in colon_prefix or "yaz" in colon_prefix and "test" in colon_prefix else (RoutedIntent.CODING if "kod" in colon_prefix else RoutedIntent.IMPROVEMENT)
             return IntentRouteResult(
-                intent=RoutedIntent.CODING if "kod" in colon_prefix else RoutedIntent.IMPROVEMENT,
+                intent=intent,
                 confidence=1.0,
                 transformed_message=raw,
                 original_message=raw,
@@ -87,7 +94,19 @@ class FreeFormIntentRouter:
 
         file_matches = self._FILE_REGEX.findall(raw)
 
-        # 1. Test niyeti kontrolü
+        # 1. Test Üretme niyeti kontrolü (Örn: 'boru/tools.py için test üret/yaz')
+        for pattern in self._TEST_GENERATE_PATTERNS:
+            if pattern.search(raw):
+                if file_matches:
+                    transformed = f"test üret: {file_matches[0]}"
+                    return IntentRouteResult(
+                        intent=RoutedIntent.TEST_GENERATION,
+                        confidence=0.92,
+                        transformed_message=transformed,
+                        original_message=raw,
+                    )
+
+        # 2. Test Çalıştırma niyeti kontrolü
         for pattern in self._TEST_PATTERNS:
             if pattern.search(raw):
                 if file_matches:
