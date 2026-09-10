@@ -11,6 +11,11 @@ from boru.improvement import (
     SafeChangeScopeResolver,
     VerifiedImprovementApplier,
 )
+from boru.reflection import (
+    JsonReflectionRepository,
+    ReflectionContextProvider,
+    SelfReflectionEngine,
+)
 from boru.agent import GeneralAgentCoordinator, ReadOnlyToolAgent
 from boru.code_index import (
     CodeSearchTool,
@@ -1264,6 +1269,12 @@ def build_application(
                 ),
             ),
         )
+    reflection_repository = JsonReflectionRepository(
+        _resolve_project_path("data/reflections.json")
+    )
+    reflection_engine = SelfReflectionEngine(reflection_repository)
+    reflection_context_provider = ReflectionContextProvider(reflection_engine)
+
     if improvement_enabled:
         if evaluator is None or coding_coordinator is None:
             raise ValueError("İyileştirme Coding, değerlendirme ve sandbox gerektirir.")
@@ -1282,6 +1293,7 @@ def build_application(
             improvement_applier,
             evaluator,
             include_baseline_context=goal_driven_change_enabled,
+            reflection_engine=reflection_engine,
         )
         if natural_change_enabled:
             if code_index is None:
@@ -1459,6 +1471,7 @@ def build_application(
                         memory_intent_detector
                     ),
                 ),
+                reflection_context_provider,
             ],
         )
     )

@@ -16,6 +16,7 @@ class ImprovementCoordinator:
         *,
         include_baseline_context: bool = False,
         baseline_context_characters: int = 5000,
+        reflection_engine=None,
     ):
         if baseline_context_characters < 1:
             raise ValueError("Başlangıç değerlendirme bağlamı sınırı pozitif olmalıdır.")
@@ -24,7 +25,10 @@ class ImprovementCoordinator:
         self._evaluator = evaluator
         self._include_baseline_context = include_baseline_context
         self._baseline_context_characters = baseline_context_characters
+        self._reflection_engine = reflection_engine
         self._undo_pending = False
+        self._last_paths = ()
+        self._last_objective = ""
 
     @property
     def has_pending(self) -> bool:
@@ -92,6 +96,8 @@ class ImprovementCoordinator:
                     "\n\nDOĞRULAMA_KANITI:\n"
                     + baseline_text[: self._baseline_context_characters]
                 )
+            self._last_paths = request.source_paths
+            self._last_objective = objective.strip()
             response = self._coding.resolve("kodla: " + task)
         except (OSError, ValueError, RuntimeError) as error:
             return f"İyileştirme başlatılamadı: {error}"
@@ -108,6 +114,15 @@ class ImprovementCoordinator:
         report = self._applier.last_validation
         if report is not None and result.startswith("Coding Agent değişikliği uygulandı"):
             result += "\n\nGeçici kopya değerlendirmesi:\n" + report.render()
+            if self._reflection_engine is not None:
+                try:
+                    self._reflection_engine.record_success(
+                        task=self._last_objective or "İyileştirme",
+                        paths=self._last_paths,
+                        summary=f"İyileştirme başarıyla doğrulandı ve uygulandı: {self._last_objective}",
+                    )
+                except Exception:
+                    pass
         return result
 
     def _resolve_undo(self, normalized):
@@ -119,6 +134,15 @@ class ImprovementCoordinator:
         self._undo_pending = False
         try:
             result = self._applier.rollback()
+            if self._reflection_engine is not None and self._last_paths:
+                try:
+                    self._reflection_engine.record_rollback(
+                        paths=self._last_paths,
+                        reason="Kullanıcı onaylanan iyileştirmeyi geri aldı",
+                    )
+                except Exception:
+                    pass
         except (OSError, RuntimeError, ValueError) as error:
             return f"İyileştirme geri alınamadı: {error}"
         return f"İyileştirme geri alındı: {len(result.outcomes)} dosya."
+
