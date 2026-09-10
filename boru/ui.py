@@ -202,12 +202,12 @@ class ChatAppUI(ctk.CTk):
         )
         self.chat_box.pack(fill="both", expand=True, padx=12, pady=(12, 6))
 
-        # Renkli Diff Etiketleri Tanımla (Tkinter Text Tag'leri)
+        # Renkli Diff Etiketleri Tanımla (CustomTkinter uyumlu renkler)
         self.chat_box.tag_config("diff_add", foreground="#48bb78", background="#1c2d20")
         self.chat_box.tag_config("diff_sub", foreground="#f56565", background="#3b1d1d")
-        self.chat_box.tag_config("diff_hdr", foreground="#63b3ed", font=("Segoe UI", 12, "bold"))
-        self.chat_box.tag_config("sender_user", foreground="#63b3ed", font=("Segoe UI", 13, "bold"))
-        self.chat_box.tag_config("sender_bot", foreground="#ecc94b", font=("Segoe UI", 13, "bold"))
+        self.chat_box.tag_config("diff_hdr", foreground="#63b3ed")
+        self.chat_box.tag_config("sender_user", foreground="#63b3ed")
+        self.chat_box.tag_config("sender_bot", foreground="#ecc94b")
         self.chat_box.tag_config("divider", foreground="#4a5568")
 
         # Katlanabilir Canlı Konsol & Terminal Paneli (Varsayılan kapalı)
@@ -255,7 +255,7 @@ class ChatAppUI(ctk.CTk):
             text_color="#c9d1d9",
         )
         self.terminal_box.pack(fill="both", expand=True, padx=8, pady=(2, 4))
-        self.terminal_box.tag_config("term_cmd", foreground="#f0883e", font=("Consolas", 11, "bold"))
+        self.terminal_box.tag_config("term_cmd", foreground="#f0883e")
         self.terminal_box.tag_config("term_success", foreground="#3fb950")
         self.terminal_box.tag_config("term_error", foreground="#f85149")
         self.terminal_box.tag_config("term_info", foreground="#58a6ff")
