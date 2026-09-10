@@ -84,11 +84,39 @@ class ControlledGitCoordinator:
         return self._execute(pending.command)
 
     def _execute(self, command: CommandSpec) -> str:
+        self._ensure_healthy_git_index()
         try:
             result = self._executor.execute(command)
+            if not result.succeeded and "index file smaller than expected" in (result.output or "").lower():
+                self._repair_corrupted_index()
+                result = self._executor.execute(command)
         except (OSError, PermissionError, ValueError) as error:
             return f"Git komutu çalıştırılamadı: {error}"
         return self._format_result(result)
+
+    @staticmethod
+    def _ensure_healthy_git_index() -> None:
+        try:
+            from pathlib import Path
+            index_path = Path(".git/index")
+            if index_path.exists() and index_path.stat().st_size < 12:
+                index_path.unlink()
+                import subprocess
+                subprocess.run(["git", "reset"], capture_output=True, check=False)
+        except Exception:
+            pass
+
+    @staticmethod
+    def _repair_corrupted_index() -> None:
+        try:
+            from pathlib import Path
+            index_path = Path(".git/index")
+            if index_path.exists():
+                index_path.unlink()
+            import subprocess
+            subprocess.run(["git", "reset"], capture_output=True, check=False)
+        except Exception:
+            pass
 
     @staticmethod
     def _format_result(result: CommandExecutionResult) -> str:
