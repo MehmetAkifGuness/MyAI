@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 
 from boru.context import ConversationContextBuilder
+from boru.context_reference_resolver import ConversationReferenceResolver
 from boru.contracts import (
     AssistantContextProvider,
     ChatModel,
@@ -53,6 +54,7 @@ class AssistantService:
         self._context_providers = tuple(
             context_providers
         )
+        self._reference_resolver = ConversationReferenceResolver()
 
     def reply(
         self,
@@ -106,6 +108,77 @@ class AssistantService:
         )
 
         return assistant_text
+
+    def reply_stream(
+        self,
+        user_message: str,
+    ):
+        """Yield response chunks sequentially. If direct response applies, yield it in one piece."""
+        user_text = user_message.strip()
+
+        if not user_text:
+            raise ValueError(
+                "Kullanıcı mesajı boş olamaz."
+            )
+
+        self._notify_observers(
+            user_text
+        )
+
+        direct_answer = (
+            self._resolve_direct_response(
+                user_text
+            )
+        )
+
+        if direct_answer is not None:
+            self._history.add_turn(
+                user_text,
+                direct_answer,
+            )
+            yield direct_answer
+            return
+
+        messages = (
+            self._build_model_messages(
+                user_text
+            )
+        )
+
+        stream_func = getattr(self._chat_model, "generate_stream", None)
+        if callable(stream_func):
+            accumulated_chunks: list[str] = []
+            for chunk in stream_func(messages):
+                accumulated_chunks.append(chunk)
+                yield chunk
+
+            full_text = "".join(accumulated_chunks).strip()
+            if not full_text:
+                raise RuntimeError(
+                    "Dil modeli boş yanıt döndürdü."
+                )
+
+            self._history.add_turn(
+                user_text,
+                full_text,
+            )
+        else:
+            # Fallback to standard generate
+            assistant_text = (
+                self._chat_model
+                .generate(messages)
+                .strip()
+            )
+            if not assistant_text:
+                raise RuntimeError(
+                    "Dil modeli boş yanıt döndürdü."
+                )
+
+            self._history.add_turn(
+                user_text,
+                assistant_text,
+            )
+            yield assistant_text
 
     def reset_conversation(
         self,
@@ -190,6 +263,17 @@ class AssistantService:
                         ),
                     )
                 )
+
+        ref_context = self._reference_resolver.build_reference_context(
+            self._history.snapshot()
+        )
+        if ref_context:
+            messages.append(
+                ChatMessage(
+                    role="system",
+                    content=ref_context,
+                )
+            )
 
         messages.extend(
             context_messages

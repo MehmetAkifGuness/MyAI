@@ -87,6 +87,39 @@ class OllamaChatModel:
             messages,
         )
 
+    def generate_stream(self, messages: Sequence[ChatMessage]):
+        """Yield response tokens sequentially as they arrive from Ollama stream."""
+        options: dict[str, Any] = {
+            "model": self._model_name,
+            "messages": [message.to_dict() for message in messages],
+            "stream": True,
+            "keep_alive": self._keep_alive,
+        }
+        if self._chat_thinking is not None:
+            options['think'] = self._chat_thinking
+        if self._chat_options:
+            options['options'] = dict(self._chat_options)
+
+        started = monotonic()
+        succeeded = False
+        try:
+            with self._lock:
+                stream_response = self._chat_client(**options)
+            for chunk in stream_response:
+                message = self._field(chunk, "message")
+                if message:
+                    content = self._field(message, "content", "")
+                    if content:
+                        yield str(content)
+            succeeded = True
+        finally:
+            if self._performance_monitor is not None:
+                self._performance_monitor.record(
+                    "model.chat.stream",
+                    monotonic() - started,
+                    succeeded,
+                )
+
     def generate_structured(
         self,
         messages: Sequence[ChatMessage],

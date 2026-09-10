@@ -182,6 +182,19 @@ class ChatAppUI(
                     *args
                 )
 
+            elif event_name == "stream_start":
+                self._stream_start(
+                    *args
+                )
+
+            elif event_name == "stream_chunk":
+                self._stream_chunk(
+                    *args
+                )
+
+            elif event_name == "stream_end":
+                self._stream_end()
+
             elif event_name == "busy":
                 self._set_busy(
                     *args
@@ -190,6 +203,59 @@ class ChatAppUI(
         self.after(
             40,
             self._process_ui_events,
+        )
+
+    def _stream_start(
+        self,
+        sender: str,
+    ) -> None:
+        self.chat_box.configure(
+            state="normal"
+        )
+        self.chat_box.insert(
+            "end",
+            f"{sender}: "
+        )
+        self.chat_box.see(
+            "end"
+        )
+        self.chat_box.configure(
+            state="disabled"
+        )
+
+    def _stream_chunk(
+        self,
+        chunk: str,
+    ) -> None:
+        self.chat_box.configure(
+            state="normal"
+        )
+        self.chat_box.insert(
+            "end",
+            chunk
+        )
+        self.chat_box.see(
+            "end"
+        )
+        self.chat_box.configure(
+            state="disabled"
+        )
+
+    def _stream_end(
+        self,
+    ) -> None:
+        self.chat_box.configure(
+            state="normal"
+        )
+        self.chat_box.insert(
+            "end",
+            "\n\n"
+        )
+        self.chat_box.see(
+            "end"
+        )
+        self.chat_box.configure(
+            state="disabled"
         )
 
     def _write_message(
@@ -329,16 +395,23 @@ class ChatAppUI(
         message: str,
     ) -> None:
         try:
-            answer = (
-                self._assistant.reply(
-                    message
+            stream_func = getattr(self._assistant, "reply_stream", None)
+            if callable(stream_func):
+                self._ui_events.put(("stream_start", ("🗣️ Börü",)))
+                for chunk in stream_func(message):
+                    self._ui_events.put(("stream_chunk", (chunk,)))
+                self._ui_events.put(("stream_end", ()))
+            else:
+                answer = (
+                    self._assistant.reply(
+                        message
+                    )
                 )
-            )
 
-            self._queue_message(
-                "🗣️ Börü",
-                answer,
-            )
+                self._queue_message(
+                    "🗣️ Börü",
+                    answer,
+                )
 
         except Exception as error:
             self._queue_message(
