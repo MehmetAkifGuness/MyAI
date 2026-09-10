@@ -546,7 +546,7 @@ class ChatAppUI(ctk.CTk):
                 self.status_label.configure(text="Hazır", text_color="#718096")
                 self.input_box.delete(0, "end")
                 self.input_box.insert(0, text)
-                self._send_message()
+                self._send_message(is_voice=True)
 
             elif event_name == "voice_error":
                 err_msg = args[0]
@@ -637,23 +637,24 @@ class ChatAppUI(ctk.CTk):
     def _queue_busy(self, busy: bool) -> None:
         self._ui_events.put(("busy", (busy,)))
 
-    def _send_message(self) -> None:
+    def _send_message(self, is_voice: bool = False) -> None:
         message = self.input_box.get().strip()
         if not message:
             return
 
         self.input_box.delete(0, "end")
-        self._write_message("👤 Sen", message)
+        sender = "👤 Sen (Sesli)" if is_voice else "👤 Sen"
+        self._write_message(sender, message)
         self._set_busy(True)
 
         threading.Thread(
             target=self._generate_reply,
-            args=(message,),
+            args=(message, is_voice),
             daemon=True,
         ).start()
 
-    def _generate_reply(self, message: str) -> None:
-        self.log_terminal(f"❯ [KULLANICI]: {message}", "cmd")
+    def _generate_reply(self, message: str, is_voice: bool = False) -> None:
+        self.log_terminal(f"❯ [{'SESLE SORU' if is_voice else 'KULLANICI'}]: {message}", "cmd")
         try:
             stream_func = getattr(self._assistant, "reply_stream", None)
             full_response = ""
@@ -669,9 +670,9 @@ class ChatAppUI(ctk.CTk):
 
             self.log_terminal(f"✔ Yanıt tamamlandı ({len(full_response)} karakter)", "success")
 
-            # Sesli yanıt açıksa seslendir
-            if self._voice_output.enabled and full_response:
-                self._voice_output.speak(full_response)
+            # Kural: Sesle sorulduysa VEYA sesli yanıt toggle'ı açıksa SESLENDİR!
+            if (is_voice or self._voice_output.enabled) and full_response:
+                self._voice_output.speak(full_response, force=is_voice)
 
         except Exception as error:
             self.log_terminal(f"❌ Hata: {error}", "error")
@@ -687,23 +688,32 @@ class ChatAppUI(ctk.CTk):
         )
 
     def _setup_jarvis_hotkey(self) -> None:
-        """Jarvis Overlay ve Global Hotkey yöneticisini başlatır."""
+        """Jarvis Overlay, Global Hotkey ve Kesintisiz Sesli Sohbet yöneticisini başlatır."""
         try:
             from boru.hotkey import GlobalHotkeyManager, JarvisOverlayWindow
+            from boru.voice import ContinuousVoiceController
+
+            self._continuous_voice = ContinuousVoiceController(
+                voice_input=self._voice_input,
+                voice_output=self._voice_output,
+                on_user_speech=self._handle_continuous_voice_speech,
+                on_status_change=self._on_voice_status_change,
+                on_dialogue_ended=self._on_voice_dialogue_ended,
+            )
 
             self._jarvis_overlay = JarvisOverlayWindow(
                 master=self,
                 on_submit_command=self._handle_jarvis_command,
-                on_voice_requested=self._handle_jarvis_voice,
+                on_voice_requested=self._toggle_continuous_voice,
                 on_open_main_ui=self.bring_to_front,
             )
             self._hotkey_mgr = GlobalHotkeyManager()
             # Ctrl+Shift+B -> Jarvis Spotlight Overlay Aç/Kapat
             self._hotkey_mgr.register("ctrl+shift+b", lambda: self.after(0, self._toggle_jarvis))
-            # Ctrl+Shift+J -> Doğrudan Sesli Bas-Konuş (Push-to-Talk)
-            self._hotkey_mgr.register("ctrl+shift+j", lambda: self.after(0, self._trigger_jarvis_push_to_talk))
+            # Ctrl+Shift+J -> Doğrudan Kesintisiz Hands-Free Sesli Sohbeti Başlat/Durdur
+            self._hotkey_mgr.register("ctrl+shift+j", lambda: self.after(0, self._toggle_continuous_voice))
             self._hotkey_mgr.start()
-            self.log_terminal("✔ Jarvis Global Hotkey (Ctrl+Shift+B, Ctrl+Shift+J) aktif.", "success")
+            self.log_terminal("✔ Jarvis Global Hotkey (Ctrl+Shift+B, Ctrl+Shift+J) & Hands-Free aktif.", "success")
         except Exception as e:
             self.log_terminal(f"⚠️ Jarvis Hotkey başlatılamadı: {e}", "info")
 
@@ -711,13 +721,54 @@ class ChatAppUI(ctk.CTk):
         if getattr(self, "_jarvis_overlay", None):
             self._jarvis_overlay.toggle()
 
-    def _trigger_jarvis_push_to_talk(self) -> None:
+    def _toggle_continuous_voice(self) -> None:
+        """Jarvis Hands-Free Kesintisiz Sesli Sohbet döngüsünü başlatır veya durdurur."""
+        if not getattr(self, "_continuous_voice", None):
+            return
+
+        if self._continuous_voice.is_active:
+            self._continuous_voice.stop()
+            if getattr(self, "_jarvis_overlay", None):
+                self._jarvis_overlay.set_mic_active(False)
+            self.log_terminal("🛑 Kesintisiz sesli sohbet sonlandırıldı.", "info")
+        else:
+            if getattr(self, "_jarvis_overlay", None):
+                self._jarvis_overlay.show()
+                self._jarvis_overlay.set_mic_active(True)
+            self._continuous_voice.start()
+            self.log_terminal("🎙️ Kesintisiz Hands-Free sesli sohbet başlatıldı.", "success")
+
+    def _handle_continuous_voice_speech(self, text: str) -> str:
+        """Kesintisiz sesli diyalogdan gelen kullanıcı cümlesini çözer ve ekrana/overlay'e basar."""
+        self.log_terminal(f"❯ [SESLE SOHBET]: {text}", "cmd")
+        self._queue_message("👤 Sen (Sesli)", text)
         if getattr(self, "_jarvis_overlay", None):
-            self._jarvis_overlay.show()
-            self._handle_jarvis_voice()
+            self.after(0, lambda: self._jarvis_overlay.set_input_text(text))
+
+        try:
+            reply = self._assistant.reply(text)
+            self._queue_message("🐺 Börü", reply)
+            if getattr(self, "_jarvis_overlay", None):
+                self.after(0, lambda: self._jarvis_overlay.show_result(reply, False))
+            return reply
+        except Exception as err:
+            err_msg = f"Yanıt üretilemedi: {err}"
+            self.log_terminal(f"❌ Sesli yanıt hatası: {err}", "error")
+            return err_msg
+
+    def _on_voice_status_change(self, text: str, color: str) -> None:
+        if getattr(self, "_jarvis_overlay", None):
+            self.after(0, lambda: self._jarvis_overlay.set_status(text, color))
+        self.after(0, lambda: self.live_indicator.configure(text=text, text_color=color))
+
+    def _on_voice_dialogue_ended(self) -> None:
+        if getattr(self, "_jarvis_overlay", None):
+            self.after(0, lambda: self._jarvis_overlay.set_mic_active(False))
+            self.after(0, lambda: self._jarvis_overlay.set_status("🟢 Hazır", "#48bb78"))
+        self.after(0, lambda: self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78"))
 
     def _handle_jarvis_command(self, cmd: str) -> str:
-        """Jarvis Overlay üzerinden gelen komutları yürütür ve ana UI'a da yansıtır."""
+        """Jarvis Overlay üzerinden klavyeyle gönderilen komutları yürütür."""
         self.log_terminal(f"❯ [JARVIS]: {cmd}", "cmd")
         self._queue_message("👤 Sen (Jarvis)", cmd)
         try:
@@ -730,23 +781,6 @@ class ChatAppUI(ctk.CTk):
             self.log_terminal(f"❌ Jarvis komut hatası: {err}", "error")
             raise err
 
-    def _handle_jarvis_voice(self) -> None:
-        """Jarvis mikrofonundan ses dinler ve overlay'e aktarır."""
-        if not getattr(self, "_jarvis_overlay", None):
-            return
-
-        self._jarvis_overlay.set_status("🎙️ Dinliyor...", "#ecc94b")
-
-        def _voice_worker():
-            try:
-                text = self._voice_input.listen_once(timeout=5.0, phrase_time_limit=10.0)
-                self.after(0, lambda: self._jarvis_overlay.set_input_text(text))
-                self.after(60, lambda: self._jarvis_overlay._handle_submit())
-            except Exception as e:
-                self.after(0, lambda: self._jarvis_overlay.set_status(f"❌ {e}", "#f56565"))
-
-        threading.Thread(target=_voice_worker, daemon=True).start()
-
     def bring_to_front(self) -> None:
         """Ana pencereyi masaüstünde tüm pencerelerin önüne getirir."""
         self.deiconify()
@@ -756,7 +790,9 @@ class ChatAppUI(ctk.CTk):
         self.focus_force()
 
     def _on_close(self) -> None:
-        """Pencere kapatıldığında global hotkey dinleyicisini temizce durdurur."""
+        """Pencere kapatıldığında sesli sohbeti ve global hotkey dinleyicisini durdurur."""
+        if getattr(self, "_continuous_voice", None):
+            self._continuous_voice.stop()
         if getattr(self, "_hotkey_mgr", None):
             self._hotkey_mgr.stop()
         self.destroy()

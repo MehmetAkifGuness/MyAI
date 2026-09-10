@@ -243,7 +243,15 @@ class JarvisOverlayWindow(ctk.CTkToplevel):
         else:
             self.set_status("🎙️ Dinleme servisi bağlı değil", "#f56565")
 
+    def set_mic_active(self, active: bool) -> None:
+        """Mikrofon butonunun durumunu (dinliyor/hazır) günceller."""
+        if active:
+            self.mic_btn.configure(fg_color="#e53e3e", text="🛑")
+        else:
+            self.mic_btn.configure(fg_color="#2b6cb0", text="🎙️")
+
     def _handle_open_main(self) -> None:
         self.hide()
         if self._on_open_main:
             self._on_open_main()
+

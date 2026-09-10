@@ -230,3 +230,4 @@ class GlobalHotkeyManager:
                 except Exception:
                     pass
             self._running = False
+

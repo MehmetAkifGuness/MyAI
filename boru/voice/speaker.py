@@ -37,9 +37,9 @@ class VoiceOutputService:
             clean = clean[:300] + "..."
         return clean
 
-    def speak(self, text: str, async_mode: bool = True) -> None:
-        """Metni seslendirir."""
-        if not self.enabled:
+    def speak(self, text: str, async_mode: bool = True, force: bool = False) -> None:
+        """Metni seslendirir. force=True ise sesli yanıt anahtarı kapalı olsa dahi seslendirir."""
+        if not self.enabled and not force:
             return
 
         cleaned = self.clean_text_for_speech(text)
@@ -54,18 +54,20 @@ class VoiceOutputService:
     def _speak_sync(self, text: str) -> None:
         with self._lock:
             try:
-                # Windows PowerShell SpeechSynthesizer ile seslendirme
+                import base64
+                # Windows PowerShell SpeechSynthesizer ile seslendirme (-EncodedCommand ile UTF-16LE garantisi)
                 escaped = text.replace("'", "''").replace('"', '""')
                 ps_script = (
                     "Add-Type -AssemblyName System.Speech; "
                     "$synth = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
                     f"$synth.Speak('{escaped}')"
                 )
+                encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
                 subprocess.run(
-                    ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_script],
+                    ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
-                    timeout=15,
+                    timeout=20,
                 )
             except Exception as e:
                 logger.debug(f"Seslendirme başarısız oldu: {e}")
