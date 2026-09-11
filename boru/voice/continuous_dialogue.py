@@ -145,6 +145,7 @@ class ContinuousVoiceController:
 
         self._running = False
         self._thread: Optional[threading.Thread] = None
+        self._lock = threading.Lock()
 
     @property
     def is_active(self) -> bool:
@@ -152,27 +153,29 @@ class ContinuousVoiceController:
 
     def start(self) -> None:
         """Kesintisiz diyalog döngüsünü başlatır."""
-        if self._running:
-            return
+        with self._lock:
+            if self._running:
+                return
 
-        self._running = True
-        self._thread = threading.Thread(
-            target=self._dialogue_loop,
-            daemon=True,
-            name="ContinuousVoiceDialogueThread",
-        )
-        self._thread.start()
-        logger.info("Kesintisiz sesli sohbet modu başlatıldı.")
+            self._running = True
+            self._thread = threading.Thread(
+                target=self._dialogue_loop,
+                daemon=True,
+                name="ContinuousVoiceDialogueThread",
+            )
+            self._thread.start()
+            logger.info("Kesintisiz sesli sohbet modu başlatıldı.")
 
     def stop(self) -> None:
         """Diyalog döngüsünü durdurur."""
-        if not self._running:
-            return
+        with self._lock:
+            if not self._running:
+                return
 
-        self._running = False
-        if hasattr(self._voice_output, "stop"):
-            self._voice_output.stop()
-        self._set_status("🟢 Hazır", "#48bb78")
+            self._running = False
+            if hasattr(self._voice_output, "stop"):
+                self._voice_output.stop()
+            self._set_status("🟢 Hazır", "#48bb78")
         if self._on_dialogue_ended:
             try:
                 self._on_dialogue_ended()

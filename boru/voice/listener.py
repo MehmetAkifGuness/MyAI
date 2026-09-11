@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Callable
+import threading
+from typing import Callable, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +76,7 @@ class VoiceInputService:
         self._recognizer = recognizer
         self._microphone = microphone
         self._initialized = False
+        self._lock = threading.Lock()
 
     def _ensure_init(self):
         if not self._initialized:
@@ -130,30 +132,58 @@ class VoiceInputService:
         self._ensure_init()
         import speech_recognition as sr
 
-        try:
-            with self._microphone as source:
-                if adjust_noise:
-                    self._recognizer.adjust_for_ambient_noise(source, duration=0.3)
-                    eth = getattr(self._recognizer, "energy_threshold", None)
-                    if isinstance(eth, (int, float)):
-                        self._recognizer.energy_threshold = min(max(eth, 150), 300)
-                audio = self._recognizer.listen(
-                    source,
-                    timeout=timeout,
-                    phrase_time_limit=phrase_time_limit,
-                )
+        with self._lock:
+            # Önceki bir işlemden mikrofon açık kaldıysa güvenle sıfırla
+            if getattr(self._microphone, "stream", None) is not None:
+                try:
+                    self._microphone.stream.close()
+                except Exception:
+                    pass
+                self._microphone.stream = None
+                if getattr(self._microphone, "audio", None) is not None:
+                    try:
+                        self._microphone.audio.terminate()
+                    except Exception:
+                        pass
+                    self._microphone.audio = None
 
             try:
-                text = self._recognizer.recognize_google(audio, language=self.language)
-                return text.strip()
-            except sr.RequestError as req_err:
-                offline_text = self._recognize_offline_fallback(audio)
-                if offline_text:
-                    logger.info("İnternet kesintisi: Çevrimdışı yerel Whisper ile ses tanındı.")
-                    return offline_text
-                raise RuntimeError(f"Ses tanıma servisine ulaşılamadı: {req_err}")
+                try:
+                    with self._microphone as source:
+                        if adjust_noise:
+                            self._recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                            eth = getattr(self._recognizer, "energy_threshold", None)
+                            if isinstance(eth, (int, float)):
+                                self._recognizer.energy_threshold = min(max(eth, 150), 300)
+                        audio = self._recognizer.listen(
+                            source,
+                            timeout=timeout,
+                            phrase_time_limit=phrase_time_limit,
+                        )
+                except AssertionError as ae:
+                    if "already inside a context manager" in str(ae):
+                        # Taze mikrofon örneği ile kendini otomatik onar
+                        self._microphone = sr.Microphone()
+                        with self._microphone as source:
+                            audio = self._recognizer.listen(
+                                source,
+                                timeout=timeout,
+                                phrase_time_limit=phrase_time_limit,
+                            )
+                    else:
+                        raise
 
-        except sr.WaitTimeoutError:
-            raise TimeoutError("Herhangi bir ses algılanamadı (zaman aşımı).")
-        except sr.UnknownValueError:
-            raise ValueError("Söylenen anlaşılamadı, lütfen tekrar edin.")
+                try:
+                    text = self._recognizer.recognize_google(audio, language=self.language)
+                    return text.strip()
+                except sr.RequestError as req_err:
+                    offline_text = self._recognize_offline_fallback(audio)
+                    if offline_text:
+                        logger.info("İnternet kesintisi: Çevrimdışı yerel Whisper ile ses tanındı.")
+                        return offline_text
+                    raise RuntimeError(f"Ses tanıma servisine ulaşılamadı: {req_err}")
+
+            except sr.WaitTimeoutError:
+                raise TimeoutError("Herhangi bir ses algılanamadı (zaman aşımı).")
+            except sr.UnknownValueError:
+                raise ValueError("Söylenen anlaşılamadı, lütfen tekrar edin.")
