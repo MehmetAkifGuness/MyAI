@@ -249,8 +249,8 @@ class ChatAppUI(ctk.CTk):
         self.main_body = ctk.CTkFrame(self, fg_color="transparent")
         self.main_body.pack(fill="both", expand=True, padx=16, pady=4)
 
-        # Sol: Dosya Ağacı / Proje Gezgini Paneli
-        self.sidebar_frame = ctk.CTkFrame(self.main_body, width=220, fg_color="#0B0F19", border_color="#1E293B", border_width=1, corner_radius=16)
+        # Sol: Dosya Ağacı / Proje Gezgini Paneli (Modern Glass Container)
+        self.sidebar_frame = ctk.CTkFrame(self.main_body, width=230, fg_color="#0B0F19", border_color="#1E293B", border_width=1, corner_radius=16)
         self.sidebar_frame.pack(side="left", fill="y", padx=(0, 10))
         self.sidebar_frame.pack_propagate(False)
 
@@ -259,7 +259,7 @@ class ChatAppUI(ctk.CTk):
 
         ctk.CTkLabel(
             sidebar_title_frame,
-            text="PROJE GEZGİNİ",
+            text="📁 PROJE GEZGİNİ",
             font=("Segoe UI", 11, "bold"),
             text_color="#64748B",
         ).pack(side="left")
@@ -277,14 +277,49 @@ class ChatAppUI(ctk.CTk):
         )
         refresh_btn.pack(side="right")
 
+        # Canlı Dosya Arama Filtresi
+        self.file_filter_entry = ctk.CTkEntry(
+            self.sidebar_frame,
+            placeholder_text="Dosyalarda filtrele...",
+            font=("Segoe UI", 11),
+            height=26,
+            fg_color="#111827",
+            border_color="#1E293B",
+            border_width=1,
+            corner_radius=8,
+        )
+        self.file_filter_entry.pack(fill="x", padx=10, pady=(2, 6))
+        self.file_filter_entry.bind("<KeyRelease>", lambda _e: self._filter_file_tree())
+
         self.file_scroll = ctk.CTkScrollableFrame(self.sidebar_frame, fg_color="transparent")
-        self.file_scroll.pack(fill="both", expand=True, padx=4, pady=4)
+        self.file_scroll.pack(fill="both", expand=True, padx=4, pady=2)
+
+        # Alt: Canlı Sistem & Donanım Durum Rozeti
+        self.sidebar_metrics = ctk.CTkFrame(self.sidebar_frame, fg_color="#0F1420", corner_radius=10, border_color="#1E293B", border_width=1)
+        self.sidebar_metrics.pack(fill="x", side="bottom", padx=8, pady=8)
+
+        self.metric_label = ctk.CTkLabel(
+            self.sidebar_metrics,
+            text="⚡ RAM ... | 🔋 Pil ...",
+            font=("Segoe UI", 10),
+            text_color="#64748B",
+        )
+        self.metric_label.pack(padx=6, pady=4)
+        self.after(1000, self._update_sidebar_metrics)
+
+        self._all_files: list[tuple[str, str]] = []
         self._populate_file_tree()
 
-        # Sağ: Sohbet, Diff ve Katlanabilir Terminal Alanı
+        # Sağ: Modern Kart Tabanlı Sohbet Alanı (Linear/ChatGPT Stili)
         self.right_container = ctk.CTkFrame(self.main_body, fg_color="#0D121D", border_color="#1E293B", border_width=1, corner_radius=16)
         self.right_container.pack(side="left", fill="both", expand=True)
 
+        # Ultra-Modern Kart Akışı (Scrollable Message Feed)
+        self.chat_feed = ctk.CTkScrollableFrame(self.right_container, fg_color="transparent")
+        self.chat_feed.pack(fill="both", expand=True, padx=12, pady=(12, 4))
+        self._active_stream_card: dict | None = None
+
+        # Geriye dönük tam uyumluluk için gizli referans chat_box
         self.chat_box = ctk.CTkTextbox(
             self.right_container,
             state="disabled",
@@ -293,9 +328,6 @@ class ChatAppUI(ctk.CTk):
             fg_color="transparent",
             text_color="#F8FAFC",
         )
-        self.chat_box.pack(fill="both", expand=True, padx=14, pady=(14, 6))
-
-        # Renkli Diff Etiketleri Tanımla (2026 Modern Neon & Card Palette)
         self.chat_box.tag_config("diff_add", foreground="#10B981", background="#064E3B")
         self.chat_box.tag_config("diff_sub", foreground="#F43F5E", background="#4C0519")
         self.chat_box.tag_config("diff_hdr", foreground="#38BDF8")
@@ -552,39 +584,74 @@ class ChatAppUI(ctk.CTk):
         except Exception as err:
             self.log_terminal(f"❌ Komut yürütülemedi: {err}", "error")
 
+    def _update_sidebar_metrics(self) -> None:
+        """Donanım ve sistem kaynaklarını periyodik olarak okur."""
+        try:
+            import psutil
+            mem = psutil.virtual_memory().percent
+            batt = psutil.sensors_battery()
+            batt_str = f"🔋 %{int(batt.percent)}" if batt else "⚡ AC"
+            self.metric_label.configure(
+                text=f"⚡ RAM %{int(mem)}  •  {batt_str}",
+                text_color="#94A3B8",
+            )
+        except Exception:
+            self.metric_label.configure(text="🐺 Börü Sistem Çevrimiçi")
+        self.after(5000, self._update_sidebar_metrics)
+
     def _populate_file_tree(self) -> None:
         """Proje kökündeki ilgili Python ve konfigürasyon dosyalarını listeler."""
-        for widget in self.file_scroll.winfo_children():
-            widget.destroy()
-
         try:
             items: list[tuple[str, str]] = []
             for root, dirs, files in os.walk(self._project_root):
-                # .git, __pycache__, .pytest_cache atla
                 dirs[:] = [d for d in dirs if not d.startswith(".") and d != "__pycache__"]
                 rel_dir = os.path.relpath(root, self._project_root)
                 for file in files:
-                    if file.endswith((".py", ".json", ".txt", ".md")):
+                    if file.endswith((".py", ".json", ".txt", ".md", ".toml", ".yaml", ".yml")):
                         rel_path = file if rel_dir == "." else os.path.join(rel_dir, file).replace("\\", "/")
                         items.append((file, rel_path))
 
             items.sort(key=lambda x: x[1])
-            for filename, rel_path in items[:60]:
-                btn = ctk.CTkButton(
-                    self.file_scroll,
-                    text=f"📄 {rel_path}",
-                    anchor="w",
-                    height=24,
-                    font=("Consolas", 11),
-                    fg_color="transparent",
-                    hover_color="#161F30",
-                    text_color="#94A3B8",
-                    corner_radius=6,
-                    command=lambda p=rel_path: self._select_file(p),
-                )
-                btn.pack(fill="x", pady=1)
+            self._all_files = items
+            for widget in self.file_scroll.winfo_children():
+                widget.destroy()
+            self._render_file_items(items[:60])
         except Exception:
             pass
+
+    def _filter_file_tree(self) -> None:
+        """Arama kutusuna yazılan anahtara göre dosya ağacını süzer."""
+        query = self.file_filter_entry.get().strip().lower()
+        for widget in self.file_scroll.winfo_children():
+            widget.destroy()
+
+        filtered = [item for item in self._all_files if query in item[1].lower()] if query else self._all_files
+        self._render_file_items(filtered[:60])
+
+    def _render_file_items(self, items: list[tuple[str, str]]) -> None:
+        for filename, rel_path in items:
+            if rel_path.endswith(".py"):
+                icon = "🐍"
+            elif rel_path.endswith(".md"):
+                icon = "📝"
+            elif rel_path.endswith((".json", ".toml", ".yaml", ".yml")):
+                icon = "⚙️"
+            else:
+                icon = "📄"
+
+            btn = ctk.CTkButton(
+                self.file_scroll,
+                text=f"{icon} {rel_path}",
+                anchor="w",
+                height=24,
+                font=("Consolas", 11),
+                fg_color="transparent",
+                hover_color="#161F30",
+                text_color="#94A3B8",
+                corner_radius=6,
+                command=lambda p=rel_path: self._select_file(p),
+            )
+            btn.pack(fill="x", pady=1)
 
     def _select_file(self, path: str) -> None:
         """Tıklanan dosya adını giriş kutusuna akıllıca ekler."""
@@ -668,48 +735,355 @@ class ChatAppUI(ctk.CTk):
 
         self.after(40, self._process_ui_events)
 
-    def _write_message(self, sender: str, message: str) -> None:
-        """Mesajları renkli diff ve formatlama desteğiyle yazar."""
-        self.chat_box.configure(state="normal")
-        divider = "─" * 50
+    def _scroll_chat_to_bottom(self) -> None:
+        try:
+            self.chat_feed.update_idletasks()
+            self.chat_feed._parent_canvas.yview_moveto(1.0)
+        except Exception:
+            pass
 
-        sender_tag = "sender_user" if "Sen" in sender else "sender_bot"
-        self.chat_box.insert("end", f"\n{sender}\n", sender_tag)
+    def _copy_text(self, text: str, btn: ctk.CTkButton | None = None) -> None:
+        try:
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            if btn:
+                btn.configure(text="✓ Alındı")
+                self.after(2000, lambda: btn.configure(text="📋 Kopyala"))
+        except Exception:
+            pass
 
-        # Eğer mesaj bir diff içeriyorsa satır satır renklendir
-        for line in message.splitlines(keepends=True):
-            if line.startswith("+") and not line.startswith("+++"):
-                self.chat_box.insert("end", line, "diff_add")
-            elif line.startswith("-") and not line.startswith("---"):
-                self.chat_box.insert("end", line, "diff_sub")
-            elif line.startswith("@@"):
-                self.chat_box.insert("end", line, "diff_hdr")
+    def _create_message_card(self, sender: str, message: str) -> None:
+        """Kullanıcı, Börü veya Sistem için şık bir mesaj kartı üretir."""
+        is_user = "Sen" in sender or "User" in sender
+        is_system = "SİSTEM" in sender or "System" in sender
+
+        card_row = ctk.CTkFrame(self.chat_feed, fg_color="transparent")
+        card_row.pack(fill="x", pady=6, padx=4)
+        now_str = time.strftime("%H:%M")
+
+        if is_system:
+            card = ctk.CTkFrame(
+                card_row,
+                fg_color="#0F172A",
+                border_color="#1E293B",
+                border_width=1,
+                corner_radius=14,
+            )
+            card.pack(fill="x", padx=16, pady=4)
+
+            hdr = ctk.CTkFrame(card, fg_color="transparent")
+            hdr.pack(fill="x", padx=14, pady=(10, 2))
+            ctk.CTkLabel(
+                hdr,
+                text="🐺 BÖRÜ SİSTEM",
+                font=("Segoe UI", 11, "bold"),
+                text_color="#38BDF8",
+            ).pack(side="left")
+            ctk.CTkLabel(
+                hdr,
+                text=now_str,
+                font=("Segoe UI", 10),
+                text_color="#64748B",
+            ).pack(side="right")
+
+            body = ctk.CTkLabel(
+                card,
+                text=message.strip(),
+                font=("Segoe UI", 12),
+                text_color="#94A3B8",
+                wraplength=620,
+                justify="left",
+            )
+            body.pack(anchor="w", padx=14, pady=(2, 8))
+
+            # Başlangıç kartı ise hızlı aksiyon hapları ekle
+            if "Börü" in message or "hoş" in message.lower() or "başlatıldı" in message.lower():
+                promo_row = ctk.CTkFrame(card, fg_color="transparent")
+                promo_row.pack(fill="x", padx=14, pady=(0, 10))
+                pills = [
+                    ("🌅 Brifing Al", "bana brifing ver"),
+                    ("📂 Masaüstü Düzenle", "masaüstümü düzenle"),
+                    ("🧠 Ansiklopedi", "hakkında bilgi ver"),
+                    ("⚡ Spotlight (Ctrl+Shift+B)", "_toggle_jarvis_"),
+                ]
+                for plabel, pcmd in pills:
+                    ctk.CTkButton(
+                        promo_row,
+                        text=plabel,
+                        font=("Segoe UI", 10),
+                        height=22,
+                        fg_color="#1E293B",
+                        hover_color="#334155",
+                        corner_radius=8,
+                        text_color="#38BDF8",
+                        command=lambda c=pcmd: self._insert_chip(c),
+                    ).pack(side="left", padx=(0, 6))
+
+        elif is_user:
+            # Sağ hizalı modern kullanıcı balonu
+            card = ctk.CTkFrame(
+                card_row,
+                fg_color="#1E293B",
+                border_color="#334155",
+                border_width=1,
+                corner_radius=16,
+            )
+            card.pack(side="right", padx=(80, 8), pady=2)
+
+            hdr = ctk.CTkFrame(card, fg_color="transparent")
+            hdr.pack(fill="x", padx=14, pady=(8, 2))
+            ctk.CTkLabel(
+                hdr,
+                text="👤 Siz",
+                font=("Segoe UI", 11, "bold"),
+                text_color="#818CF8",
+            ).pack(side="left")
+            ctk.CTkLabel(
+                hdr,
+                text=now_str,
+                font=("Segoe UI", 10),
+                text_color="#64748B",
+            ).pack(side="right", padx=(14, 0))
+
+            body = ctk.CTkLabel(
+                card,
+                text=message.strip(),
+                font=("Segoe UI", 13),
+                text_color="#F8FAFC",
+                wraplength=520,
+                justify="left",
+            )
+            body.pack(anchor="w", padx=14, pady=(2, 10))
+
+        else:
+            # Sol hizalı Börü asistan kartı
+            card = ctk.CTkFrame(
+                card_row,
+                fg_color="#101726",
+                border_color="#1E293B",
+                border_width=1,
+                corner_radius=16,
+            )
+            card.pack(side="left", fill="x", expand=True, padx=(8, 60), pady=2)
+
+            hdr = ctk.CTkFrame(card, fg_color="transparent")
+            hdr.pack(fill="x", padx=14, pady=(10, 4))
+
+            ctk.CTkLabel(
+                hdr,
+                text="🐺 Börü",
+                font=("Segoe UI", 12, "bold"),
+                text_color="#38BDF8",
+            ).pack(side="left")
+
+            badge = ctk.CTkLabel(
+                hdr,
+                text="⚡ Asistan",
+                font=("Segoe UI", 9, "bold"),
+                text_color="#10B981",
+                fg_color="#064E3B",
+                corner_radius=6,
+                padx=6,
+                pady=1,
+            )
+            badge.pack(side="left", padx=(8, 0))
+
+            ctk.CTkLabel(
+                hdr,
+                text=now_str,
+                font=("Segoe UI", 10),
+                text_color="#64748B",
+            ).pack(side="right", padx=(8, 0))
+
+            copy_btn = ctk.CTkButton(
+                hdr,
+                text="📋 Kopyala",
+                width=68,
+                height=22,
+                font=("Segoe UI", 10),
+                fg_color="#1E293B",
+                hover_color="#334155",
+                corner_radius=6,
+                command=lambda m=message: self._copy_text(m, copy_btn),
+            )
+            copy_btn.pack(side="right")
+
+            # Kod veya Diff kontrolü
+            has_diff = any(
+                line.startswith(("+", "-", "@@")) and not line.startswith(("+++", "---"))
+                for line in message.splitlines()
+            )
+
+            if has_diff:
+                code_card = ctk.CTkFrame(card, fg_color="#06090F", corner_radius=10, border_color="#1E293B", border_width=1)
+                code_card.pack(fill="x", padx=12, pady=(4, 10))
+
+                diff_lines = message.splitlines(keepends=True)
+                diff_box = ctk.CTkTextbox(
+                    code_card,
+                    font=("Consolas", 11),
+                    fg_color="transparent",
+                    text_color="#F8FAFC",
+                    wrap="none",
+                    height=min(260, max(70, len(diff_lines) * 20)),
+                )
+                diff_box.pack(fill="both", expand=True, padx=8, pady=8)
+                diff_box.tag_config("diff_add", foreground="#10B981", background="#064E3B")
+                diff_box.tag_config("diff_sub", foreground="#F43F5E", background="#4C0519")
+                diff_box.tag_config("diff_hdr", foreground="#38BDF8")
+
+                for line in diff_lines:
+                    if line.startswith("+") and not line.startswith("+++"):
+                        diff_box.insert("end", line, "diff_add")
+                    elif line.startswith("-") and not line.startswith("---"):
+                        diff_box.insert("end", line, "diff_sub")
+                    elif line.startswith("@@"):
+                        diff_box.insert("end", line, "diff_hdr")
+                    else:
+                        diff_box.insert("end", line)
+                diff_box.configure(state="disabled")
             else:
-                self.chat_box.insert("end", line)
+                body = ctk.CTkLabel(
+                    card,
+                    text=message.strip(),
+                    font=("Segoe UI", 13),
+                    text_color="#F1F5F9",
+                    wraplength=620,
+                    justify="left",
+                )
+                body.pack(anchor="w", padx=14, pady=(2, 10))
 
-        self.chat_box.insert("end", f"\n{divider}\n", "divider")
-        self.chat_box.see("end")
-        self.chat_box.configure(state="disabled")
+        self._scroll_chat_to_bottom()
+
+    def _write_message(self, sender: str, message: str) -> None:
+        """Mesajları hem ultra-modern kart akışına hem de uyumluluk tamponuna yazar."""
+        try:
+            self.chat_box.configure(state="normal")
+            sender_tag = "sender_user" if "Sen" in sender else "sender_bot"
+            self.chat_box.insert("end", f"\n{sender}\n", sender_tag)
+            self.chat_box.insert("end", f"{message}\n")
+            self.chat_box.configure(state="disabled")
+        except Exception:
+            pass
+
+        self._create_message_card(sender, message)
 
     def _stream_start(self, sender: str) -> None:
-        self.chat_box.configure(state="normal")
-        sender_tag = "sender_user" if "Sen" in sender else "sender_bot"
-        self.chat_box.insert("end", f"\n{sender}\n", sender_tag)
-        self.chat_box.see("end")
-        self.chat_box.configure(state="disabled")
+        try:
+            self.chat_box.configure(state="normal")
+            sender_tag = "sender_user" if "Sen" in sender else "sender_bot"
+            self.chat_box.insert("end", f"\n{sender}\n", sender_tag)
+            self.chat_box.configure(state="disabled")
+        except Exception:
+            pass
+
+        now_str = time.strftime("%H:%M")
+        card_row = ctk.CTkFrame(self.chat_feed, fg_color="transparent")
+        card_row.pack(fill="x", pady=6, padx=4)
+
+        card = ctk.CTkFrame(
+            card_row,
+            fg_color="#101726",
+            border_color="#1E293B",
+            border_width=1,
+            corner_radius=16,
+        )
+        card.pack(side="left", fill="x", expand=True, padx=(8, 60), pady=2)
+
+        hdr = ctk.CTkFrame(card, fg_color="transparent")
+        hdr.pack(fill="x", padx=14, pady=(10, 4))
+
+        ctk.CTkLabel(
+            hdr,
+            text="🐺 Börü",
+            font=("Segoe UI", 12, "bold"),
+            text_color="#38BDF8",
+        ).pack(side="left")
+
+        stream_badge = ctk.CTkLabel(
+            hdr,
+            text="⚡ Yanıt hazırlanıyor...",
+            font=("Segoe UI", 9, "bold"),
+            text_color="#F59E0B",
+            fg_color="#451A03",
+            corner_radius=6,
+            padx=6,
+            pady=1,
+        )
+        stream_badge.pack(side="left", padx=(8, 0))
+
+        time_lbl = ctk.CTkLabel(
+            hdr,
+            text=now_str,
+            font=("Segoe UI", 10),
+            text_color="#64748B",
+        )
+        time_lbl.pack(side="right")
+
+        stream_body = ctk.CTkLabel(
+            card,
+            text="▍",
+            font=("Segoe UI", 13),
+            text_color="#F1F5F9",
+            wraplength=620,
+            justify="left",
+        )
+        stream_body.pack(anchor="w", padx=14, pady=(2, 10))
+
+        self._active_stream_card = {
+            "card": card,
+            "badge": stream_badge,
+            "body": stream_body,
+            "text": "",
+            "time_lbl": time_lbl,
+            "hdr": hdr,
+        }
+        self._scroll_chat_to_bottom()
 
     def _stream_chunk(self, chunk: str) -> None:
-        self.chat_box.configure(state="normal")
-        self.chat_box.insert("end", chunk)
-        self.chat_box.see("end")
-        self.chat_box.configure(state="disabled")
+        try:
+            self.chat_box.configure(state="normal")
+            self.chat_box.insert("end", chunk)
+            self.chat_box.configure(state="disabled")
+        except Exception:
+            pass
+
+        if not getattr(self, "_active_stream_card", None):
+            return
+        self._active_stream_card["text"] += chunk
+        self._active_stream_card["body"].configure(text=self._active_stream_card["text"] + " ▍")
+        self._scroll_chat_to_bottom()
 
     def _stream_end(self) -> None:
-        self.chat_box.configure(state="normal")
-        divider = "─" * 50
-        self.chat_box.insert("end", f"\n{divider}\n", "divider")
-        self.chat_box.see("end")
-        self.chat_box.configure(state="disabled")
+        try:
+            self.chat_box.configure(state="normal")
+            self.chat_box.insert("end", "\n")
+            self.chat_box.configure(state="disabled")
+        except Exception:
+            pass
+
+        if not getattr(self, "_active_stream_card", None):
+            return
+        card_info = self._active_stream_card
+        card_info["body"].configure(text=card_info["text"])
+        card_info["badge"].configure(text="⚡ Asistan", text_color="#10B981", fg_color="#064E3B")
+
+        full_text = card_info["text"]
+        copy_btn = ctk.CTkButton(
+            card_info["hdr"],
+            text="📋 Kopyala",
+            width=68,
+            height=22,
+            font=("Segoe UI", 10),
+            fg_color="#1E293B",
+            hover_color="#334155",
+            corner_radius=6,
+        )
+        copy_btn.configure(command=lambda m=full_text, b=copy_btn: self._copy_text(m, b))
+        copy_btn.pack(side="right", padx=(0, 8), before=card_info["time_lbl"])
+
+        self._active_stream_card = None
+        self._scroll_chat_to_bottom()
 
     def _queue_message(self, sender: str, message: str) -> None:
         self._ui_events.put(("write", (sender, message)))
@@ -794,9 +1168,17 @@ class ChatAppUI(ctk.CTk):
 
     def _reset_conversation(self) -> None:
         self._assistant.reset_conversation()
+        for w in self.chat_feed.winfo_children():
+            w.destroy()
+        try:
+            self.chat_box.configure(state="normal")
+            self.chat_box.delete("1.0", "end")
+            self.chat_box.configure(state="disabled")
+        except Exception:
+            pass
         self._write_message(
             "SİSTEM",
-            "Kısa süreli konuşma geçmişi temizlendi. Kalıcı profil ve öğrenilen dersler korunuyor.",
+            "Kısa süreli konuşma geçmişi temizlendi. Börü yeni sohbet için hazır!",
         )
 
     def _setup_jarvis_hotkey(self) -> None:

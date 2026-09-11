@@ -9,7 +9,7 @@ from boru.sentinel import SentinelService, resolve_sentinel_command, get_sentine
 class TestSentinel:
     def test_battery_low_alert_and_no_spam(self):
         mock_speak = MagicMock()
-        service = SentinelService(speak_fn=mock_speak, check_interval_seconds=1.0)
+        service = SentinelService(speak_fn=mock_speak, check_interval_seconds=1.0, enable_ram_sentinel=False)
 
         with patch("ctypes.windll.kernel32.GetSystemPowerStatus") as mock_power:
             def side_effect(byref_p):
