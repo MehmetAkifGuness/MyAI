@@ -12,10 +12,14 @@ from typing import Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
-# Win32 Sanal Tuş Kodları (Ses Kontrolü)
+# Win32 Sanal Tuş Kodları (Ses & Medya Kontrolü)
 VK_VOLUME_MUTE = 0xAD
 VK_VOLUME_DOWN = 0xAE
 VK_VOLUME_UP = 0xAF
+VK_MEDIA_NEXT_TRACK = 0xB0
+VK_MEDIA_PREV_TRACK = 0xB1
+VK_MEDIA_STOP = 0xB2
+VK_MEDIA_PLAY_PAUSE = 0xB3
 KEYEVENTF_KEYUP = 0x0002
 
 APP_COMMAND_MAP = {
@@ -136,6 +140,37 @@ def control_volume(action: str, steps: int = 5) -> Tuple[bool, str]:
         return False, f"Ses kontrol edilemedi: {e}"
 
 
+def control_media(action: str) -> Tuple[bool, str]:
+    """
+    Windows üzerinde çalan medyayı (Spotify, YouTube, VLC vb.) küresel donanım medya tuşlarıyla yönetir.
+    action: 'play_pause', 'next', 'prev', 'stop'
+    """
+    try:
+        user32 = ctypes.windll.user32
+        act = action.lower().strip()
+        if act in ("play_pause", "play", "pause", "toggle", "oynat", "duraklat", "durdur"):
+            user32.keybd_event(VK_MEDIA_PLAY_PAUSE, 0, 0, 0)
+            user32.keybd_event(VK_MEDIA_PLAY_PAUSE, 0, KEYEVENTF_KEYUP, 0)
+            return True, "Medya oynatıldı / duraklatıldı."
+        elif act in ("next", "ileri", "sonraki", "geç"):
+            user32.keybd_event(VK_MEDIA_NEXT_TRACK, 0, 0, 0)
+            user32.keybd_event(VK_MEDIA_NEXT_TRACK, 0, KEYEVENTF_KEYUP, 0)
+            return True, "Sonraki parçaya geçildi."
+        elif act in ("prev", "previous", "geri", "önceki"):
+            user32.keybd_event(VK_MEDIA_PREV_TRACK, 0, 0, 0)
+            user32.keybd_event(VK_MEDIA_PREV_TRACK, 0, KEYEVENTF_KEYUP, 0)
+            return True, "Önceki parçaya geçildi."
+        elif act in ("stop", "tamamen durdur"):
+            user32.keybd_event(VK_MEDIA_STOP, 0, 0, 0)
+            user32.keybd_event(VK_MEDIA_STOP, 0, KEYEVENTF_KEYUP, 0)
+            return True, "Medya durduruldu."
+        else:
+            return False, f"Bilinmeyen medya eylemi: {action}"
+    except Exception as e:
+        logger.debug(f"Medya kontrol hatası: {e}")
+        return False, f"Medya kontrol edilemedi: {e}"
+
+
 class _MEMORYSTATUSEX(ctypes.Structure):
     _fields_ = [
         ("dwLength", wintypes.DWORD),
@@ -246,7 +281,22 @@ def resolve_system_command(user_text: str) -> Optional[str]:
             ok, msg = open_application(target_cand)
             return msg
 
-    # 2. Ses Kontrolü
+    # 2. Medya & Müzik Kontrolü (Spotify, YouTube, VLC vb.)
+    # Örnek: "müziği durdur", "şarkıyı duraklat", "devam ettir", "müziği çal", "sonraki şarkı", "şarkıyı geç", "önceki parça"
+    if re.search(r"\b(?:müziği|şarkıyı|parçayı|medyayı)?\s*(?:durdur|duraklat|pause)\b", cleaned) and "uygulama" not in cleaned:
+        _, msg = control_media("play_pause")
+        return msg
+    if re.search(r"\b(?:müziği|şarkıyı|parçayı|medyayı)?\s*(?:devam ettir|sürdür|çal|oynat)\b", cleaned) and "aç" not in cleaned and "uygulama" not in cleaned:
+        _, msg = control_media("play_pause")
+        return msg
+    if re.search(r"\b(?:sonraki|sıradaki|ileri)\s+(?:şarkı|parça|müzik|video)\b|\bşarkıyı\s+geç\b", cleaned):
+        _, msg = control_media("next")
+        return msg
+    if re.search(r"\b(?:önceki|geçen|geri)\s+(?:şarkı|parça|müzik|video)\b|\bbaşa\s+sar\b", cleaned):
+        _, msg = control_media("prev")
+        return msg
+
+    # 3. Ses Kontrolü
     # Örnek: "sesi aç", "sesi yükselt", "sesi kıs", "sesi azalt", "sesi kapat", "sessize al"
     if re.search(r"\bses(?:i)?\s+(?:artır|yükselt|aç|fazlalaştır)\b", cleaned):
         _, msg = control_volume("up", steps=5)
@@ -295,5 +345,14 @@ def resolve_system_command(user_text: str) -> Optional[str]:
             return analyze_screen(user_text)
         except Exception as e:
             return f"Ekran inceleme servisi çalıştırılamadı: {e}"
+
+    # 6. Canlı Hızlı Bilgi (Hava Durumu, Dolar, Euro vb. - Tarayıcı açmadan anında sesli cevap)
+    try:
+        from boru.tools.quick_info import resolve_quick_info
+        quick_res = resolve_quick_info(user_text)
+        if quick_res is not None:
+            return quick_res
+    except Exception as e:
+        logger.debug(f"Hızlı bilgi çözme hatası: {e}")
 
     return None

@@ -6,6 +6,8 @@ import subprocess
 import threading
 import time
 
+import math
+import tkinter as tk
 import customtkinter as ctk
 
 from boru.contracts import AssistantPort
@@ -13,6 +15,83 @@ from boru.voice import VoiceInputService, VoiceOutputService, AudioCueService
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
+
+
+class AudioWaveVisualizer(tk.Canvas):
+    """
+    Siri / Jarvis tarzı akışkan, canlı ses dalgası görselleştiricisi.
+    Boşta (idle), Dinliyor (listening), Konuşuyor (speaking) ve Düşünüyor (thinking)
+    modları arasında dinamik ve yumuşak geçiş yapar.
+    """
+
+    def __init__(self, master, width: int = 100, height: int = 20, bg: str = "#1a1c23", **kwargs):
+        super().__init__(master, width=width, height=height, bg=bg, highlightthickness=0, **kwargs)
+        self._width = width
+        self._height = height
+        self._phase = 0.0
+        self._mode = "idle"
+        self._after_id = None
+        self._draw_wave()
+
+    def set_mode(self, mode: str) -> None:
+        self._mode = mode
+
+    def _draw_wave(self) -> None:
+        if not self.winfo_exists():
+            return
+        self.delete("all")
+        mid_y = self._height / 2.0
+        self._phase += 0.15
+
+        if self._mode == "listening":
+            # Dinleme Modu: Canlı turkuaz/yeşil ekolayzır barları
+            colors = ["#48bb78", "#38b2ac", "#4fd1c5"]
+            num_bars = 7
+            spacing = self._width / (num_bars + 1)
+            for i in range(num_bars):
+                x = (i + 1) * spacing
+                amp = math.sin(self._phase + i * 0.9) * (self._height * 0.4) + 2.0
+                bar_h = max(2.5, abs(amp))
+                color = colors[i % len(colors)]
+                self.create_line(x, mid_y - bar_h, x, mid_y + bar_h, fill=color, width=2.5, capstyle="round")
+
+        elif self._mode == "speaking":
+            # Konuşma Modu: Akışkan çift sinüs ses dalgası
+            points = []
+            for x in range(0, self._width, 4):
+                rel_x = x / self._width
+                envelope = math.sin(rel_x * math.pi)
+                y = mid_y + math.sin(self._phase + rel_x * 8.0) * (self._height * 0.38) * envelope
+                points.extend([x, y])
+            if len(points) >= 4:
+                self.create_line(*points, fill="#805ad5", width=2, smooth=True)
+
+            points2 = []
+            for x in range(0, self._width, 4):
+                rel_x = x / self._width
+                envelope = math.sin(rel_x * math.pi)
+                y = mid_y + math.cos(self._phase * 1.3 + rel_x * 6.0) * (self._height * 0.28) * envelope
+                points2.extend([x, y])
+            if len(points2) >= 4:
+                self.create_line(*points2, fill="#4299e1", width=1.5, smooth=True)
+
+        elif self._mode == "thinking":
+            # Düşünme Modu: Amber rengi nabız noktaları
+            num_dots = 5
+            spacing = self._width / (num_dots + 1)
+            for i in range(num_dots):
+                x = (i + 1) * spacing
+                pulse = math.sin(self._phase * 1.4 + i * 0.8)
+                r = 1.8 + max(0.4, pulse * 2.0)
+                self.create_oval(x - r, mid_y - r, x + r, mid_y + r, fill="#ecc94b", outline="")
+
+        else:
+            # Boşta (Idle) Modu: Sakin, ince parlayan yatay çizgi ve süzülen hafif nokta
+            self.create_line(10, mid_y, self._width - 10, mid_y, fill="#374151", width=1.2)
+            pulse_x = (math.sin(self._phase * 0.4) * 0.5 + 0.5) * (self._width - 30) + 15
+            self.create_oval(pulse_x - 1.5, mid_y - 1.5, pulse_x + 1.5, mid_y + 1.5, fill="#64748b", outline="")
+
+        self._after_id = self.after(50, self._draw_wave)
 
 
 class ChatAppUI(ctk.CTk):
@@ -97,13 +176,19 @@ class ChatAppUI(ctk.CTk):
         )
         title_label.pack(anchor="w")
 
+        status_sub_frame = ctk.CTkFrame(title_info_frame, fg_color="transparent")
+        status_sub_frame.pack(anchor="w")
+
         self.live_indicator = ctk.CTkLabel(
-            title_info_frame,
+            status_sub_frame,
             text="🟢 Çevrimiçi & Hazır",
             font=("Segoe UI", 11),
             text_color="#48bb78",
         )
-        self.live_indicator.pack(anchor="w")
+        self.live_indicator.pack(side="left")
+
+        self.visualizer = AudioWaveVisualizer(status_sub_frame, width=90, height=18, bg="#1a1c23")
+        self.visualizer.pack(side="left", padx=(10, 0))
 
         # Sağ taraf: Sesli Yanıt Toggle + Sıfırla Butonu
         control_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
@@ -619,6 +704,8 @@ class ChatAppUI(ctk.CTk):
         if busy:
             self._busy_started_at = time.monotonic()
             self.live_indicator.configure(text="🟡 Düşünüyor...", text_color="#ecc94b")
+            if hasattr(self, "visualizer"):
+                self.visualizer.set_mode("thinking")
             self._update_busy_status()
         else:
             self._busy_started_at = None
@@ -626,6 +713,8 @@ class ChatAppUI(ctk.CTk):
                 self.after_cancel(self._status_after_id)
                 self._status_after_id = None
             self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78")
+            if hasattr(self, "visualizer"):
+                self.visualizer.set_mode("idle")
             self.status_label.configure(text="Hazır", text_color="#718096")
 
         if not busy:
@@ -817,6 +906,17 @@ class ChatAppUI(ctk.CTk):
             self.after(0, lambda: self._jarvis_overlay.set_status(text, color))
         self.after(0, lambda: self.live_indicator.configure(text=text, text_color=color))
 
+        t_low = text.lower()
+        if hasattr(self, "visualizer"):
+            if "dinliyor" in t_low:
+                self.after(0, lambda: self.visualizer.set_mode("listening"))
+            elif "konuşuyor" in t_low:
+                self.after(0, lambda: self.visualizer.set_mode("speaking"))
+            elif "düşünüyor" in t_low or "işleniyor" in t_low:
+                self.after(0, lambda: self.visualizer.set_mode("thinking"))
+            else:
+                self.after(0, lambda: self.visualizer.set_mode("idle"))
+
     def _on_voice_dialogue_ended(self) -> None:
         self.after(0, lambda: self.mic_button.configure(fg_color="#2b6cb0", text="🎙️"))
         if getattr(self, "_jarvis_overlay", None):
@@ -826,6 +926,8 @@ class ChatAppUI(ctk.CTk):
             if not self.winfo_viewable():
                 self.after(1500, self._jarvis_overlay.hide)
         self.after(0, lambda: self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78"))
+        if hasattr(self, "visualizer"):
+            self.after(0, lambda: self.visualizer.set_mode("idle"))
         if getattr(self, "_wake_listener", None):
             self._wake_listener.resume()
 

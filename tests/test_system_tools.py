@@ -92,6 +92,19 @@ class TestSystemTools:
             res = resolve_system_command("internette yapay zeka ara")
             assert res == "Google'da arama açıldı."
 
+        with patch("boru.tools.system_tools.control_media", return_value=(True, "Medya oynatıldı / duraklatıldı.")) as mock_media:
+            res = resolve_system_command("müziği durdur")
+            assert res == "Medya oynatıldı / duraklatıldı."
+            mock_media.assert_called_with("play_pause")
+
+            res = resolve_system_command("sonraki şarkı")
+            assert res == "Medya oynatıldı / duraklatıldı."
+            mock_media.assert_called_with("next")
+
+            res = resolve_system_command("önceki parça")
+            assert res == "Medya oynatıldı / duraklatıldı."
+            mock_media.assert_called_with("prev")
+
         # Eşleşmeyen komut None dönmeli
         assert resolve_system_command("Python fonksiyonu nasıl yazılır?") is None
 
