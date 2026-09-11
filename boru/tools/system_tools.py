@@ -107,6 +107,18 @@ APP_PROCESS_MAP = {
 def open_application(app_name: str) -> Tuple[bool, str]:
     """İstenen uygulama veya web sitesini Windows üzerinde güvenle ve arka planda başlatır."""
     cleaned = app_name.lower().strip()
+
+    # Sezgisel hafızadan uygulama tercihi kontrolü
+    if cleaned in ("müzik", "şarkı"):
+        try:
+            from boru.learning import get_implicit_learner
+            pref_music = get_implicit_learner().get_app_preference("music")
+            if pref_music and pref_music in APP_COMMAND_MAP:
+                cleaned = pref_music
+                app_name = pref_music
+        except Exception:
+            pass
+
     cmd = APP_COMMAND_MAP.get(cleaned)
 
     # Eğer bir domain / URL ise (örn: youtube.com, google.com vb.)
@@ -526,6 +538,24 @@ def resolve_system_command(user_text: str) -> Optional[str]:
             return file_res
     except Exception as e:
         logger.debug(f"Dosya düzenleyici çözme hatası: {e}")
+
+    # 0.4 Otonom Merak ve Öğrenme Sorguları ("yeni ne var", "bugün neler öğrendin")
+    try:
+        from boru.learning import get_curiosity_daemon
+        curiosity_res = get_curiosity_daemon().resolve_curiosity_query(user_text)
+        if curiosity_res is not None:
+            return curiosity_res
+    except Exception as e:
+        logger.debug(f"Curiosity çözme hatası: {e}")
+
+    # 0.5 Hata Düzeltme Kuralları Sorguları ("hatalarından ne öğrendin")
+    try:
+        from boru.learning import get_reflection_learner
+        refl_res = get_reflection_learner().resolve_rules_query(user_text)
+        if refl_res is not None:
+            return refl_res
+    except Exception as e:
+        logger.debug(f"Reflection çözme hatası: {e}")
 
     # 1. Uygulama ve Web Sitelerini Açma Komutları
     # Standalone açma talepleri: "aç", "aç lütfen", "lütfen aç"

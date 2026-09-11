@@ -10,6 +10,7 @@ from boru.contracts import (
     ContextBuilder,
     DirectResponseResolver,
     MessageObserver,
+    TurnObserver,
 )
 from boru.conversation import ConversationHistory
 from boru.models import ChatMessage
@@ -48,6 +49,9 @@ class AssistantService:
         context_providers: Sequence[
             AssistantContextProvider
         ] = (),
+        turn_observers: Sequence[
+            TurnObserver
+        ] = (),
     ):
         self._chat_model = chat_model
         self._history = conversation_history
@@ -60,6 +64,10 @@ class AssistantService:
 
         self._message_observers = tuple(
             message_observers
+        )
+
+        self._turn_observers = tuple(
+            turn_observers
         )
 
         self._direct_response_resolvers = tuple(
@@ -105,6 +113,10 @@ class AssistantService:
                 user_text,
                 direct_answer,
             )
+            self._notify_turn_observers(
+                user_text,
+                direct_answer,
+            )
 
             return direct_answer
 
@@ -127,6 +139,10 @@ class AssistantService:
             )
 
         self._history.add_turn(
+            user_text,
+            assistant_text,
+        )
+        self._notify_turn_observers(
             user_text,
             assistant_text,
         )
@@ -165,6 +181,10 @@ class AssistantService:
                 user_text,
                 direct_answer,
             )
+            self._notify_turn_observers(
+                user_text,
+                direct_answer,
+            )
             yield direct_answer
             return
 
@@ -192,6 +212,10 @@ class AssistantService:
                 user_text,
                 full_text,
             )
+            self._notify_turn_observers(
+                user_text,
+                full_text,
+            )
         else:
             # Fallback to standard generate
             assistant_text = (
@@ -206,6 +230,10 @@ class AssistantService:
                 )
 
             self._history.add_turn(
+                user_text,
+                assistant_text,
+            )
+            self._notify_turn_observers(
                 user_text,
                 assistant_text,
             )
@@ -224,6 +252,20 @@ class AssistantService:
             observer.observe(
                 user_message
             )
+
+    def _notify_turn_observers(
+        self,
+        user_message: str,
+        assistant_message: str,
+    ) -> None:
+        for observer in self._turn_observers:
+            try:
+                observer.observe_turn(
+                    user_message,
+                    assistant_message,
+                )
+            except Exception:
+                pass
 
     def _resolve_direct_response(
         self,

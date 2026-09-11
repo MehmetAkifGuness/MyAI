@@ -28,6 +28,15 @@ class MessageObserver(Protocol):
         ...
 
 
+class TurnObserver(Protocol):
+    def observe_turn(
+        self,
+        user_message: str,
+        assistant_message: str,
+    ) -> None:
+        ...
+
+
 class DirectResponseResolver(Protocol):
     def resolve(
         self,

@@ -373,6 +373,15 @@ def resolve_quick_info(user_text: str) -> Optional[str]:
                     target_city = cand
 
         if not target_city:
+            try:
+                from boru.learning import get_implicit_learner
+                learned_city = get_implicit_learner().get_city()
+                if learned_city:
+                    target_city = learned_city
+            except Exception:
+                pass
+
+        if not target_city:
             target_city = "Istanbul"
 
         ok, msg = get_weather(target_city)

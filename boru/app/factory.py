@@ -1323,6 +1323,19 @@ def build_application(
         )
         conversation_model = ConversationalChatModel(conversation_model)
 
+    # ── 10.1 Otonom Öğrenme Paketi (Learning Suite) ────────────────────────
+    from boru.learning import (
+        get_implicit_learner,
+        get_reflection_learner,
+        get_curiosity_daemon,
+        get_dataset_collector,
+    )
+    implicit_learner = get_implicit_learner(project_root / "data" / "user_learned_profile.json")
+    reflection_learner = get_reflection_learner(project_root / "data" / "reflection_rules.json")
+    curiosity_daemon = get_curiosity_daemon(project_root / "data" / "curiosity_knowledge.json")
+    dataset_collector = get_dataset_collector(project_root / "data" / "self_training_dataset.jsonl")
+    curiosity_daemon.start()
+
     assistant = AssistantService(
         chat_model=conversation_model,
         conversation_history=history,
@@ -1334,6 +1347,11 @@ def build_application(
         message_observers=[
             ProfileObserver(profile_service),
             MemoryObserver(memory_service),
+        ],
+        turn_observers=[
+            implicit_learner,
+            reflection_learner,
+            dataset_collector,
         ],
         direct_response_resolvers=[
             *([SandboxCoordinator(sandbox_executor)] if sandbox_executor is not None else []),
@@ -1366,6 +1384,8 @@ def build_application(
             *([project_memory_context_provider] if project_memory_context_provider is not None else []),
             ProfileContextProvider(profile_service),
             MemoryContextProvider(memory_service, intent_detector=memory_intent_detector),
+            implicit_learner,
+            reflection_learner,
         ],
     )
 
