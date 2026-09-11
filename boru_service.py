@@ -15,6 +15,7 @@ Kullanım:
 from __future__ import annotations
 
 import argparse
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -63,7 +64,7 @@ def install_service() -> bool:
     vbs_content = (
         'Set WshShell = CreateObject("WScript.Shell")\n'
         f'WshShell.CurrentDirectory = "{str(project_root)}"\n'
-        f'WshShell.Run """{str(pythonw)}"" ""{str(main_py)}"" --silent", 0, False\n'
+        f'WshShell.Run """{str(sys.executable)}"" ""{str(main_py)}"" --silent", 0, False\n'
     )
     with open(vbs_path, "w", encoding="utf-8") as f:
         f.write(vbs_content)
@@ -140,6 +141,41 @@ def uninstall_service() -> bool:
     return True
 
 
+def get_running_boru_processes() -> list[dict]:
+    """Çalışan python/pythonw süreçlerinden Börü'ye ait olanları JSON ile tespit eder."""
+    ps_script = (
+        "Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | "
+        "Select-Object ProcessId, WorkingSetSize, CommandLine | "
+        "ConvertTo-Json -Compress"
+    )
+    try:
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return []
+        data = json.loads(proc.stdout.strip())
+        if isinstance(data, dict):
+            data = [data]
+        res = []
+        for item in data:
+            if not isinstance(item, dict):
+                continue
+            cmd = (item.get("CommandLine") or "").lower()
+            pid = item.get("ProcessId")
+            ws = item.get("WorkingSetSize") or 0
+            if pid and ("main.py" in cmd or "run_daemon.py" in cmd) and "pytest" not in cmd:
+                res.append({"pid": int(pid), "ws": int(ws), "cmd": cmd})
+        return res
+    except Exception:
+        return []
+
+
 def start_service() -> bool:
     """Börü'yü bağımsız, terminalden kopuk (detached) bir Windows süreci olarak başlatır."""
     stop_service(quiet=True)
@@ -155,10 +191,9 @@ def start_service() -> bool:
         subprocess.Popen(
             ["wscript.exe", str(vbs_path)],
             cwd=str(project_root),
-            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP,
-            close_fds=True
+            creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
         )
-        time.sleep(1.5)
+        time.sleep(2.5)
         print("✔ Börü arka plan servisi bağımsız olarak başlatıldı!")
         print("💡 IDE'yi (VS Code) kapatsanız dahi Börü arka planda çalışmaya devam eder.")
         print("💡 Kısayollar: Ctrl + Shift + J (Sesli Asistan), Ctrl + Shift + B (Arayüz)")
@@ -172,22 +207,13 @@ def stop_service(quiet: bool = False) -> bool:
     """Çalışan tüm Börü süreçlerini (main.py, pythonw, run_daemon) sonlandırır."""
     killed = 0
     try:
-        cmd = "Get-CimInstance Win32_Process -Filter \"Name = 'python.exe' or Name = 'pythonw.exe'\" | Select-Object ProcessId, CommandLine"
-        proc = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
-        for line in proc.stdout.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split(maxsplit=1)
-            if len(parts) == 2 and parts[0].isdigit():
-                pid = int(parts[0])
-                cmdline = parts[1].lower()
-                if "main.py" in cmdline or "run_daemon.py" in cmdline:
-                    try:
-                        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=3)
-                        killed += 1
-                    except Exception:
-                        pass
+        procs = get_running_boru_processes()
+        for p in procs:
+            try:
+                subprocess.run(["taskkill", "/F", "/PID", str(p["pid"])], capture_output=True, timeout=3)
+                killed += 1
+            except Exception:
+                pass
     except Exception as e:
         if not quiet:
             print(f"Hata: {e}")
@@ -202,32 +228,18 @@ def stop_service(quiet: bool = False) -> bool:
 
 def status_service() -> None:
     """Servis ve çalışan süreçlerin durumunu gösterir."""
-    running_instances = []
-    try:
-        cmd = "Get-CimInstance Win32_Process -Filter \"Name = 'python.exe' or Name = 'pythonw.exe'\" | Select-Object ProcessId, WorkingSetSize, CommandLine"
-        proc = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
-        for line in proc.stdout.splitlines():
-            line = line.strip()
-            if not line:
-                continue
-            parts = line.split(maxsplit=2)
-            if len(parts) >= 2 and parts[0].isdigit():
-                pid = int(parts[0])
-                ws = int(parts[1]) if parts[1].isdigit() else 0
-                cmdline = parts[2].lower() if len(parts) > 2 else ""
-                if "main.py" in cmdline or "run_daemon.py" in cmdline:
-                    running_instances.append((pid, ws, cmdline))
-    except Exception as e:
-        print(f"Süreç kontrol hatası: {e}")
+    running_instances = get_running_boru_processes()
 
     print("==================================================================")
     print("🐺 BÖRÜ AI SERVİS DURUMU")
     print("==================================================================")
     if running_instances:
         print(f"🟢 DURUM: AKTİF ÇALIŞIYOR ({len(running_instances)} süreç)")
-        for pid, ws, cmdline in running_instances:
-            mb = ws / (1024 * 1024)
-            print(f"   ▶ PID: {pid} | Bellek: {mb:.1f} MB | {cmdline[:60]}...")
+        for inst in running_instances:
+            pid = inst["pid"]
+            mb = inst["ws"] / (1024 * 1024)
+            cmd = inst["cmd"]
+            print(f"   ▶ PID: {pid} | Bellek: {mb:.1f} MB | {cmd[:60]}...")
     else:
         print("⚪ DURUM: ÇALIŞMIYOR")
 

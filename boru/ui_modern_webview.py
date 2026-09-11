@@ -1761,11 +1761,6 @@ def run_modern_app(
         minimized=True if hidden else False,
     )
     api.set_window(window)
-    if hidden:
-        try:
-            window.events.loaded += lambda: window.hide()
-        except Exception:
-            pass
     if on_closing:
         window.events.closing += on_closing
     if on_window_created:

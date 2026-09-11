@@ -1,31 +1,57 @@
 import argparse
+import json
 import logging
+import os
+import subprocess
 import sys
 from boru.release import build_release, _RELEASES
+
+# pythonw altında stdout/stderr None olabilir, çökmeyi önle
+if sys.stdout is None:
+    try:
+        sys.stdout = open(os.devnull, "w", encoding="utf-8")
+    except Exception:
+        pass
+if sys.stderr is None:
+    try:
+        sys.stderr = open(os.devnull, "w", encoding="utf-8")
+    except Exception:
+        pass
 
 logger = logging.getLogger(__name__)
 
 
 def _cleanup_stale_processes():
     try:
-        import os
-        import subprocess
         current_pid = os.getpid()
-        cmd = "Get-CimInstance Win32_Process -Filter \"Name = 'python.exe' or Name = 'pythonw.exe'\" | Select-Object ProcessId, CommandLine"
-        proc = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=4)
-        for line in proc.stdout.splitlines():
-            line = line.strip()
-            if not line:
+        ps_script = (
+            "Get-CimInstance Win32_Process -Filter \"Name like 'python%'\" | "
+            "Select-Object ProcessId, CommandLine | "
+            "ConvertTo-Json -Compress"
+        )
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=5
+        )
+        if proc.returncode != 0 or not proc.stdout.strip():
+            return
+        data = json.loads(proc.stdout.strip())
+        if isinstance(data, dict):
+            data = [data]
+        for item in data:
+            if not isinstance(item, dict):
                 continue
-            parts = line.split(maxsplit=1)
-            if len(parts) == 2 and parts[0].isdigit():
-                pid = int(parts[0])
-                cmdline = parts[1].lower()
-                if pid != current_pid and ("run_daemon.py" in cmdline or ("main.py" in cmdline and "pytest" not in cmdline)):
-                    try:
-                        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=2)
-                    except Exception:
-                        pass
+            pid = item.get("ProcessId")
+            cmdline = (item.get("CommandLine") or "").lower()
+            if pid and pid != current_pid and ("run_daemon.py" in cmdline or ("main.py" in cmdline and "pytest" not in cmdline)):
+                try:
+                    subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=2)
+                except Exception:
+                    pass
     except Exception:
         pass
 
