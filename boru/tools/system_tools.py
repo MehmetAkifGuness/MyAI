@@ -89,7 +89,7 @@ def open_application(app_name: str) -> Tuple[bool, str]:
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
         startupinfo.wShowWindow = subprocess.SW_HIDE
-        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008  # DETACHED_PROCESS
 
         if cmd:
             if cmd.startswith(("http://", "https://")):
@@ -100,11 +100,22 @@ def open_application(app_name: str) -> Tuple[bool, str]:
                 os.startfile(cmd)
                 return True, f"{app_name.capitalize()} açıldı."
 
-            subprocess.Popen([cmd], shell=True, startupinfo=startupinfo, creationflags=creationflags)
+            # Windows ShellExecute (os.startfile) konsol açmadan yerel başlatır
+            try:
+                os.startfile(cmd)
+                return True, f"{app_name.capitalize()} açıldı."
+            except Exception:
+                pass
+
+            subprocess.Popen([cmd], shell=True, startupinfo=startupinfo, creationflags=creationflags, close_fds=True)
             return True, f"{app_name.capitalize()} açıldı."
         else:
-            # Doğrudan girilen program adını başlatmayı dene
-            subprocess.Popen([cleaned], shell=True, startupinfo=startupinfo, creationflags=creationflags)
+            try:
+                os.startfile(cleaned)
+                return True, f"{app_name.capitalize()} başlatıldı."
+            except Exception:
+                pass
+            subprocess.Popen([cleaned], shell=True, startupinfo=startupinfo, creationflags=creationflags, close_fds=True)
             return True, f"{app_name.capitalize()} başlatıldı."
     except Exception as e:
         logger.debug(f"Uygulama başlatma hatası ({app_name}): {e}")

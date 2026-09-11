@@ -38,7 +38,7 @@ def patch_speech_recognition_windows_console() -> None:
             startup_info = subprocess.STARTUPINFO()
             startup_info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startup_info.wShowWindow = subprocess.SW_HIDE
-            creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008  # DETACHED_PROCESS
 
             process = subprocess.Popen(
                 [
@@ -52,6 +52,7 @@ def patch_speech_recognition_windows_console() -> None:
                 stdout=subprocess.PIPE,
                 startupinfo=startup_info,
                 creationflags=creation_flags,
+                close_fds=True,
             )
             flac_data, _ = process.communicate(wav_data)
             return flac_data
@@ -82,8 +83,8 @@ class VoiceInputService:
                 patch_speech_recognition_windows_console()
                 if self._recognizer is None:
                     self._recognizer = sr.Recognizer()
-                    self._recognizer.pause_threshold = 1.8  # Cümle içi doğal nefes duraklaması payı
-                    self._recognizer.non_speaking_duration = 1.2  # Cümlenin son kelimesini kırpmaması için sondaki ses tamponu
+                    self._recognizer.pause_threshold = 2.0  # Cümle içi doğal nefes ve düşünme duraklaması payı
+                    self._recognizer.non_speaking_duration = 1.5  # Cümlenin son kelimesini kırpmaması için sondaki ses tamponu
                     self._recognizer.phrase_threshold = 0.2
                     self._recognizer.dynamic_energy_threshold = False  # Uzun cümlelerde eşiğin yapay yükselip son kelimeyi yutmasını engeller
                     self._recognizer.energy_threshold = 200  # İnsan sesi için ideal hassasiyet eşiği
@@ -121,7 +122,7 @@ class VoiceInputService:
             logger.debug(f"Çevrimdışı ses tanıma hatası: {e}")
             return None
 
-    def listen_once(self, timeout: float = 8.0, phrase_time_limit: float = 45.0, adjust_noise: bool = False) -> str:
+    def listen_once(self, timeout: float = 8.0, phrase_time_limit: float = 60.0, adjust_noise: bool = False) -> str:
         """
         Mikrofonu dinler ve konuşulan metni Türkçe olarak döndürür.
         Çevrimiçi Google STT önceliklidir; internet kesintisinde yerel Whisper'a otomatik geçer.
@@ -133,6 +134,9 @@ class VoiceInputService:
             with self._microphone as source:
                 if adjust_noise:
                     self._recognizer.adjust_for_ambient_noise(source, duration=0.3)
+                    eth = getattr(self._recognizer, "energy_threshold", None)
+                    if isinstance(eth, (int, float)):
+                        self._recognizer.energy_threshold = min(max(eth, 150), 300)
                 audio = self._recognizer.listen(
                     source,
                     timeout=timeout,

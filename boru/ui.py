@@ -513,6 +513,10 @@ class ChatAppUI(ctk.CTk):
     def _run_cmd_async(self, cmd: str) -> None:
         self.log_terminal(f"❯ {cmd}", "cmd")
         try:
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008
             process = subprocess.Popen(
                 cmd,
                 shell=True,
@@ -521,7 +525,9 @@ class ChatAppUI(ctk.CTk):
                 text=True,
                 bufsize=1,
                 cwd=str(self._project_root),
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+                startupinfo=startupinfo,
+                creationflags=creationflags,
+                close_fds=True,
             )
             if process.stdout:
                 for line in process.stdout:

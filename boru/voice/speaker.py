@@ -197,13 +197,15 @@ class VoiceOutputService:
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startupinfo.wShowWindow = subprocess.SW_HIDE
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008  # DETACHED_PROCESS
             subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
                 timeout=20,
                 startupinfo=startupinfo,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
+                creationflags=creationflags,
+                close_fds=True,
             )
         except Exception as e:
             logger.debug(f"Yerel SAPI seslendirme hatası: {e}")

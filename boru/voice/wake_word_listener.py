@@ -76,7 +76,9 @@ class BackgroundWakeWordListener:
                 import speech_recognition as sr
 
                 with self._microphone as source:
-                    self._recognizer.adjust_for_ambient_noise(source, duration=0.4)
+                    eth = getattr(self._recognizer, "energy_threshold", None)
+                    if isinstance(eth, (int, float)):
+                        self._recognizer.energy_threshold = min(max(eth, 150), 300)
 
                 self._stop_listening_fn = self._recognizer.listen_in_background(
                     self._microphone,
