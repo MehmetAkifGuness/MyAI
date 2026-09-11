@@ -17,6 +17,9 @@ class TestStopPhraseDetector:
         assert is_stop_phrase("görüşürüz")
         assert is_stop_phrase("hoşça kal")
         assert is_stop_phrase("tamamdır teşekkürler")
+        assert is_stop_phrase("dur")
+        assert is_stop_phrase("yeterli")
+        assert is_stop_phrase("bu kadar")
 
     def test_tamam_is_not_a_stop_phrase(self):
         assert not is_stop_phrase("tamam")
@@ -57,6 +60,21 @@ class TestWakeWordDetector:
         is_wake, rem = parse_wake_word("Hey Börü, git status çalıştır")
         assert is_wake
         assert rem == "git status çalıştır"
+
+    def test_wake_word_with_greetings_and_suffix(self):
+        from boru.voice.continuous_dialogue import parse_wake_word
+
+        is_wake, rem = parse_wake_word("Merhaba Börü")
+        assert is_wake
+        assert rem == ""
+
+        is_wake, rem = parse_wake_word("Selam Börü nasılsın")
+        assert is_wake
+        assert rem == "nasılsın"
+
+        is_wake, rem = parse_wake_word("Hava durumu nasıl Börü")
+        assert is_wake
+        assert rem == "Hava durumu nasıl"
 
     def test_no_wake_word(self):
         from boru.voice.continuous_dialogue import parse_wake_word

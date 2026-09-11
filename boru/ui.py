@@ -335,7 +335,7 @@ class ChatAppUI(ctk.CTk):
             font=("Segoe UI Emoji", 16),
             fg_color="#2b6cb0",
             hover_color="#2c5282",
-            command=self._listen_voice,
+            command=self._toggle_continuous_voice,
         )
         self.mic_button.pack(side="left", padx=(10, 8), pady=8)
 
@@ -737,10 +737,13 @@ class ChatAppUI(ctk.CTk):
         self.after(0, self._handle_wake_up_trigger, remaining_cmd)
 
     def _handle_wake_up_trigger(self, remaining_cmd: str) -> None:
-        """Uyandırma gerçekleştiğinde overlay'i açar ve sesli diyaloğu başlatır."""
-        if getattr(self, "_jarvis_overlay", None):
+        """Uyandırma gerçekleştiğinde gerekirse overlay'i açar ve sesli diyaloğu başlatır."""
+        # Yalnızca ana pencere küçültülmüş veya görünür değilse Spotlight overlay'ini öne çıkar
+        if not self.winfo_viewable() and getattr(self, "_jarvis_overlay", None):
             self._jarvis_overlay.show()
             self._jarvis_overlay.set_mic_active(True)
+
+        self.mic_button.configure(fg_color="#e53e3e", text="🛑")
 
         if not remaining_cmd:
             def _greet_and_listen():
@@ -751,7 +754,9 @@ class ChatAppUI(ctk.CTk):
             threading.Thread(target=_greet_and_listen, daemon=True).start()
         else:
             def _execute_and_listen():
-                self._handle_continuous_voice_speech(remaining_cmd)
+                reply = self._handle_continuous_voice_speech(remaining_cmd)
+                if reply:
+                    self._voice_output.speak(reply, async_mode=False, force=True)
                 if getattr(self, "_continuous_voice", None):
                     self._continuous_voice.start()
 
@@ -764,6 +769,7 @@ class ChatAppUI(ctk.CTk):
 
         if self._continuous_voice.is_active:
             self._continuous_voice.stop()
+            self.mic_button.configure(fg_color="#2b6cb0", text="🎙️")
             if getattr(self, "_jarvis_overlay", None):
                 self._jarvis_overlay.set_mic_active(False)
             if getattr(self, "_wake_listener", None):
@@ -772,8 +778,10 @@ class ChatAppUI(ctk.CTk):
         else:
             if getattr(self, "_wake_listener", None):
                 self._wake_listener.pause()
+            self.mic_button.configure(fg_color="#e53e3e", text="🛑")
             if getattr(self, "_jarvis_overlay", None):
-                self._jarvis_overlay.show()
+                if not self.winfo_viewable():
+                    self._jarvis_overlay.show()
                 self._jarvis_overlay.set_mic_active(True)
             self._continuous_voice.start()
             self.log_terminal("🎙️ Kesintisiz Hands-Free sesli sohbet başlatıldı.", "success")
@@ -802,6 +810,7 @@ class ChatAppUI(ctk.CTk):
         self.after(0, lambda: self.live_indicator.configure(text=text, text_color=color))
 
     def _on_voice_dialogue_ended(self) -> None:
+        self.after(0, lambda: self.mic_button.configure(fg_color="#2b6cb0", text="🎙️"))
         if getattr(self, "_jarvis_overlay", None):
             self.after(0, lambda: self._jarvis_overlay.set_mic_active(False))
             self.after(0, lambda: self._jarvis_overlay.set_status("🟢 Hazır", "#48bb78"))

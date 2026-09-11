@@ -51,9 +51,9 @@ class BackgroundWakeWordListener:
                 self._recognizer = sr.Recognizer()
                 self._recognizer.energy_threshold = 250
                 self._recognizer.dynamic_energy_threshold = False
-                self._recognizer.pause_threshold = 1.6
+                self._recognizer.pause_threshold = 0.8  # Hızlı uyandırma algılaması için optimize
                 self._recognizer.phrase_threshold = 0.2
-                self._recognizer.non_speaking_duration = 1.0
+                self._recognizer.non_speaking_duration = 0.5
 
             if self._microphone is None:
                 self._microphone = sr.Microphone()
@@ -66,7 +66,7 @@ class BackgroundWakeWordListener:
     def start(self) -> bool:
         """Arka plan dinlemesini başlatır."""
         with self._lock:
-            if self._is_running:
+            if self._is_running and self._stop_listening_fn is not None:
                 return True
 
             if not self._ensure_init():
@@ -76,12 +76,12 @@ class BackgroundWakeWordListener:
                 import speech_recognition as sr
 
                 with self._microphone as source:
-                    self._recognizer.adjust_for_ambient_noise(source, duration=0.5)
+                    self._recognizer.adjust_for_ambient_noise(source, duration=0.4)
 
                 self._stop_listening_fn = self._recognizer.listen_in_background(
                     self._microphone,
                     self._audio_callback,
-                    phrase_time_limit=12.0,
+                    phrase_time_limit=5.0,
                 )
                 self._is_running = True
                 self._is_paused = False
@@ -92,12 +92,33 @@ class BackgroundWakeWordListener:
                 return False
 
     def pause(self) -> None:
-        """Diyalog sürerken veya Börü konuşurken arka plan dinleyicisini geçici duraklatır."""
-        self._is_paused = True
+        """Diyalog sürerken veya Börü konuşurken arka plan dinleyicisini geçici duraklatır ve mikrofonu bırakır."""
+        with self._lock:
+            self._is_paused = True
+            if self._stop_listening_fn:
+                try:
+                    self._stop_listening_fn(wait_for_stop=False)
+                except Exception:
+                    pass
+                self._stop_listening_fn = None
+            logger.debug("Arka plan dinleyicisi mikrofonu bıraktı (duraklatıldı).")
 
     def resume(self) -> None:
         """Diyalog bittiğinde arka plan dinlemesini tekrar aktif eder."""
-        self._is_paused = False
+        with self._lock:
+            if not self._is_running:
+                return
+            self._is_paused = False
+            if self._stop_listening_fn is None and self._ensure_init():
+                try:
+                    self._stop_listening_fn = self._recognizer.listen_in_background(
+                        self._microphone,
+                        self._audio_callback,
+                        phrase_time_limit=5.0,
+                    )
+                    logger.debug("Arka plan dinleyicisi mikrofona tekrar bağlandı.")
+                except Exception as e:
+                    logger.error(f"resume listen_in_background hatası: {e}")
 
     def stop(self) -> None:
         """Arka plan dinleyicisini tamamen kapatır."""

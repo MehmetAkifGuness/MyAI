@@ -19,11 +19,22 @@ class VoiceOutputService:
         self.enabled = enabled
         self._lock = threading.Lock()
 
+    def stop(self) -> None:
+        """Devam eden ses çalmayı anında durdurur."""
+        try:
+            import pygame
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+        except Exception:
+            pass
+
     @staticmethod
     def clean_text_for_speech(text: str) -> str:
         """Kod bloklarını, sembolleri ve markdown etiketlerini temizler; cümleleri yarıda kesmez."""
+        # <think>...</think> düşünce bloklarını çıkar
+        no_think = re.sub(r"<think>[\s\S]*?</think>", "", text)
         # ```kod``` bloklarını çıkar
-        no_code = re.sub(r"```[\s\S]*?```", " ilgili kod bloğu ", text)
+        no_code = re.sub(r"```[\s\S]*?```", " ilgili kod bloğu ", no_think)
         # `inline kod` bloklarını sadeleştir
         no_inline = re.sub(r"`([^`]+)`", r"\1", no_code)
         # Markdown başlıklarını, sembolleri temizle

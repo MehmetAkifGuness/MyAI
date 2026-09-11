@@ -28,6 +28,15 @@ STOP_PHRASES = {
     "teşekkürler kapatabilirsin",
     "teşekkürler",
     "teşekkür ederim",
+    "dur",
+    "börü dur",
+    "sus",
+    "börü sus",
+    "yeterli",
+    "bu kadar",
+    "sonlandır",
+    "çık",
+    "çıkış",
 }
 
 
@@ -73,22 +82,40 @@ WAKE_WORDS = {
 
 def parse_wake_word(text: str) -> tuple[bool, str]:
     """
-    Kullanıcının 'Börü' veya 'Hey Börü' deyip demediğini tespit eder.
-    Dönüş: (is_wake_word_detected, remaining_command)
-    Örnek:
+    Kullanıcının 'Börü' veya 'Hey Börü' deyip demediğini esnekçe tespit eder.
+    Başta, sonda veya selam/hitap ekleriyle birlikte kullanımı destekler:
       'Börü' -> (True, '')
       'Hey Börü nasılsın' -> (True, 'nasılsın')
+      'Selam Börü hava durumu nasıl' -> (True, 'hava durumu nasıl')
+      'Hava durumu nasıl Börü' -> (True, 'Hava durumu nasıl')
       'Python kodunu açıkla' -> (False, 'Python kodunu açıkla')
     """
     cleaned = text.strip()
-    low = cleaned.lower()
+    low = cleaned.lower().strip(".!?, ")
+    prefixes = ("hey", "ey", "alo", "selam", "merhaba")
+    wake_bases = ("börü", "boru")
 
-    for w in sorted(WAKE_WORDS, key=len, reverse=True):
-        if low == w or low in (f"{w}!", f"{w}?", f"{w}."):
+    # 1. Tam eşleşme ("börü", "hey börü", "merhaba börü" vb.)
+    for base in wake_bases:
+        if low == base:
             return True, ""
-        if low.startswith(w + " ") or low.startswith(w + ",") or low.startswith(w + ":"):
-            remaining = cleaned[len(w):].lstrip(" ,:!?.")
-            return True, remaining
+        for p in prefixes:
+            if low == f"{p} {base}":
+                return True, ""
+
+    # 2. Başta yer alan uyandırma kelimesi ("börü ...", "hey börü ...", "merhaba börü ...")
+    for pfx in ("", *(f"{p} " for p in prefixes)):
+        for base in wake_bases:
+            lead = f"{pfx}{base}"
+            if low.startswith(lead + " ") or low.startswith(lead + ",") or low.startswith(lead + ":"):
+                rem = cleaned[len(lead):].lstrip(" ,:!?.")
+                return True, rem
+
+    # 3. Sonda yer alan uyandırma kelimesi ("nasılsın börü", "hava nasıl boru")
+    for base in wake_bases:
+        if low.endswith(" " + base):
+            rem = cleaned[:-len(base)].rstrip(" ,:!?.")
+            return True, rem
 
     return False, cleaned
 
@@ -141,6 +168,8 @@ class ContinuousVoiceController:
             return
 
         self._running = False
+        if hasattr(self._voice_output, "stop"):
+            self._voice_output.stop()
         self._set_status("🟢 Hazır", "#48bb78")
         if self._on_dialogue_ended:
             try:
@@ -158,17 +187,24 @@ class ContinuousVoiceController:
 
     def _dialogue_loop(self) -> None:
         consecutive_timeouts = 0
+        consecutive_unknowns = 0
+        consecutive_errors = 0
+
+        # Mikrofonun arka plan dinleyicisinden tamamen serbest kalması için kısa bekleme payı
+        time.sleep(0.2)
 
         try:
             while self._running:
                 self._set_status("🎙️ Dinliyor (Konuşun)...", "#ecc94b")
 
                 try:
-                    text = self._voice_input.listen_once(timeout=8.0, phrase_time_limit=45.0)
+                    text = self._voice_input.listen_once(timeout=10.0, phrase_time_limit=45.0)
                     consecutive_timeouts = 0
+                    consecutive_unknowns = 0
+                    consecutive_errors = 0
                 except TimeoutError:
                     consecutive_timeouts += 1
-                    if consecutive_timeouts >= 2:
+                    if consecutive_timeouts >= 3:
                         self._set_status("💤 Zaman Aşımı", "#718096")
                         self._voice_output.speak(
                             "Sizi duyamadım, dinlemeyi sonlandırıyorum.",
@@ -178,12 +214,32 @@ class ContinuousVoiceController:
                         break
                     continue
                 except ValueError:
-                    # Söylenen anlaşılamadı
+                    # Söylenen anlaşılamadı (gürültü veya belirsiz fısıltı)
+                    consecutive_unknowns += 1
                     self._set_status("❓ Anlaşılamadı", "#f56565")
+                    if consecutive_unknowns >= 2:
+                        self._voice_output.speak(
+                            "Sizi tam anlayamadım, lütfen tekrar eder misiniz?",
+                            async_mode=False,
+                            force=True,
+                        )
+                        consecutive_unknowns = 0
+                    else:
+                        time.sleep(0.3)
                     continue
                 except Exception as e:
-                    logger.debug(f"Ses tanıma döngü hatası: {e}")
-                    break
+                    consecutive_errors += 1
+                    logger.warning(f"Ses tanıma döngü hatası ({consecutive_errors}/3): {e}")
+                    self._set_status("⚠️ Bağlantı hatası...", "#f56565")
+                    if consecutive_errors >= 3:
+                        self._voice_output.speak(
+                            "Ses bağlantısında bir sorun oluştu, dinleme sonlandırıldı.",
+                            async_mode=False,
+                            force=True,
+                        )
+                        break
+                    time.sleep(1.0)
+                    continue
 
                 if not text or not self._running:
                     continue
@@ -192,7 +248,7 @@ class ContinuousVoiceController:
                 if is_stop_phrase(text):
                     self._set_status("👋 Görüşmek Üzere", "#48bb78")
                     self._voice_output.speak(
-                        "Rica ederim, istediğiniz zaman buradayım.",
+                        "Rica ederim, istediğiniz zaman buradayım. Görüşmek üzere!",
                         async_mode=False,
                         force=True,
                     )

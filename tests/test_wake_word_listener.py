@@ -34,13 +34,17 @@ class TestBackgroundWakeWordListener:
 
         listener.pause()
         assert listener.is_paused
+        # pause() mikrofonu serbest bırakmak için stop_fn'i çağırmalı
+        stop_fn.assert_called_once()
 
         listener.resume()
         assert not listener.is_paused
+        # resume() arka plan dinlemesini yeniden bağlamalı
+        assert mock_rec.listen_in_background.call_count == 2
 
         listener.stop()
         assert not listener.is_running
-        stop_fn.assert_called_once()
+        assert stop_fn.call_count == 2
 
     def test_audio_callback_triggers_wake_word(self):
         callback = MagicMock()
