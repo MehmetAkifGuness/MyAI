@@ -1341,11 +1341,86 @@ VOICE_OVERLAY_HTML = """<!DOCTYPE html>
     .hdr-btn.close { color: #F87171; border-color: rgba(248, 113, 113, 0.3); }
     .hdr-btn.close:hover { background: rgba(239, 68, 68, 0.15); }
 
+    /* ─── Raycast Command Bar ─── */
+    .cmd-bar {
+      padding: 8px 14px;
+      background: rgba(10, 14, 26, 0.95);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.15);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+    .cmd-icon { font-size: 14px; color: #38BDF8; opacity: 0.8; }
+    .cmd-input {
+      flex: 1;
+      background: transparent;
+      border: none;
+      outline: none;
+      color: #F1F5F9;
+      font-size: 13px;
+      font-family: inherit;
+    }
+    .cmd-input::placeholder { color: #475569; }
+    .cmd-run-btn {
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: #0284C7;
+      border: none;
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .cmd-run-btn:hover { background: #0369A1; }
+
+    /* ─── Quick Chips ─── */
+    .chips {
+      display: flex;
+      gap: 6px;
+      padding: 4px 14px 6px;
+      background: rgba(10, 14, 26, 0.95);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+      overflow-x: auto;
+      flex-shrink: 0;
+    }
+    .chips::-webkit-scrollbar { display: none; }
+    .chip {
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94A3B8;
+      font-size: 10px;
+      cursor: pointer;
+      white-space: nowrap;
+      transition: all 0.15s;
+    }
+    .chip:hover {
+      background: rgba(56, 189, 248, 0.12);
+      border-color: rgba(56, 189, 248, 0.3);
+      color: #38BDF8;
+    }
+
+    /* ─── Quick Result Alert ─── */
+    .quick-result {
+      display: none;
+      margin: 8px 14px 0;
+      padding: 8px 12px;
+      background: rgba(14, 165, 233, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 8px;
+      font-size: 12px;
+      line-height: 1.4;
+      color: #E0F2FE;
+    }
+
     /* ─── Conversation area ─── */
     .conv {
       flex: 1;
       overflow-y: auto;
-      padding: 10px 14px;
+      padding: 8px 14px;
       display: flex;
       flex-direction: column;
       gap: 7px;
@@ -1359,13 +1434,13 @@ VOICE_OVERLAY_HTML = """<!DOCTYPE html>
       flex-direction: column;
       align-items: center;
       justify-content: center;
-      gap: 6px;
+      gap: 4px;
       height: 100%;
       color: #334155;
-      font-size: 12px;
+      font-size: 11px;
       text-align: center;
     }
-    .empty-icon { font-size: 26px; opacity: 0.35; }
+    .empty-icon { font-size: 22px; opacity: 0.35; }
     .empty-hint { font-size: 10px; opacity: 0.5; margin-top: 2px; }
 
     /* ─── Message bubbles ─── */
@@ -1412,23 +1487,40 @@ VOICE_OVERLAY_HTML = """<!DOCTYPE html>
 <body>
   <div class="header" id="hdr">
     <span class="wolf-icon">🐺</span>
-    <span class="app-title">Börü Sesli Diyalog</span>
+    <span class="app-title">Börü Sesli Diyalog & Raycast</span>
     <div class="status-pill" id="spill">🟢 Hazır</div>
     <button class="hdr-btn" onclick="openMain()">🖥️ Ana</button>
     <button class="hdr-btn close" onclick="doClose()">✕</button>
   </div>
 
+  <div class="cmd-bar">
+    <span class="cmd-icon">⚡</span>
+    <input type="text" id="cmd-input" class="cmd-input" placeholder="Hızlı komut yazın (örn: =14*5, ara: dolar kuru, ses aç)..." onkeydown="handleCmdKeyDown(event)">
+    <button class="cmd-run-btn" onclick="runQuickAction()">Çalıştır</button>
+  </div>
+
+  <div class="chips">
+    <span class="chip" onclick="applyChip('= 450 * 1.2')">🧮 Hesap</span>
+    <span class="chip" onclick="applyChip('ara: güncel haberler')">🌐 Haberler</span>
+    <span class="chip" onclick="applyChip('sesi artır')">🔊 Ses Aç</span>
+    <span class="chip" onclick="applyChip('not defterini aç')">📝 Not Defteri</span>
+    <span class="chip" onclick="applyChip('ram durumu')">📊 RAM</span>
+    <span class="chip" onclick="applyChip('masaüstünü göster')">🖥️ Masaüstü</span>
+  </div>
+
+  <div id="quick-res" class="quick-result"></div>
+
   <div class="conv" id="conv">
     <div class="empty" id="empty">
       <div class="empty-icon">🎙️</div>
-      <div>Konuşmaya başlayın</div>
-      <div class="empty-hint">Ctrl+Shift+J aç/kapat &nbsp;•&nbsp; Esc kapat</div>
+      <div>Konuşmaya başlayın veya yukarıya hızlı komut yazın</div>
+      <div class="empty-hint">Ctrl+Shift+J aç/kapat &nbsp;•&nbsp; Esc kapat &nbsp;•&nbsp; ↵ Çalıştır</div>
     </div>
   </div>
 
   <div class="footer">
-    <span class="ft-hint">Esc kapat &nbsp;•&nbsp; Ctrl+Shift+J toggle</span>
-    <span class="ft-brand">BÖRÜ V14 PRO</span>
+    <span class="ft-hint">Esc kapat &nbsp;•&nbsp; Ctrl+Shift+J toggle &nbsp;•&nbsp; [=] Hesap &nbsp;•&nbsp; [ara:] Web</span>
+    <span class="ft-brand">BÖRÜ PRO</span>
   </div>
 
   <script>
@@ -1439,6 +1531,56 @@ VOICE_OVERLAY_HTML = """<!DOCTYPE html>
         if (window.pywebview && window.pywebview.api) window.pywebview.api.toggle_voice_from_overlay();
       }
     });
+
+    function handleCmdKeyDown(e) {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        runQuickAction();
+      }
+    }
+
+    function applyChip(text) {
+      const inp = document.getElementById('cmd-input');
+      if (inp) {
+        inp.value = text;
+        inp.focus();
+        runQuickAction();
+      }
+    }
+
+    function runQuickAction() {
+      const inp = document.getElementById('cmd-input');
+      const val = inp ? inp.value.trim() : '';
+      if (!val) return;
+
+      const resBox = document.getElementById('quick-res');
+      if (resBox) {
+        resBox.style.display = 'block';
+        resBox.innerText = '⚡ İşleniyor...';
+      }
+
+      if (window.pywebview && window.pywebview.api && window.pywebview.api.execute_quick_action) {
+        window.pywebview.api.execute_quick_action(val).then(res => {
+          if (resBox) {
+            resBox.style.display = 'block';
+            resBox.innerText = res.reply || 'Tamamlandı.';
+            if (res.status === 'error') {
+              resBox.style.borderColor = '#EF4444';
+              resBox.style.color = '#FCA5A5';
+            } else {
+              resBox.style.borderColor = 'rgba(56, 189, 248, 0.4)';
+              resBox.style.color = '#E0F2FE';
+            }
+          }
+          addExchange('⚡ ' + val, res.reply || 'Tamamlandı.');
+        }).catch(err => {
+          if (resBox) {
+            resBox.style.display = 'block';
+            resBox.innerText = 'Hata: ' + err;
+          }
+        });
+      }
+    }
 
     function updateStatus(text, color) {
       const p = document.getElementById('spill');
@@ -1503,21 +1645,19 @@ VOICE_OVERLAY_HTML = """<!DOCTYPE html>
 
 
 class VoiceOverlayApi:
-    """Yüzen sesli diyalog overlay penceresi için Python-JS köprüsü.
-
-    Sadece overlay penceresine özgü komutları barındırır: kapat,
-    ana pencereyi aç, overlay'den ses toggle.
-    """
+    """Yüzen sesli diyalog ve Raycast hızlı eylemler overlay penceresi için Python-JS köprüsü."""
 
     def __init__(
         self,
         on_toggle_voice: Optional[Callable[[], None]] = None,
         on_open_main: Optional[Callable[[], None]] = None,
         on_close: Optional[Callable[[], None]] = None,
+        on_execute_command: Optional[Callable[[str], str]] = None,
     ):
         self._on_toggle_voice = on_toggle_voice
         self._on_open_main = on_open_main
         self._on_close = on_close
+        self._on_execute_command = on_execute_command
         self._window: Optional[webview.Window] = None
 
     def set_window(self, window: webview.Window) -> None:
@@ -1537,6 +1677,52 @@ class VoiceOverlayApi:
         """Overlay içinden Ctrl+Shift+J kısayolu: sesi toggle eder."""
         if self._on_toggle_voice:
             self._on_toggle_voice()
+
+    def execute_quick_action(self, cmd: str) -> dict[str, Any]:
+        """Raycast komut çubuğundan gelen hızlı hesaplama veya sistem komutunu yürütür."""
+        text = cmd.strip()
+        if not text:
+            return {"status": "error", "reply": "Lütfen bir komut girin."}
+
+        # 1. Hızlı Hesaplama: "calc: 15 * 4" veya "= 15 * 4"
+        if text.startswith(("=", "calc:", "hesap:")):
+            expr = re.sub(r"^(?:=|calc:|hesap:)\s*", "", text).strip()
+            try:
+                from boru.tools.builtins.calculator import CalculatorTool
+                calc = CalculatorTool()
+                res = calc.execute({"expression": expr})
+                return {"status": "success", "reply": f"= {res.output}"}
+            except Exception as e:
+                return {"status": "error", "reply": f"Hesaplama hatası: {e}"}
+
+        # 2. Canlı Web Araması: "web: dolar kuru" veya "ara: haberler"
+        if text.startswith(("web:", "ara:", "google:")):
+            query = re.sub(r"^(?:web:|ara:|google:)\s*", "", text).strip()
+            try:
+                from boru.tools.web_search import search_web_live
+                ok, web_res = search_web_live(query)
+                return {"status": "success" if ok else "error", "reply": web_res}
+            except Exception as e:
+                return {"status": "error", "reply": f"Web arama hatası: {e}"}
+
+        # 3. Sistem & OS Araçları (System Tools / OS Agent)
+        try:
+            from boru.tools.system_tools import execute_system_command
+            sys_res = execute_system_command(text)
+            if sys_res:
+                return {"status": "success", "reply": sys_res}
+        except Exception as e:
+            logger.debug(f"Hızlı sistem eylemi hatası: {e}")
+
+        # 4. Asistan Yapay Zeka Yanıtı (Custom Callback)
+        if self._on_execute_command:
+            try:
+                reply = self._on_execute_command(text)
+                return {"status": "success", "reply": reply}
+            except Exception as err:
+                return {"status": "error", "reply": f"Hata: {err}"}
+
+        return {"status": "success", "reply": f"Komut işlendi: {text}"}
 
 
 def run_modern_app(
@@ -1593,11 +1779,11 @@ def run_modern_app(
 
         overlay_api = VoiceOverlayApi()  # callbacks wired by caller via on_overlay_window_created
         overlay_win = webview.create_window(
-            title="Börü Sesli Diyalog",
+            title="Börü Sesli Diyalog & Raycast",
             html=VOICE_OVERLAY_HTML,
             js_api=overlay_api,
             width=_ow,
-            height=270,
+            height=340,
             x=_ox,
             y=_oy,
             frameless=True,

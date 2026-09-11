@@ -67,6 +67,11 @@ APP_COMMAND_MAP = {
     "dosya gezgini": "explorer",
     "dosyalar": "explorer",
     "belgelerim": "explorer",
+    "belgeler": "explorer",
+    "indirilenler": "explorer shell:Downloads",
+    "downloads": "explorer shell:Downloads",
+    "masaüstü": "explorer shell:Desktop",
+    "resimler": "explorer shell:My Pictures",
     "ayarlar": "ms-settings:",
     "settings": "ms-settings:",
     "denetim masası": "control",
@@ -582,6 +587,15 @@ def resolve_system_command(user_text: str) -> Optional[str]:
         if query:
             _, msg = search_web(query, platform="youtube")
             return msg
+
+    # 4. Canlı Web Araması & Haberler (Tarayıcı açmadan doğrudan sesli/metin özet)
+    try:
+        from boru.tools.web_search import resolve_web_search_command
+        live_search_res = resolve_web_search_command(user_text)
+        if live_search_res is not None:
+            return live_search_res
+    except Exception as e:
+        logger.debug(f"Canlı web arama hatası: {e}")
 
     google_match = re.search(r"(?:google(?:'da|'de)?\s+(?:ara|arama yap)\s*:?\s*|google(?:'da|'de)?\s+)(.+?)(?:\s+(?:ara|arama yap))?$", cleaned)
     if google_match and "google" in cleaned:

@@ -15,8 +15,10 @@ class VoiceOutputService:
     Kod bloklarını ve gereksiz etiketleri konuşmadan önce otomatik temizler.
     """
 
-    def __init__(self, enabled: bool = True):
+    def __init__(self, enabled: bool = True, voice: str = "tr-TR-AhmetNeural", rate: str = "+0%"):
         self.enabled = enabled
+        self.voice = voice
+        self.rate = rate
         self._lock = threading.Lock()
 
     def stop(self) -> None:
@@ -108,7 +110,7 @@ class VoiceOutputService:
                 tmp_path = f.name
 
             async def _generate():
-                communicate = edge_tts.Communicate(text, voice="tr-TR-AhmetNeural")
+                communicate = edge_tts.Communicate(text, voice=self.voice, rate=self.rate)
                 await communicate.save(tmp_path)
 
             asyncio.run(_generate())

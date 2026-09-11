@@ -227,6 +227,7 @@ def main():
                 ov_api._on_toggle_voice = _toggle_voice
                 ov_api._on_open_main = _show_modern_window
                 ov_api._on_close = lambda: _safe_hide_overlay(ov_win)
+                ov_api._on_execute_command = lambda cmd: app._assistant.reply(cmd) if getattr(app, "_assistant", None) else f"Alındı: {cmd}"
 
             def _safe_hide_overlay(ov_win):
                 try:
