@@ -53,9 +53,11 @@ def main():
             from boru.ui_modern_webview import run_modern_app
 
             app.withdraw()
-            app._suppress_tk_overlay = True
+            # NOT: _suppress_tk_overlay artık ayarlanmıyor —
+            # Tkinter JarvisOverlayWindow yerine yeni WebView2 overlay kullanıyoruz.
 
             modern_window_ref = [None]
+            overlay_window_ref = [None]   # WebView2 sesli diyalog overlay penceresi
             _allow_exit = [False]
 
             def _show_modern_window():
@@ -74,29 +76,52 @@ def main():
                         pass
 
             def _on_speech_recognized(user_text: str, bot_reply: str):
+                import json
+                u_json = json.dumps(user_text)
+                b_json = json.dumps(bot_reply)
                 if modern_window_ref[0]:
                     try:
-                        import json
-                        u_json = json.dumps(user_text)
-                        b_json = json.dumps(bot_reply)
                         modern_window_ref[0].evaluate_js(f"appendSpeechExchange({u_json}, {b_json})")
+                    except Exception:
+                        pass
+                # Overlay'i de güncelle ve görünür yap
+                if overlay_window_ref[0]:
+                    try:
+                        overlay_window_ref[0].show()
+                        overlay_window_ref[0].evaluate_js(f"addExchange({u_json}, {b_json})")
                     except Exception:
                         pass
 
             def _on_voice_status(text: str, color: str):
+                import json
+                t_json = json.dumps(text)
+                c_json = json.dumps(color)
                 if modern_window_ref[0]:
                     try:
-                        import json
-                        t_json = json.dumps(text)
-                        c_json = json.dumps(color)
                         modern_window_ref[0].evaluate_js(f"updateVoiceStatus({t_json}, {c_json})")
+                    except Exception:
+                        pass
+                # Overlay durum rozetini de güncelle
+                if overlay_window_ref[0]:
+                    try:
+                        overlay_window_ref[0].evaluate_js(f"updateStatus({t_json}, {c_json})")
                     except Exception:
                         pass
 
             def _toggle_voice():
                 if getattr(app, "_toggle_continuous_voice", None):
                     app._toggle_continuous_voice()
-                    return bool(getattr(app, "_continuous_voice", None) and app._continuous_voice.is_active)
+                    is_active = bool(getattr(app, "_continuous_voice", None) and app._continuous_voice.is_active)
+                    # Ses başladıysa overlay'i göster, durduysa gizle
+                    if overlay_window_ref[0]:
+                        try:
+                            if is_active:
+                                overlay_window_ref[0].show()
+                            else:
+                                overlay_window_ref[0].hide()
+                        except Exception:
+                            pass
+                    return is_active
                 return False
 
             def _open_spotlight():
@@ -147,6 +172,11 @@ def main():
                         app._hotkey_mgr.stop()
                     except Exception:
                         pass
+                if overlay_window_ref[0]:
+                    try:
+                        overlay_window_ref[0].destroy()
+                    except Exception:
+                        pass
                 if modern_window_ref[0]:
                     try:
                         modern_window_ref[0].destroy()
@@ -174,6 +204,20 @@ def main():
             def _on_window_created(win):
                 modern_window_ref[0] = win
 
+            def _on_overlay_window_created(ov_win, ov_api):
+                """Overlay penceresi oluşturulduğunda VoiceOverlayApi callback'lerini bağlar."""
+                overlay_window_ref[0] = ov_win
+                # Overlay'den gelen komutları main.py bağlamında yönet
+                ov_api._on_toggle_voice = _toggle_voice
+                ov_api._on_open_main = _show_modern_window
+                ov_api._on_close = lambda: _safe_hide_overlay(ov_win)
+
+            def _safe_hide_overlay(ov_win):
+                try:
+                    ov_win.hide()
+                except Exception:
+                    pass
+
             try:
                 run_modern_app(
                     assistant=app._assistant,
@@ -182,6 +226,7 @@ def main():
                     on_open_spotlight=_open_spotlight,
                     on_window_created=_on_window_created,
                     on_closing=_on_window_closing,
+                    on_overlay_window_created=_on_overlay_window_created,
                 )
             finally:
                 _full_exit()

@@ -1253,6 +1253,292 @@ Komut çalıştırmak için aşağıya yazıp Enter'a basın (örn: pytest, git 
 """
 
 
+# ---------------------------------------------------------------------------
+# Yüzen Sesli Diyalog Overlay'i — Başlangıç HTML Şablonu
+# ---------------------------------------------------------------------------
+VOICE_OVERLAY_HTML = """<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Börü Sesli Diyalog</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #07090E;
+      border: 1.5px solid #38BDF8;
+      border-radius: 18px;
+      overflow: hidden;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+      color: #E2E8F0;
+      user-select: none;
+    }
+    /* ─── Header ─── */
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      background: rgba(14, 20, 38, 0.85);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid rgba(56, 189, 248, 0.18);
+      flex-shrink: 0;
+      -webkit-app-region: drag;
+    }
+    .wolf-icon { font-size: 17px; }
+    .app-title {
+      font-size: 11px;
+      font-weight: 700;
+      color: #94A3B8;
+      letter-spacing: 0.8px;
+      text-transform: uppercase;
+      flex: 1;
+    }
+    .status-pill {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #10B981;
+      transition: all 0.3s;
+      white-space: nowrap;
+    }
+    .status-pill.active {
+      background: rgba(239, 68, 68, 0.15);
+      border-color: rgba(239, 68, 68, 0.4);
+      color: #EF4444;
+      animation: statusPulse 1.2s infinite ease-in-out;
+    }
+    .status-pill.thinking {
+      background: rgba(245, 158, 11, 0.12);
+      border-color: rgba(245, 158, 11, 0.35);
+      color: #F59E0B;
+    }
+    @keyframes statusPulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.65; }
+    }
+    .hdr-btn {
+      padding: 4px 10px;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #94A3B8;
+      font-size: 11px;
+      cursor: pointer;
+      transition: all 0.15s;
+      -webkit-app-region: no-drag;
+    }
+    .hdr-btn:hover { background: rgba(255, 255, 255, 0.1); color: #E2E8F0; }
+    .hdr-btn.close { color: #F87171; border-color: rgba(248, 113, 113, 0.3); }
+    .hdr-btn.close:hover { background: rgba(239, 68, 68, 0.15); }
+
+    /* ─── Conversation area ─── */
+    .conv {
+      flex: 1;
+      overflow-y: auto;
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+      scroll-behavior: smooth;
+    }
+    .conv::-webkit-scrollbar { width: 3px; }
+    .conv::-webkit-scrollbar-track { background: transparent; }
+    .conv::-webkit-scrollbar-thumb { background: #1E293B; border-radius: 2px; }
+    .empty {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 100%;
+      color: #334155;
+      font-size: 12px;
+      text-align: center;
+    }
+    .empty-icon { font-size: 26px; opacity: 0.35; }
+    .empty-hint { font-size: 10px; opacity: 0.5; margin-top: 2px; }
+
+    /* ─── Message bubbles ─── */
+    .row { display: flex; }
+    .row.u { justify-content: flex-end; }
+    .row.b { justify-content: flex-start; }
+    .bubble {
+      max-width: 88%;
+      padding: 7px 11px;
+      border-radius: 12px;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .row.u .bubble {
+      background: #1A2847;
+      border: 1px solid #2D4170;
+      color: #C7D7F0;
+      border-bottom-right-radius: 3px;
+    }
+    .row.b .bubble {
+      background: #0D1525;
+      border: 1px solid #1B2539;
+      color: #B8C8DC;
+      border-bottom-left-radius: 3px;
+    }
+    .lbl { font-size: 10px; font-weight: 700; margin-bottom: 3px; }
+    .row.u .lbl { color: #818CF8; }
+    .row.b .lbl { color: #38BDF8; }
+
+    /* ─── Footer ─── */
+    .footer {
+      padding: 5px 14px;
+      background: rgba(7, 9, 14, 0.7);
+      border-top: 1px solid rgba(56, 189, 248, 0.08);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    .ft-hint { font-size: 10px; color: #1E2D3D; }
+    .ft-brand { font-size: 10px; font-weight: 700; letter-spacing: 0.6px; color: #162030; }
+  </style>
+</head>
+<body>
+  <div class="header" id="hdr">
+    <span class="wolf-icon">🐺</span>
+    <span class="app-title">Börü Sesli Diyalog</span>
+    <div class="status-pill" id="spill">🟢 Hazır</div>
+    <button class="hdr-btn" onclick="openMain()">🖥️ Ana</button>
+    <button class="hdr-btn close" onclick="doClose()">✕</button>
+  </div>
+
+  <div class="conv" id="conv">
+    <div class="empty" id="empty">
+      <div class="empty-icon">🎙️</div>
+      <div>Konuşmaya başlayın</div>
+      <div class="empty-hint">Ctrl+Shift+J aç/kapat &nbsp;•&nbsp; Esc kapat</div>
+    </div>
+  </div>
+
+  <div class="footer">
+    <span class="ft-hint">Esc kapat &nbsp;•&nbsp; Ctrl+Shift+J toggle</span>
+    <span class="ft-brand">BÖRÜ V14 PRO</span>
+  </div>
+
+  <script>
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') { doClose(); return; }
+      if ((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'J' || e.key === 'j')) {
+        e.preventDefault();
+        if (window.pywebview && window.pywebview.api) window.pywebview.api.toggle_voice_from_overlay();
+      }
+    });
+
+    function updateStatus(text, color) {
+      const p = document.getElementById('spill');
+      if (!p) return;
+      p.innerText = text;
+      p.style.setProperty('color', color, '');
+      const lower = text.toLowerCase();
+      if (lower.includes('hazır') || lower.includes('çevrimiçi')) {
+        p.className = 'status-pill';
+      } else if (lower.includes('işleniyor') || lower.includes('düşünüyor') || lower.includes('cevap')) {
+        p.className = 'status-pill thinking';
+      } else {
+        p.className = 'status-pill active';
+      }
+    }
+
+    function addExchange(userText, botReply) {
+      const conv = document.getElementById('conv');
+      const empty = document.getElementById('empty');
+      if (empty) empty.remove();
+
+      const userRow = document.createElement('div');
+      userRow.className = 'row u';
+      userRow.innerHTML = `<div class="bubble"><div class="lbl">👤 Siz</div>${esc(userText)}</div>`;
+      conv.appendChild(userRow);
+
+      if (botReply && botReply.trim()) {
+        const botRow = document.createElement('div');
+        botRow.className = 'row b';
+        botRow.innerHTML = `<div class="bubble"><div class="lbl">🐺 Börü</div>${esc(botReply)}</div>`;
+        conv.appendChild(botRow);
+      }
+
+      // Keep last 12 bubbles (6 exchanges)
+      const rows = conv.querySelectorAll('.row');
+      if (rows.length > 12) {
+        for (let i = 0; i < rows.length - 12; i++) rows[i].remove();
+      }
+      conv.scrollTop = conv.scrollHeight;
+    }
+
+    function clearConv() {
+      const conv = document.getElementById('conv');
+      conv.innerHTML = '<div class="empty" id="empty"><div class="empty-icon">🎙️</div><div>Konuşmaya başlayın</div><div class="empty-hint">Ctrl+Shift+J aç/kapat &nbsp;•&nbsp; Esc kapat</div></div>';
+    }
+
+    function esc(s) {
+      return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\\n/g,'<br>');
+    }
+
+    function doClose() {
+      if (window.pywebview && window.pywebview.api) window.pywebview.api.close_overlay();
+    }
+
+    function openMain() {
+      if (window.pywebview && window.pywebview.api) window.pywebview.api.open_main_window();
+    }
+  </script>
+</body>
+</html>
+"""
+
+
+class VoiceOverlayApi:
+    """Yüzen sesli diyalog overlay penceresi için Python-JS köprüsü.
+
+    Sadece overlay penceresine özgü komutları barındırır: kapat,
+    ana pencereyi aç, overlay'den ses toggle.
+    """
+
+    def __init__(
+        self,
+        on_toggle_voice: Optional[Callable[[], None]] = None,
+        on_open_main: Optional[Callable[[], None]] = None,
+        on_close: Optional[Callable[[], None]] = None,
+    ):
+        self._on_toggle_voice = on_toggle_voice
+        self._on_open_main = on_open_main
+        self._on_close = on_close
+        self._window: Optional[webview.Window] = None
+
+    def set_window(self, window: webview.Window) -> None:
+        self._window = window
+
+    def close_overlay(self) -> None:
+        """Overlay penceresini gizler (sesi durdurmaz)."""
+        if self._on_close:
+            self._on_close()
+
+    def open_main_window(self) -> None:
+        """Ana pencereyi öne getirir ve overlay'i gizler."""
+        if self._on_open_main:
+            self._on_open_main()
+
+    def toggle_voice_from_overlay(self) -> None:
+        """Overlay içinden Ctrl+Shift+J kısayolu: sesi toggle eder."""
+        if self._on_toggle_voice:
+            self._on_toggle_voice()
+
+
 def run_modern_app(
     assistant: Any,
     title: str = "Börü Yerel Yapay Zekâ",
@@ -1261,8 +1547,14 @@ def run_modern_app(
     on_open_spotlight: Optional[Callable[[], None]] = None,
     on_window_created: Optional[Callable[[webview.Window], None]] = None,
     on_closing: Optional[Callable[[], bool]] = None,
+    on_overlay_window_created: Optional[Callable[[webview.Window, "VoiceOverlayApi"], None]] = None,
 ) -> None:
-    """Next-Gen WebView2 Börü masaüstü uygulamasını başlatır."""
+    """Next-Gen WebView2 Börü masaüstü uygulamasını başlatır.
+
+    İsteğe bağlı olarak yüzen sesli diyalog overlay'i de oluşturur.
+    on_overlay_window_created(overlay_window, overlay_api) callback'i
+    ile dış kod overlay'e JS çağrısı yapabilir, göster/gizle kontrolü sağlar.
+    """
     api = BoruModernApi(
         assistant=assistant,
         project_root=project_root,
@@ -1284,4 +1576,36 @@ def run_modern_app(
         window.events.closing += on_closing
     if on_window_created:
         on_window_created(window)
+
+    # ── Yüzen sesli overlay (opsiyonel) ────────────────────────────────────
+    if on_overlay_window_created is not None:
+        try:
+            import ctypes as _ctypes
+            _sw = _ctypes.windll.user32.GetSystemMetrics(0)
+        except Exception:
+            _sw = 1920
+        _ow = 720
+        _ox = max(0, (_sw - _ow) // 2)
+        _oy = 68
+
+        overlay_api = VoiceOverlayApi()  # callbacks wired by caller via on_overlay_window_created
+        overlay_win = webview.create_window(
+            title="Börü Sesli Diyalog",
+            html=VOICE_OVERLAY_HTML,
+            js_api=overlay_api,
+            width=_ow,
+            height=270,
+            x=_ox,
+            y=_oy,
+            frameless=True,
+            on_top=True,
+            hidden=True,
+            easy_drag=True,
+            shadow=True,
+            resizable=False,
+            background_color="#07090E",
+        )
+        overlay_api.set_window(overlay_win)
+        on_overlay_window_created(overlay_win, overlay_api)
+
     webview.start(debug=False)
