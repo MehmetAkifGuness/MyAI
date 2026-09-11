@@ -82,9 +82,11 @@ class VoiceInputService:
                 patch_speech_recognition_windows_console()
                 if self._recognizer is None:
                     self._recognizer = sr.Recognizer()
-                    self._recognizer.pause_threshold = 2.0  # Konuşma arası duraklamalarda cümleyi yarıda kesmemesi için
+                    self._recognizer.pause_threshold = 1.8  # Cümle içi doğal nefes duraklaması payı
+                    self._recognizer.non_speaking_duration = 1.2  # Cümlenin son kelimesini kırpmaması için sondaki ses tamponu
                     self._recognizer.phrase_threshold = 0.2
-                    self._recognizer.non_speaking_duration = 0.8
+                    self._recognizer.dynamic_energy_threshold = False  # Uzun cümlelerde eşiğin yapay yükselip son kelimeyi yutmasını engeller
+                    self._recognizer.energy_threshold = 200  # İnsan sesi için ideal hassasiyet eşiği
                 if self._microphone is None:
                     self._microphone = sr.Microphone()
                 self._initialized = True
@@ -92,11 +94,11 @@ class VoiceInputService:
                 logger.error(f"Mikrofon veya SpeechRecognition başlatılamadı: {e}")
                 raise RuntimeError(f"Ses tanıma motoru başlatılamadı: {e}")
 
-    def listen_once(self, timeout: float = 8.0, phrase_time_limit: float = 30.0, adjust_noise: bool = False) -> str:
+    def listen_once(self, timeout: float = 8.0, phrase_time_limit: float = 45.0, adjust_noise: bool = False) -> str:
         """
         Mikrofonu dinler ve konuşulan metni Türkçe olarak döndürür.
-        phrase_time_limit 30 saniyeye çıkarıldı, pause_threshold 2.0 saniyeye ayarlandı;
-        böylece uzun ve duraklamalı cümleler asla yarıda kesilmez.
+        non_speaking_duration 1.2s ve dynamic_energy_threshold=False ile
+        uzun cümlelerin son kelimesi de dahil olmak üzere eksiksiz yakalar.
         """
         self._ensure_init()
         import speech_recognition as sr
