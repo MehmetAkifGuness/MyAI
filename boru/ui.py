@@ -1359,6 +1359,11 @@ class ChatAppUI(ctk.CTk):
                     self.after(0, lambda: self._jarvis_overlay.show_result(reply, False))
                 except Exception:
                     pass
+            if getattr(self, "_on_speech_recognized_listener", None):
+                try:
+                    self._on_speech_recognized_listener(text, reply)
+                except Exception:
+                    pass
             return reply
         except Exception as err:
             err_msg = f"Yanıt üretilemedi: {err}"
@@ -1366,34 +1371,56 @@ class ChatAppUI(ctk.CTk):
             return err_msg
 
     def _on_voice_status_change(self, text: str, color: str) -> None:
-        if getattr(self, "_jarvis_overlay", None):
-            self.after(0, lambda: self._jarvis_overlay.set_status(text, color))
-        self.after(0, lambda: self.live_indicator.configure(text=text, text_color=color))
+        try:
+            if getattr(self, "_jarvis_overlay", None):
+                self.after(0, lambda: self._jarvis_overlay.set_status(text, color))
+            self.after(0, lambda: self.live_indicator.configure(text=text, text_color=color))
 
-        t_low = text.lower()
-        if hasattr(self, "visualizer"):
-            if "dinliyor" in t_low:
-                self.after(0, lambda: self.visualizer.set_mode("listening"))
-            elif "konuşuyor" in t_low:
-                self.after(0, lambda: self.visualizer.set_mode("speaking"))
-            elif "düşünüyor" in t_low or "işleniyor" in t_low:
-                self.after(0, lambda: self.visualizer.set_mode("thinking"))
-            else:
-                self.after(0, lambda: self.visualizer.set_mode("idle"))
+            t_low = text.lower()
+            if hasattr(self, "visualizer"):
+                if "dinliyor" in t_low:
+                    self.after(0, lambda: self.visualizer.set_mode("listening"))
+                elif "konuşuyor" in t_low:
+                    self.after(0, lambda: self.visualizer.set_mode("speaking"))
+                elif "düşünüyor" in t_low or "işleniyor" in t_low:
+                    self.after(0, lambda: self.visualizer.set_mode("thinking"))
+                else:
+                    self.after(0, lambda: self.visualizer.set_mode("idle"))
+        except Exception:
+            pass
+
+        if getattr(self, "_on_voice_status_listener", None):
+            try:
+                self._on_voice_status_listener(text, color)
+            except Exception:
+                pass
 
     def _on_voice_dialogue_ended(self) -> None:
-        self.after(0, lambda: self.mic_button.configure(fg_color="#2b6cb0", text="🎙️"))
-        if getattr(self, "_jarvis_overlay", None):
-            self.after(0, lambda: self._jarvis_overlay.set_mic_active(False))
-            self.after(0, lambda: self._jarvis_overlay.set_status("🟢 Hazır", "#48bb78"))
-            # Eğer ana pencere küçültülmüş/gizliyse overlay'i 1.5 sn sonra geri gizle
-            if not self.winfo_viewable():
-                self.after(1500, self._jarvis_overlay.hide)
-        self.after(0, lambda: self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78"))
-        if hasattr(self, "visualizer"):
-            self.after(0, lambda: self.visualizer.set_mode("idle"))
+        try:
+            self.after(0, lambda: self.mic_button.configure(fg_color="#2b6cb0", text="🎙️"))
+            if getattr(self, "_jarvis_overlay", None):
+                self.after(0, lambda: self._jarvis_overlay.set_mic_active(False))
+                self.after(0, lambda: self._jarvis_overlay.set_status("🟢 Hazır", "#48bb78"))
+                # Eğer ana pencere küçültülmüş/gizliyse overlay'i 1.5 sn sonra geri gizle
+                if not self.winfo_viewable():
+                    self.after(1500, self._jarvis_overlay.hide)
+            self.after(0, lambda: self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78"))
+            if hasattr(self, "visualizer"):
+                self.after(0, lambda: self.visualizer.set_mode("idle"))
+        except Exception:
+            pass
+
+        if getattr(self, "_on_voice_state_changed_listener", None):
+            try:
+                self._on_voice_state_changed_listener(False)
+            except Exception:
+                pass
+
         if getattr(self, "_wake_listener", None):
-            self._wake_listener.resume()
+            try:
+                self._wake_listener.resume()
+            except Exception:
+                pass
 
     def _handle_jarvis_command(self, cmd: str) -> str:
         """Börü Overlay üzerinden klavyeyle gönderilen komutları yürütür."""

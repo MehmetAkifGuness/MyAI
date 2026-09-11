@@ -73,6 +73,26 @@ def main():
                     except Exception:
                         pass
 
+            def _on_speech_recognized(user_text: str, bot_reply: str):
+                if modern_window_ref[0]:
+                    try:
+                        import json
+                        u_json = json.dumps(user_text)
+                        b_json = json.dumps(bot_reply)
+                        modern_window_ref[0].evaluate_js(f"appendSpeechExchange({u_json}, {b_json})")
+                    except Exception:
+                        pass
+
+            def _on_voice_status(text: str, color: str):
+                if modern_window_ref[0]:
+                    try:
+                        import json
+                        t_json = json.dumps(text)
+                        c_json = json.dumps(color)
+                        modern_window_ref[0].evaluate_js(f"updateVoiceStatus({t_json}, {c_json})")
+                    except Exception:
+                        pass
+
             def _toggle_voice():
                 if getattr(app, "_toggle_continuous_voice", None):
                     app._toggle_continuous_voice()
@@ -83,7 +103,7 @@ def main():
                 _show_modern_window()
                 if modern_window_ref[0]:
                     try:
-                        modern_window_ref[0].evaluate_js("switchTab('actions')")
+                        modern_window_ref[0].evaluate_js("switchTab('tools')")
                     except Exception:
                         pass
 
@@ -147,6 +167,8 @@ def main():
                 app._tray._on_exit = _full_exit
 
             app._on_voice_state_changed_listener = _on_voice_state_changed
+            app._on_speech_recognized_listener = _on_speech_recognized
+            app._on_voice_status_listener = _on_voice_status
             app._on_spotlight_custom = _open_spotlight
 
             def _on_window_created(win):

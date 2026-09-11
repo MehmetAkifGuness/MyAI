@@ -85,9 +85,63 @@ class BoruModernApi:
             if batt:
                 data["battery_percent"] = int(batt.percent)
                 data["battery_plugged"] = bool(batt.power_plugged)
+            return data
         except Exception:
             pass
+
+        # Windows ctypes yerel API fallback (psutil gerektirmeden tam çalışır)
+        try:
+            import ctypes
+            from ctypes import wintypes
+
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", wintypes.DWORD),
+                    ("dwMemoryLoad", wintypes.DWORD),
+                    ("ullTotalPhys", ctypes.c_uint64),
+                    ("ullAvailPhys", ctypes.c_uint64),
+                    ("ullTotalPageFile", ctypes.c_uint64),
+                    ("ullAvailPageFile", ctypes.c_uint64),
+                    ("ullTotalVirtual", ctypes.c_uint64),
+                    ("ullAvailVirtual", ctypes.c_uint64),
+                    ("ullAvailExtendedVirtual", ctypes.c_uint64),
+                ]
+
+            mem_info = MEMORYSTATUSEX()
+            mem_info.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem_info)):
+                data["ram_percent"] = int(mem_info.dwMemoryLoad)
+                data["ram_total_gb"] = round(mem_info.ullTotalPhys / (1024**3), 1)
+                data["ram_used_gb"] = round((mem_info.ullTotalPhys - mem_info.ullAvailPhys) / (1024**3), 1)
+
+            class SYSTEM_POWER_STATUS(ctypes.Structure):
+                _fields_ = [
+                    ("ACLineStatus", wintypes.BYTE),
+                    ("BatteryFlag", wintypes.BYTE),
+                    ("BatteryLifePercent", wintypes.BYTE),
+                    ("SystemStatusFlag", wintypes.BYTE),
+                    ("BatteryLifeTime", wintypes.DWORD),
+                    ("BatteryFullLifeTime", wintypes.DWORD),
+                ]
+
+            pwr = SYSTEM_POWER_STATUS()
+            if ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(pwr)):
+                if pwr.BatteryLifePercent != 255:
+                    data["battery_percent"] = int(pwr.BatteryLifePercent)
+                data["battery_plugged"] = (pwr.ACLineStatus == 1)
+        except Exception as e:
+            logger.debug(f"Yerel donanım metrikleri okuma hatası: {e}")
+
         return data
+
+    def hide_window(self) -> dict[str, str]:
+        if self._window:
+            try:
+                self._window.hide()
+                return {"status": "hidden"}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+        return {"status": "no_window"}
 
     def get_project_files(self) -> list[dict[str, str]]:
         """Proje kökündeki dosyaları listeler."""
@@ -510,7 +564,30 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       flex-shrink: 0;
     }
     .mic-btn-circle:hover { background: #0369A1; transform: scale(1.05); }
-    .mic-btn-circle.active { background: #EF4444; }
+    .mic-btn-circle.active {
+      background: #EF4444 !important;
+      box-shadow: 0 0 16px rgba(239, 68, 68, 0.8), 0 0 32px rgba(239, 68, 68, 0.4) !important;
+      animation: micPulse 1.2s infinite ease-in-out !important;
+    }
+    @keyframes micPulse {
+      0%, 100% { transform: scale(1); box-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
+      50% { transform: scale(1.08); box-shadow: 0 0 24px rgba(239, 68, 68, 0.95); }
+    }
+
+    .voice-status-pill {
+      display: none;
+      align-items: center;
+      gap: 6px;
+      padding: 3px 12px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 700;
+      background: rgba(239, 68, 68, 0.15);
+      border: 1px solid rgba(239, 68, 68, 0.4);
+      color: #EF4444;
+      letter-spacing: 0.3px;
+      animation: micPulse 1.2s infinite ease-in-out;
+    }
 
     #chat-input {
       flex: 1;
@@ -755,6 +832,7 @@ HTML_TEMPLATE = """<!DOCTYPE html>
       <div class="top-left">
         <span class="top-title">BÖRÜ AI DESKTOP</span>
         <span class="top-badge">V14.0 PRO</span>
+        <div class="voice-status-pill" id="voice-status-pill">🎙️ Dinliyor (Konuşun)...</div>
       </div>
       <div class="top-right">
         <button class="action-btn" onclick="openSpotlight()">⚡ Spotlight (Ctrl+Shift+B)</button>
@@ -917,7 +995,30 @@ Komut çalıştırmak için aşağıya yazıp Enter'a basın (örn: pytest, git 
   <script>
     let allFiles = [];
 
+    // Modern pencere içi küresel klavye kısayolları
+    document.addEventListener('keydown', function(e) {
+      // Ctrl+Shift+J veya Alt+J -> Kesintisiz Sesli Sohbeti Aç/Kapat
+      if (((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'J' || e.key === 'j')) || (e.altKey && (e.key === 'J' || e.key === 'j'))) {
+        e.preventDefault();
+        toggleVoice();
+        return;
+      }
+      // Ctrl+Shift+B veya Alt+B -> Eylemler (Spotlight) Sekmesine Odaklan
+      if (((e.ctrlKey || e.metaKey) && e.shiftKey && (e.key === 'B' || e.key === 'b')) || (e.altKey && (e.key === 'B' || e.key === 'b'))) {
+        e.preventDefault();
+        switchTab('tools');
+        return;
+      }
+      // Escape -> Pencereyi sistem tepsisine gizle
+      if (e.key === 'Escape') {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.hide_window) {
+          window.pywebview.api.hide_window();
+        }
+      }
+    });
+
     function switchTab(tabId) {
+      if (tabId === 'actions') tabId = 'tools';
       document.querySelectorAll('.tab-page').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
 
@@ -1040,9 +1141,37 @@ Komut çalıştırmak için aşağıya yazıp Enter'a basın (örn: pytest, git 
       }
     }
 
+    function updateVoiceStatus(text, color) {
+      const pill = document.getElementById('voice-status-pill');
+      if (!pill) return;
+      if (!text || text.includes('Hazır') || text.includes('Çevrimiçi')) {
+        pill.style.display = 'none';
+        updateMicState(false);
+      } else {
+        pill.style.display = 'inline-flex';
+        pill.innerText = text;
+        pill.style.color = color || '#EF4444';
+        pill.style.borderColor = color || '#EF4444';
+        if (text.includes('Dinliyor')) {
+          updateMicState(true);
+        }
+      }
+    }
+
+    function appendSpeechExchange(userText, botReply) {
+      const hero = document.getElementById('welcome-hero');
+      if (hero) hero.style.display = 'none';
+      appendBubble('user', userText);
+      appendBubble('bot', botReply);
+      const scrollArea = document.getElementById('chat-scroll');
+      if (scrollArea) scrollArea.scrollTop = scrollArea.scrollHeight;
+    }
+
     async function toggleVoice() {
       const res = await window.pywebview.api.toggle_voice();
-      updateMicState(res.active);
+      if (res && res.active !== undefined) {
+        updateMicState(res.active);
+      }
     }
 
     function openSpotlight() {
