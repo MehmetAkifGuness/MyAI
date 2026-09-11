@@ -1409,12 +1409,15 @@ def build_application(
         get_reflection_learner,
         get_curiosity_daemon,
         get_dataset_collector,
+        get_continuous_learning_engine,
     )
     implicit_learner = get_implicit_learner(project_root / "data" / "user_learned_profile.json")
     reflection_learner = get_reflection_learner(project_root / "data" / "reflection_rules.json")
     curiosity_daemon = get_curiosity_daemon(project_root / "data" / "curiosity_knowledge.json")
     dataset_collector = get_dataset_collector(project_root / "data" / "self_training_dataset.jsonl")
+    continuous_learning_engine = get_continuous_learning_engine(project_root / "data")
     curiosity_daemon.start()
+    continuous_learning_engine.start()
 
     assistant = (
         AssistantService(
@@ -1444,6 +1447,7 @@ def build_application(
                 implicit_learner,
                 reflection_learner,
                 dataset_collector,
+                continuous_learning_engine,
             ],
             direct_response_resolvers=[
                 *([SandboxCoordinator(sandbox_executor)] if sandbox_executor is not None else []),
@@ -1503,6 +1507,7 @@ def build_application(
                 ),
                 implicit_learner,
                 reflection_learner,
+                continuous_learning_engine,
             ],
         )
     )

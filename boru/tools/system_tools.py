@@ -539,6 +539,15 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     except Exception as e:
         logger.debug(f"Dosya düzenleyici çözme hatası: {e}")
 
+    # 0.35 Sürekli Öğrenme ve Adaptasyon Modu Sorguları ("sürekli öğrenme modu", "beni ne kadar anlıyorsun")
+    try:
+        from boru.learning import get_continuous_learning_engine
+        cont_res = get_continuous_learning_engine().resolve_command(user_text)
+        if cont_res is not None:
+            return cont_res
+    except Exception as e:
+        logger.debug(f"Continuous learning resolve hatası: {e}")
+
     # 0.4 Otonom Merak ve Öğrenme Sorguları ("yeni ne var", "bugün neler öğrendin")
     try:
         from boru.learning import get_curiosity_daemon

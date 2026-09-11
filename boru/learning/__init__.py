@@ -16,11 +16,13 @@ from boru.learning.implicit_memory import ImplicitMemoryLearner
 from boru.learning.self_reflection import SelfReflectionLearner
 from boru.learning.curiosity_daemon import CuriosityDaemon
 from boru.learning.dataset_collector import DatasetCollector
+from boru.learning.continuous_learning import ContinuousLearningEngine
 
 _GLOBAL_IMPLICIT_LEARNER: Optional[ImplicitMemoryLearner] = None
 _GLOBAL_REFLECTION_LEARNER: Optional[SelfReflectionLearner] = None
 _GLOBAL_CURIOSITY_DAEMON: Optional[CuriosityDaemon] = None
 _GLOBAL_DATASET_COLLECTOR: Optional[DatasetCollector] = None
+_GLOBAL_CONTINUOUS_LEARNING_ENGINE: Optional[ContinuousLearningEngine] = None
 
 
 def get_implicit_learner(storage_path: Optional[Path | str] = None) -> ImplicitMemoryLearner:
@@ -54,13 +56,29 @@ def get_dataset_collector(storage_path: Optional[Path | str] = None) -> DatasetC
     return _GLOBAL_DATASET_COLLECTOR
 
 
+def get_continuous_learning_engine(
+    data_dir: Optional[Path | str] = None,
+    interval_seconds: int = 1800,
+) -> ContinuousLearningEngine:
+    global _GLOBAL_CONTINUOUS_LEARNING_ENGINE
+    if _GLOBAL_CONTINUOUS_LEARNING_ENGINE is None:
+        _GLOBAL_CONTINUOUS_LEARNING_ENGINE = ContinuousLearningEngine(
+            data_dir=data_dir,
+            implicit_memory=get_implicit_learner(),
+            interval_seconds=interval_seconds,
+        )
+    return _GLOBAL_CONTINUOUS_LEARNING_ENGINE
+
+
 __all__ = [
     "ImplicitMemoryLearner",
     "SelfReflectionLearner",
     "CuriosityDaemon",
     "DatasetCollector",
+    "ContinuousLearningEngine",
     "get_implicit_learner",
     "get_reflection_learner",
     "get_curiosity_daemon",
     "get_dataset_collector",
+    "get_continuous_learning_engine",
 ]
