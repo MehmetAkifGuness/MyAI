@@ -54,3 +54,4 @@ class TestCompoundTools:
 
         ans = resolve_compound_commands("müziği durdur ve hava çok güzel", resolver_fn=mock_resolver)
         assert ans is None
+

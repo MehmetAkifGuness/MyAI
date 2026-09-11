@@ -205,6 +205,43 @@ class FreeFormIntentRouter:
                     original_message=raw,
                 )
 
+        # 4.1 Konuşma Dili Eylem Köprüsü (Conversational Action Bridge)
+        # Müzik kapatma / susturma
+        if re.search(r"\b(?:müzi[gğ]i\s+(?:sustur|kes|durdur|kapat)|kafa\s+(?:ütüledi|şişirdi)|şark[ıi]y[ıi]\s+(?:durdur|kes|kapat))\b", raw, re.IGNORECASE):
+            return IntentRouteResult(
+                intent=RoutedIntent.STATUS,
+                confidence=0.92,
+                transformed_message="müziği durdur",
+                original_message=raw,
+            )
+
+        # Bilgisayarı kapatma / uyku
+        if re.search(r"\b(?:bilgisayar[ıi]\s+(?:kapat[ıi]p\s+yat|kapatay[ıi]m|kapat)|kapat[ıi]p\s+yatay[ıi]m)\b", raw, re.IGNORECASE):
+            return IntentRouteResult(
+                intent=RoutedIntent.STATUS,
+                confidence=0.92,
+                transformed_message="bilgisayarı kapat",
+                original_message=raw,
+            )
+
+        # Brifing
+        if re.search(r"\b(?:günün\s+özetini\s+ge[cç]|bana\s+(?:k[ıi]sa\s+bir\s+)?brifing\s+ver|neler\s+var\s+bugün)\b", raw, re.IGNORECASE):
+            return IntentRouteResult(
+                intent=RoutedIntent.STATUS,
+                confidence=0.92,
+                transformed_message="bana brifing ver",
+                original_message=raw,
+            )
+
+        # Masaüstü düzenleme
+        if re.search(r"\b(?:masaüstü(?:m)?\s+(?:darmada[gğ][ıi]n|kar[ıi][sş][ıi]k|toparla|düzenle))\b", raw, re.IGNORECASE):
+            return IntentRouteResult(
+                intent=RoutedIntent.STATUS,
+                confidence=0.92,
+                transformed_message="masaüstümü düzenle",
+                original_message=raw,
+            )
+
         # 5. Varsayılan: Genel Sohbet
         return IntentRouteResult(
             intent=RoutedIntent.GENERAL_CHAT,

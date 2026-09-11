@@ -456,6 +456,33 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     except Exception as e:
         logger.debug(f"Brifing çözme hatası: {e}")
 
+    # 0.1 Proaktif Arka Plan Bekçisi
+    try:
+        from boru.sentinel import resolve_sentinel_command
+        sent_res = resolve_sentinel_command(user_text)
+        if sent_res is not None:
+            return sent_res
+    except Exception as e:
+        logger.debug(f"Sentinel çözme hatası: {e}")
+
+    # 0.2 Canlı Web Bilgi & Ansiklopedi Motoru (Wikipedia / Kimdir / Nedir)
+    try:
+        from boru.tools.web_qa_tools import resolve_web_qa_command
+        qa_res = resolve_web_qa_command(user_text)
+        if qa_res is not None:
+            return qa_res
+    except Exception as e:
+        logger.debug(f"Web QA çözme hatası: {e}")
+
+    # 0.3 Akıllı Masaüstü & Dosya Düzenleyici
+    try:
+        from boru.tools.file_organizer import resolve_file_organizer_command
+        file_res = resolve_file_organizer_command(user_text)
+        if file_res is not None:
+            return file_res
+    except Exception as e:
+        logger.debug(f"Dosya düzenleyici çözme hatası: {e}")
+
     # 1. Uygulama ve Web Sitelerini Açma Komutları ("... aç", "aç ...", "... başlat")
     # Örnek: "youtube aç", "youtube'u aç", "lütfen spotify aç", "aç youtube", "not defterini aç"
     target_cand = None
