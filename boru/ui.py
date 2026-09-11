@@ -531,7 +531,10 @@ class ChatAppUI(ctk.CTk):
 
     def log_terminal(self, message: str, level: str = "info") -> None:
         """Arka plan iş parçacıklarından güvenle canlı terminal paneline log basar."""
-        self.after(0, self._append_terminal_log, message, level)
+        try:
+            self.after(0, self._append_terminal_log, message, level)
+        except Exception:
+            pass
 
     def _append_terminal_log(self, message: str, level: str) -> None:
         tag = {
@@ -1213,7 +1216,7 @@ class ChatAppUI(ctk.CTk):
             self._wake_listener = BackgroundWakeWordListener(
                 on_wake_word=self._on_background_wake_word,
                 recognizer=getattr(self._voice_input, "_recognizer", None),
-                microphone=getattr(self._voice_input, "_microphone", None),
+                microphone=None,
             )
             self._wake_listener.start()
 
@@ -1223,15 +1226,18 @@ class ChatAppUI(ctk.CTk):
 
     def _on_hotkey_spotlight(self) -> None:
         try:
-            self.after(0, self._toggle_jarvis)
-        except Exception:
+            if getattr(self, "_on_spotlight_custom", None):
+                self._on_spotlight_custom()
+                return
             self._toggle_jarvis()
+        except Exception as e:
+            logger.debug(f"Spotlight toggle hatası: {e}")
 
     def _on_hotkey_voice(self) -> None:
         try:
-            self.after(0, self._toggle_continuous_voice)
-        except Exception:
             self._toggle_continuous_voice()
+        except Exception as e:
+            logger.debug(f"Voice hotkey hatası: {e}")
 
     def _toggle_jarvis(self) -> None:
         if getattr(self, "_jarvis_overlay", None):
@@ -1294,6 +1300,11 @@ class ChatAppUI(ctk.CTk):
                 except Exception:
                     pass
             self.log_terminal("🛑 Kesintisiz sesli sohbet sonlandırıldı.", "info")
+            if getattr(self, "_on_voice_state_changed_listener", None):
+                try:
+                    self._on_voice_state_changed_listener(False)
+                except Exception:
+                    pass
         else:
             if getattr(self, "_audio_cues", None):
                 try:
@@ -1309,28 +1320,45 @@ class ChatAppUI(ctk.CTk):
                 self.mic_button.configure(fg_color="#e53e3e", text="🛑")
             except Exception:
                 pass
-            if getattr(self, "_jarvis_overlay", None):
+            if not getattr(self, "_suppress_tk_overlay", False) and getattr(self, "_jarvis_overlay", None):
                 try:
-                    if not self.winfo_viewable():
+                    if self.winfo_exists() and not self.winfo_viewable():
                         self._jarvis_overlay.show()
                     self._jarvis_overlay.set_mic_active(True)
                 except Exception:
                     pass
             self._continuous_voice.start()
             self.log_terminal("🎙️ Kesintisiz Hands-Free sesli sohbet başlatıldı.", "success")
+            if getattr(self, "_on_voice_state_changed_listener", None):
+                try:
+                    self._on_voice_state_changed_listener(True)
+                except Exception:
+                    pass
 
     def _handle_continuous_voice_speech(self, text: str) -> str:
         """Kesintisiz sesli diyalogdan gelen kullanıcı cümlesini çözer ve ekrana/overlay'e basar."""
         self.log_terminal(f"❯ [SESLE SOHBET]: {text}", "cmd")
-        self._queue_message("👤 Sen (Sesli)", text)
+        try:
+            self._queue_message("👤 Sen (Sesli)", text)
+        except Exception:
+            pass
         if getattr(self, "_jarvis_overlay", None):
-            self.after(0, lambda: self._jarvis_overlay.set_input_text(text))
+            try:
+                self.after(0, lambda: self._jarvis_overlay.set_input_text(text))
+            except Exception:
+                pass
 
         try:
             reply = self._assistant.reply(text)
-            self._queue_message("🐺 Börü", reply)
+            try:
+                self._queue_message("🐺 Börü", reply)
+            except Exception:
+                pass
             if getattr(self, "_jarvis_overlay", None):
-                self.after(0, lambda: self._jarvis_overlay.show_result(reply, False))
+                try:
+                    self.after(0, lambda: self._jarvis_overlay.show_result(reply, False))
+                except Exception:
+                    pass
             return reply
         except Exception as err:
             err_msg = f"Yanıt üretilemedi: {err}"

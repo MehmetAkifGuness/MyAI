@@ -146,10 +146,11 @@ class GlobalHotkeyManager:
             return
 
         self._running = False
-        if self._thread_id and self._win32:
+        user32 = self._get_user32()
+        if self._thread_id and user32:
             try:
                 # PostThreadMessageW ile WM_QUIT (0x0012) gönderip GetMessageW'den çıkar
-                self._win32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)
+                user32.PostThreadMessageW(self._thread_id, 0x0012, 0, 0)
             except Exception as e:
                 logger.debug(f"PostThreadMessage hatası: {e}")
 
@@ -157,6 +158,13 @@ class GlobalHotkeyManager:
             self._thread.join(timeout=1.0)
         self._thread = None
         self._thread_id = None
+
+        if user32:
+            for hid in list(self._hotkeys.keys()):
+                try:
+                    user32.UnregisterHotKey(None, hid)
+                except Exception:
+                    pass
         logger.info("GlobalHotkeyManager durduruldu.")
 
     def _get_user32(self):

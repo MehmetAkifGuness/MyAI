@@ -99,7 +99,7 @@ class BackgroundWakeWordListener:
             self._is_paused = True
             if self._stop_listening_fn:
                 try:
-                    self._stop_listening_fn(wait_for_stop=False)
+                    self._stop_listening_fn(wait_for_stop=True)
                 except Exception:
                     pass
                 self._stop_listening_fn = None
@@ -130,7 +130,7 @@ class BackgroundWakeWordListener:
 
             if self._stop_listening_fn:
                 try:
-                    self._stop_listening_fn(wait_for_stop=False)
+                    self._stop_listening_fn(wait_for_stop=True)
                 except Exception:
                     pass
                 self._stop_listening_fn = None
