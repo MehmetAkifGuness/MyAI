@@ -1,4 +1,4 @@
-﻿[
+[
   {
     "memory_id": "3c3d8f2f09e9419598ef91c1465e21e3",
     "content": "Auth API projem unittest kullanıyor.",
@@ -7,5 +7,14 @@
     "subject": "Auth API",
     "relation": "test_framework",
     "value": "unittest"
+  },
+  {
+    "memory_id": "0242827aa7984a47b341193da2b2f238",
+    "content": "Beni duyuyor musun",
+    "created_at": "2026-09-10T18:57:58.662916+00:00",
+    "updated_at": "2026-09-10T18:57:58.662916+00:00",
+    "subject": null,
+    "relation": null,
+    "value": null
   }
 ]
