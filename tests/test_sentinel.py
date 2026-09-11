@@ -74,3 +74,4 @@ class TestSentinel:
         res4 = resolve_sentinel_command("proaktif uyarıları kapat")
         assert "kapatıldı" in res4
         assert get_sentinel().enable_battery is False
+

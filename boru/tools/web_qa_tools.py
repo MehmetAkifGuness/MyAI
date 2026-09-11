@@ -147,3 +147,4 @@ def resolve_web_qa_command(user_text: str) -> Optional[str]:
                 return summary
 
     return None
+

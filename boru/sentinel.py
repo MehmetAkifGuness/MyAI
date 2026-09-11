@@ -231,3 +231,4 @@ def resolve_sentinel_command(user_text: str) -> Optional[str]:
         return f"Proaktif Bekçi ({run_st}): Pil uyarısı: {st_bat}, RAM uyarısı: {st_ram}, Mola hatırlatıcı: {st_brk}."
 
     return None
+

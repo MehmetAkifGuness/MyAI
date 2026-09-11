@@ -33,3 +33,4 @@ class TestWebQATools:
         assert resolve_web_qa_command("ram nedir") is None
         assert resolve_web_qa_command("pil nedir") is None
         assert resolve_web_qa_command("sesi aç") is None
+

@@ -138,13 +138,13 @@ class ChatAppUI(ctk.CTk):
         self._write_message("SİSTEM", startup_message)
 
     def _build_ui(self, title: str) -> None:
-        # ── 1. Modern Üst Bar (Header Panel) ──────────────────────────
-        header_frame = ctk.CTkFrame(self, fg_color="#1a1c23", corner_radius=12)
+        # ── 1. Modern Üst Bar (Glassmorphic Header Panel) ──────────────
+        header_frame = ctk.CTkFrame(self, fg_color="#0F1420", border_color="#1E293B", border_width=1, corner_radius=16)
         header_frame.pack(fill="x", padx=16, pady=(16, 8))
 
         # Sol taraf: Sidebar Toggle + Logo + Başlık + Canlı Gösterge
         brand_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        brand_frame.pack(side="left", padx=12, pady=10)
+        brand_frame.pack(side="left", padx=14, pady=10)
 
         self.toggle_sidebar_btn = ctk.CTkButton(
             brand_frame,
@@ -152,8 +152,9 @@ class ChatAppUI(ctk.CTk):
             width=36,
             height=32,
             font=("Segoe UI Emoji", 14),
-            fg_color="#2d3748",
-            hover_color="#4a5568",
+            fg_color="#1E293B",
+            hover_color="#334155",
+            corner_radius=10,
             command=self._toggle_sidebar,
         )
         self.toggle_sidebar_btn.pack(side="left", padx=(0, 10))
@@ -172,7 +173,7 @@ class ChatAppUI(ctk.CTk):
             title_info_frame,
             text=title,
             font=("Segoe UI", 15, "bold"),
-            text_color="#e2e8f0",
+            text_color="#F8FAFC",
         )
         title_label.pack(anchor="w")
 
@@ -181,18 +182,18 @@ class ChatAppUI(ctk.CTk):
 
         self.live_indicator = ctk.CTkLabel(
             status_sub_frame,
-            text="🟢 Çevrimiçi & Hazır",
-            font=("Segoe UI", 11),
-            text_color="#48bb78",
+            text="🟢 Çevrimiçi | V14.0",
+            font=("Segoe UI", 11, "bold"),
+            text_color="#10B981",
         )
         self.live_indicator.pack(side="left")
 
-        self.visualizer = AudioWaveVisualizer(status_sub_frame, width=90, height=18, bg="#1a1c23")
+        self.visualizer = AudioWaveVisualizer(status_sub_frame, width=90, height=18, bg="#0F1420")
         self.visualizer.pack(side="left", padx=(10, 0))
 
         # Sağ taraf: Sesli Yanıt Toggle + Sıfırla Butonu
         control_frame = ctk.CTkFrame(header_frame, fg_color="transparent")
-        control_frame.pack(side="right", padx=12, pady=10)
+        control_frame.pack(side="right", padx=14, pady=10)
 
         self.voice_toggle = ctk.CTkSwitch(
             control_frame,
@@ -201,7 +202,7 @@ class ChatAppUI(ctk.CTk):
             command=self._toggle_voice_output,
             onvalue=True,
             offvalue=False,
-            progress_color="#3182ce",
+            progress_color="#6366F1",
         )
         self.voice_toggle.pack(side="left", padx=(0, 10))
 
@@ -210,8 +211,9 @@ class ChatAppUI(ctk.CTk):
             text="📟 Terminal",
             width=85,
             height=28,
-            fg_color="#2d3748",
-            hover_color="#4a5568",
+            fg_color="#1E293B",
+            hover_color="#334155",
+            corner_radius=10,
             font=("Segoe UI", 12),
             command=self._toggle_terminal,
         )
@@ -219,11 +221,12 @@ class ChatAppUI(ctk.CTk):
 
         self.jarvis_btn = ctk.CTkButton(
             control_frame,
-            text="⚡ Börü (Ctrl+Shift+B)",
-            width=150,
+            text="⚡ Spotlight (Ctrl+Shift+B)",
+            width=170,
             height=28,
-            fg_color="#553c9a",
-            hover_color="#6b46c1",
+            fg_color="#4F46E5",
+            hover_color="#4338CA",
+            corner_radius=10,
             font=("Segoe UI", 12, "bold"),
             command=self._toggle_jarvis,
         )
@@ -232,10 +235,11 @@ class ChatAppUI(ctk.CTk):
         self.reset_button = ctk.CTkButton(
             control_frame,
             text="Temizle",
-            width=80,
+            width=75,
             height=28,
-            fg_color="#2d3748",
-            hover_color="#4a5568",
+            fg_color="#1E293B",
+            hover_color="#334155",
+            corner_radius=10,
             font=("Segoe UI", 12),
             command=self._reset_conversation,
         )
@@ -246,18 +250,18 @@ class ChatAppUI(ctk.CTk):
         self.main_body.pack(fill="both", expand=True, padx=16, pady=4)
 
         # Sol: Dosya Ağacı / Proje Gezgini Paneli
-        self.sidebar_frame = ctk.CTkFrame(self.main_body, width=220, fg_color="#181a20", corner_radius=12)
+        self.sidebar_frame = ctk.CTkFrame(self.main_body, width=220, fg_color="#0B0F19", border_color="#1E293B", border_width=1, corner_radius=16)
         self.sidebar_frame.pack(side="left", fill="y", padx=(0, 10))
         self.sidebar_frame.pack_propagate(False)
 
         sidebar_title_frame = ctk.CTkFrame(self.sidebar_frame, fg_color="transparent")
-        sidebar_title_frame.pack(fill="x", padx=10, pady=(10, 6))
+        sidebar_title_frame.pack(fill="x", padx=12, pady=(12, 6))
 
         ctk.CTkLabel(
             sidebar_title_frame,
-            text="PROJE DOSYALARI",
+            text="PROJE GEZGİNİ",
             font=("Segoe UI", 11, "bold"),
-            text_color="#a0aec0",
+            text_color="#64748B",
         ).pack(side="left")
 
         refresh_btn = ctk.CTkButton(
@@ -266,8 +270,9 @@ class ChatAppUI(ctk.CTk):
             width=28,
             height=24,
             font=("Segoe UI Emoji", 11),
-            fg_color="#2d3748",
-            hover_color="#4a5568",
+            fg_color="#1E293B",
+            hover_color="#334155",
+            corner_radius=8,
             command=self._populate_file_tree,
         )
         refresh_btn.pack(side="right")
@@ -277,7 +282,7 @@ class ChatAppUI(ctk.CTk):
         self._populate_file_tree()
 
         # Sağ: Sohbet, Diff ve Katlanabilir Terminal Alanı
-        self.right_container = ctk.CTkFrame(self.main_body, fg_color="#13141c", corner_radius=12)
+        self.right_container = ctk.CTkFrame(self.main_body, fg_color="#0D121D", border_color="#1E293B", border_width=1, corner_radius=16)
         self.right_container.pack(side="left", fill="both", expand=True)
 
         self.chat_box = ctk.CTkTextbox(
@@ -286,17 +291,17 @@ class ChatAppUI(ctk.CTk):
             wrap="word",
             font=("Segoe UI", 13),
             fg_color="transparent",
-            text_color="#f7fafc",
+            text_color="#F8FAFC",
         )
-        self.chat_box.pack(fill="both", expand=True, padx=12, pady=(12, 6))
+        self.chat_box.pack(fill="both", expand=True, padx=14, pady=(14, 6))
 
-        # Renkli Diff Etiketleri Tanımla (CustomTkinter uyumlu renkler)
-        self.chat_box.tag_config("diff_add", foreground="#48bb78", background="#1c2d20")
-        self.chat_box.tag_config("diff_sub", foreground="#f56565", background="#3b1d1d")
-        self.chat_box.tag_config("diff_hdr", foreground="#63b3ed")
-        self.chat_box.tag_config("sender_user", foreground="#63b3ed")
-        self.chat_box.tag_config("sender_bot", foreground="#ecc94b")
-        self.chat_box.tag_config("divider", foreground="#4a5568")
+        # Renkli Diff Etiketleri Tanımla (2026 Modern Neon & Card Palette)
+        self.chat_box.tag_config("diff_add", foreground="#10B981", background="#064E3B")
+        self.chat_box.tag_config("diff_sub", foreground="#F43F5E", background="#4C0519")
+        self.chat_box.tag_config("diff_hdr", foreground="#38BDF8")
+        self.chat_box.tag_config("sender_user", foreground="#818CF8")
+        self.chat_box.tag_config("sender_bot", foreground="#38BDF8")
+        self.chat_box.tag_config("divider", foreground="#1E293B")
 
         # Katlanabilir Canlı Konsol & Terminal Paneli (Varsayılan kapalı)
         self.terminal_frame = ctk.CTkFrame(self.right_container, height=200, fg_color="#0d1117", corner_radius=10)
@@ -386,16 +391,15 @@ class ChatAppUI(ctk.CTk):
         chips_frame.pack(fill="x", padx=16, pady=(4, 6))
 
         chips = [
-            ("⚡ Börü", "_toggle_jarvis_"),
-            ("❓ Yardım", "yardım"),
-            ("🧪 Test Üret", "test üret: "),
-            ("🕸️ Bağımlılık", "bağımlılıklar: "),
-            ("🔍 Sembol", "sembol ara: "),
+            ("⚡ Spotlight", "_toggle_jarvis_"),
+            ("🌅 Günün Brifingi", "bana brifing ver"),
+            ("🎙️ Sesli Not", "notlarıma ekle: "),
+            ("📂 Masaüstü Düzenle", "masaüstümü düzenle"),
+            ("🧠 Ansiklopedi", "hakkında bilgi ver"),
             ("📟 Terminal", "_toggle_terminal_"),
-            ("🔧 İyileştir", "iyileştir: "),
+            ("❓ Yardım", "yardım"),
             ("💻 Kodla", "kodla: "),
             ("📊 Değerlendir", "kendini değerlendir:"),
-            ("🌐 Web Durum", "web durum"),
         ]
 
         for label, cmd in chips:
@@ -404,60 +408,68 @@ class ChatAppUI(ctk.CTk):
                 text=label,
                 font=("Segoe UI", 11),
                 height=26,
-                fg_color="#232734",
-                hover_color="#32384a",
-                text_color="#cbd5e0",
+                fg_color="#131B2E",
+                hover_color="#1E293B",
+                border_color="#1E293B",
+                border_width=1,
+                corner_radius=12,
+                text_color="#94A3B8",
                 command=lambda c=cmd: self._insert_chip(c),
             )
             btn.pack(side="left", padx=(0, 6))
 
-        # ── 4. Giriş Paneli (Input + Mic + Send) ────────────────────────
-        input_panel = ctk.CTkFrame(self, fg_color="#1a1c23", corner_radius=12)
+        # ── 4. Süzülen Giriş Yuvası (Floating Pill Input Dock) ──────────
+        input_panel = ctk.CTkFrame(self, fg_color="#0F1420", border_color="#1E293B", border_width=1.5, corner_radius=20)
         input_panel.pack(fill="x", padx=16, pady=(4, 8))
 
         self.mic_button = ctk.CTkButton(
             input_panel,
             text="🎙️",
             width=42,
-            height=40,
+            height=42,
             font=("Segoe UI Emoji", 16),
-            fg_color="#2b6cb0",
-            hover_color="#2c5282",
+            fg_color="#0284C7",
+            hover_color="#0369A1",
+            corner_radius=18,
             command=self._toggle_continuous_voice,
         )
-        self.mic_button.pack(side="left", padx=(10, 8), pady=8)
+        self.mic_button.pack(side="left", padx=(10, 8), pady=6)
 
         self.input_box = ctk.CTkEntry(
             input_panel,
-            placeholder_text="Börü'ye yazın veya mikrofona konuşun...",
+            placeholder_text="Börü'ye yazın veya mikrofona konuşun... (Enter: Gönder)",
             font=("Segoe UI", 13),
-            height=40,
-            fg_color="#232734",
-            border_color="#2d3748",
+            height=42,
+            fg_color="#131B2E",
+            border_color="#1E293B",
+            text_color="#F8FAFC",
+            placeholder_text_color="#64748B",
+            corner_radius=14,
         )
-        self.input_box.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=8)
+        self.input_box.pack(side="left", fill="x", expand=True, padx=(0, 8), pady=6)
         self.input_box.bind("<Return>", lambda _: self._send_message())
 
         self.send_button = ctk.CTkButton(
             input_panel,
-            text="Gönder",
+            text="Gönder ➤",
             width=85,
-            height=40,
-            font=("Segoe UI", 13, "bold"),
-            fg_color="#3182ce",
-            hover_color="#2b6cb0",
+            height=42,
+            font=("Segoe UI", 12, "bold"),
+            fg_color="#6366F1",
+            hover_color="#4F46E5",
+            corner_radius=14,
             command=self._send_message,
         )
-        self.send_button.pack(side="left", padx=(0, 10), pady=8)
+        self.send_button.pack(side="left", padx=(0, 10), pady=6)
 
         # ── 5. Alt Bilgi / Durum Çubuğu ────────────────────────────────
         self.status_label = ctk.CTkLabel(
             self,
-            text="Hazır",
-            font=("Segoe UI", 11),
-            text_color="#718096",
+            text="🐺 Börü Hazır • Ctrl+Shift+B ile Hızlı Komut",
+            font=("Segoe UI", 10),
+            text_color="#64748B",
         )
-        self.status_label.pack(pady=(0, 8))
+        self.status_label.pack(pady=(0, 6))
 
     def _toggle_sidebar(self) -> None:
         if self._sidebar_visible:
@@ -565,8 +577,9 @@ class ChatAppUI(ctk.CTk):
                     height=24,
                     font=("Consolas", 11),
                     fg_color="transparent",
-                    hover_color="#232734",
-                    text_color="#cbd5e0",
+                    hover_color="#161F30",
+                    text_color="#94A3B8",
+                    corner_radius=6,
                     command=lambda p=rel_path: self._select_file(p),
                 )
                 btn.pack(fill="x", pady=1)
