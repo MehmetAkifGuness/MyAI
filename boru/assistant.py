@@ -212,6 +212,15 @@ class AssistantService:
         self,
         user_message: str,
     ) -> str | None:
+        # 1. Öncelik: PC Yönetim ve Sistem Araçları (Uygulama açma, ses, pil vb.)
+        try:
+            from boru.tools.system_tools import resolve_system_command
+            sys_res = resolve_system_command(user_message)
+            if sys_res is not None:
+                return sys_res
+        except Exception:
+            pass
+
         for resolver in (
             self._direct_response_resolvers
         ):

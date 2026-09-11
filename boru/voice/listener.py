@@ -94,11 +94,37 @@ class VoiceInputService:
                 logger.error(f"Mikrofon veya SpeechRecognition başlatılamadı: {e}")
                 raise RuntimeError(f"Ses tanıma motoru başlatılamadı: {e}")
 
+    def _recognize_offline_fallback(self, audio) -> Optional[str]:
+        """Çevrimdışı yerel Whisper modeli kuruluysa sesi yerel olarak transkribe eder."""
+        try:
+            from faster_whisper import WhisperModel
+            import tempfile
+            import os
+
+            if getattr(self, "_offline_model", None) is None:
+                self._offline_model = WhisperModel("tiny", device="cpu", compute_type="int8")
+
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
+                wav_path = f.name
+                f.write(audio.get_wav_data())
+
+            segments, _ = self._offline_model.transcribe(wav_path, language="tr")
+            text = " ".join([seg.text for seg in segments]).strip()
+
+            try:
+                os.remove(wav_path)
+            except Exception:
+                pass
+
+            return text if text else None
+        except Exception as e:
+            logger.debug(f"Çevrimdışı ses tanıma hatası: {e}")
+            return None
+
     def listen_once(self, timeout: float = 8.0, phrase_time_limit: float = 45.0, adjust_noise: bool = False) -> str:
         """
         Mikrofonu dinler ve konuşulan metni Türkçe olarak döndürür.
-        non_speaking_duration 1.2s ve dynamic_energy_threshold=False ile
-        uzun cümlelerin son kelimesi de dahil olmak üzere eksiksiz yakalar.
+        Çevrimiçi Google STT önceliklidir; internet kesintisinde yerel Whisper'a otomatik geçer.
         """
         self._ensure_init()
         import speech_recognition as sr
@@ -113,11 +139,17 @@ class VoiceInputService:
                     phrase_time_limit=phrase_time_limit,
                 )
 
-            text = self._recognizer.recognize_google(audio, language=self.language)
-            return text.strip()
+            try:
+                text = self._recognizer.recognize_google(audio, language=self.language)
+                return text.strip()
+            except sr.RequestError as req_err:
+                offline_text = self._recognize_offline_fallback(audio)
+                if offline_text:
+                    logger.info("İnternet kesintisi: Çevrimdışı yerel Whisper ile ses tanındı.")
+                    return offline_text
+                raise RuntimeError(f"Ses tanıma servisine ulaşılamadı: {req_err}")
+
         except sr.WaitTimeoutError:
             raise TimeoutError("Herhangi bir ses algılanamadı (zaman aşımı).")
         except sr.UnknownValueError:
             raise ValueError("Söylenen anlaşılamadı, lütfen tekrar edin.")
-        except sr.RequestError as e:
-            raise RuntimeError(f"Ses tanıma servisine ulaşılamadı: {e}")

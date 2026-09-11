@@ -11,6 +11,7 @@ from boru.voice.continuous_dialogue import (
     is_stop_phrase,
     parse_wake_word,
 )
+from boru.voice.audio_cues import AudioCueService
 from boru.voice.wake_word_listener import BackgroundWakeWordListener
 
 # Windows konsol pencerelerinin açılmasını engelle
@@ -21,6 +22,7 @@ __all__ = [
     "VoiceOutputService",
     "ContinuousVoiceController",
     "BackgroundWakeWordListener",
+    "AudioCueService",
     "WAKE_WORDS",
     "is_stop_phrase",
     "parse_wake_word",

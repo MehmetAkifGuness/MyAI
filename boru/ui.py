@@ -9,7 +9,7 @@ import time
 import customtkinter as ctk
 
 from boru.contracts import AssistantPort
-from boru.voice import VoiceInputService, VoiceOutputService
+from boru.voice import VoiceInputService, VoiceOutputService, AudioCueService
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
@@ -32,6 +32,7 @@ class ChatAppUI(ctk.CTk):
         self._assistant = assistant
         self._voice_input = VoiceInputService()
         self._voice_output = VoiceOutputService(enabled=False)
+        self._audio_cues = AudioCueService(enabled=True)
         self._project_root = Path(".").resolve()
 
         self._ui_events: queue.Queue[tuple[str, tuple]] = queue.Queue()
@@ -47,9 +48,11 @@ class ChatAppUI(ctk.CTk):
 
         self._jarvis_overlay = None
         self._hotkey_mgr = None
+        self._tray = None
 
         self._build_ui(title)
         self._setup_jarvis_hotkey()
+        self._setup_system_tray()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self._process_ui_events()
 
@@ -700,6 +703,7 @@ class ChatAppUI(ctk.CTk):
                 on_user_speech=self._handle_continuous_voice_speech,
                 on_status_change=self._on_voice_status_change,
                 on_dialogue_ended=self._on_voice_dialogue_ended,
+                audio_cues=self._audio_cues,
             )
 
             self._jarvis_overlay = JarvisOverlayWindow(
@@ -733,6 +737,8 @@ class ChatAppUI(ctk.CTk):
 
     def _on_background_wake_word(self, remaining_cmd: str) -> None:
         """Kullanıcı arka planda 'Börü' dediğinde tetiklenir."""
+        if getattr(self, "_audio_cues", None):
+            self._audio_cues.play_wake()
         self.log_terminal(f"🐺 'Börü' uyandırma kelimesi algılandı! Komut: '{remaining_cmd}'", "success")
         self.after(0, self._handle_wake_up_trigger, remaining_cmd)
 
@@ -776,6 +782,8 @@ class ChatAppUI(ctk.CTk):
                 self._wake_listener.resume()
             self.log_terminal("🛑 Kesintisiz sesli sohbet sonlandırıldı.", "info")
         else:
+            if getattr(self, "_audio_cues", None):
+                self._audio_cues.play_wake()
             if getattr(self, "_wake_listener", None):
                 self._wake_listener.pause()
             self.mic_button.configure(fg_color="#e53e3e", text="🛑")
@@ -843,11 +851,42 @@ class ChatAppUI(ctk.CTk):
         self.after(100, lambda: self.attributes("-topmost", False))
         self.focus_force()
 
+    def _setup_system_tray(self) -> None:
+        """Sistem tepsisi (System Tray) ikonunu başlatır."""
+        try:
+            from boru.tray import BoruSystemTray
+            self._tray = BoruSystemTray(
+                on_open=lambda: self.after(0, self.bring_to_front),
+                on_voice=lambda: self.after(0, self._toggle_continuous_voice),
+                on_spotlight=lambda: self.after(0, self._toggle_jarvis),
+                on_exit=lambda: self.after(0, self._full_exit),
+            )
+            self._tray.start()
+        except Exception as e:
+            self.log_terminal(f"⚠️ Sistem tepsisi başlatılamadı: {e}", "info")
+
     def _on_close(self) -> None:
-        """Pencere kapatıldığında sesli sohbeti ve global hotkey dinleyicisini durdurur."""
+        """Pencere kapatıldığında arka plana küçülür ve saatin yanında çalışmaya devam eder."""
+        if getattr(self, "_tray", None) and self._tray.is_running:
+            self.withdraw()
+            self._tray.notify(
+                "🐺 Börü Arka Planda Aktif",
+                "Börü saatin yanında çalışmaya devam ediyor. 'Börü' diyerek veya Ctrl+Shift+B ile açabilirsiniz.",
+            )
+        else:
+            self._full_exit()
+
+    def _full_exit(self) -> None:
+        """Uygulamayı ve tüm arka plan dinleyicilerini tamamen sonlandırır."""
+        if getattr(self, "_tray", None):
+            self._tray.stop()
         if getattr(self, "_continuous_voice", None):
             self._continuous_voice.stop()
+        if getattr(self, "_wake_listener", None):
+            self._wake_listener.stop()
         if getattr(self, "_hotkey_mgr", None):
             self._hotkey_mgr.stop()
         self.destroy()
+        import os
+        os._exit(0)
 

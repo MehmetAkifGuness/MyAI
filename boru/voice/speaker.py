@@ -54,6 +54,18 @@ class VoiceOutputService:
                 clean = truncated + "..."
         return clean
 
+    @staticmethod
+    def split_into_sentences(text: str) -> list[str]:
+        """Metni doğal cümle sınırlarından (nokta, ünlem, soru işareti, satır başı) böler."""
+        cleaned = re.sub(r"<think>[\s\S]*?</think>", "", text)
+        sentences = re.split(r"(?<=[.!?\n])\s+", cleaned)
+        result = []
+        for s in sentences:
+            s_clean = s.strip()
+            if s_clean and s_clean != "ilgili kod bloğu":
+                result.append(s_clean)
+        return result
+
     def speak(self, text: str, async_mode: bool = True, force: bool = False) -> None:
         """Metni seslendirir. force=True ise sesli yanıt anahtarı kapalı olsa dahi seslendirir."""
         if not self.enabled and not force:
@@ -70,21 +82,26 @@ class VoiceOutputService:
 
     def _speak_sync(self, text: str) -> None:
         with self._lock:
-            # 1. Öncelik: Ultra Doğal Microsoft Neural Türkçe Sesi (tr-TR-AhmetNeural)
+            sentences = self.split_into_sentences(text)
+            if not sentences:
+                return
+
+            # Çoklu cümlelerde ilk cümle hemen çalarken sonraki cümleler arka planda önceden sentezlenir (Streaming TTS)
+            if len(sentences) > 1:
+                if self._speak_streaming_pipeline(sentences):
+                    return
+
+            # Tek cümle veya fallback
             if self._speak_neural_sync(text):
                 return
 
-            # 2. Yedek: Yerel Windows SpeechSynthesizer
             self._speak_sapi_sync(text)
 
-    def _speak_neural_sync(self, text: str) -> bool:
-        """Microsoft Neural Türkçe yapay zeka sesi ile insan doğallığında seslendirir."""
+    def _generate_neural_mp3(self, text: str) -> Optional[str]:
+        """Tek bir metin/cümle için arka planda Edge TTS ile MP3 dosyası oluşturur."""
         try:
             import asyncio
-            import base64
-            import os
             import tempfile
-            import time
             import edge_tts
 
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
@@ -95,59 +112,76 @@ class VoiceOutputService:
                 await communicate.save(tmp_path)
 
             asyncio.run(_generate())
-
-            # 1. En Hızlı & Kesintisiz Yöntem: pygame.mixer (0ms gecikme, tam çalma)
-            played_via_pygame = False
-            try:
-                import pygame
-                if not pygame.mixer.get_init():
-                    pygame.mixer.init()
-                pygame.mixer.music.load(tmp_path)
-                pygame.mixer.music.play()
-                # Ses sürücüsünün oynatmaya başladığından emin olmak için minik bir eşzamanlama payı
-                time.sleep(0.08)
-                while pygame.mixer.music.get_busy():
-                    time.sleep(0.04)
-                pygame.mixer.music.stop()
-                pygame.mixer.music.unload()
-                played_via_pygame = True
-            except Exception as pygame_err:
-                logger.debug(f"pygame oynatma hatası ({pygame_err}), PowerShell MediaPlayer deneniyor.")
-
-            # 2. Yedek: PowerShell PresentationCore MediaPlayer (tam süre beklemeli)
-            if not played_via_pygame:
-                norm_path = tmp_path.replace("\\", "/")
-                # Ortalama süre tahmini (Türkçe'de ~11 karakter/saniye)
-                est_seconds = max(3.0, len(text) / 10.0 + 2.0)
-                ps_script = f"""
-                Add-Type -AssemblyName PresentationCore
-                $player = New-Object System.Windows.Media.MediaPlayer
-                $player.Open([System.Uri]'{norm_path}')
-                $player.Play()
-                Start-Sleep -Milliseconds {int(est_seconds * 1000)}
-                $player.Close()
-                """
-                encoded = base64.b64encode(ps_script.encode("utf-16le")).decode("ascii")
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = subprocess.SW_HIDE
-                subprocess.run(
-                    ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                    timeout=int(est_seconds + 10),
-                    startupinfo=startupinfo,
-                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000),
-                )
-
-            try:
-                os.remove(tmp_path)
-            except Exception:
-                pass
-            return True
+            return tmp_path
         except Exception as err:
-            logger.debug(f"Neural TTS kullanılamadı ({err}), yerel SAPI'ye geçiliyor.")
+            logger.debug(f"Neural MP3 sentez hatası: {err}")
+            return None
+
+    def _play_single_mp3(self, tmp_path: str, text: str) -> bool:
+        """Sentezlenmiş MP3 dosyasını çalar ve ardından temizler."""
+        import os
+        import time
+        played = False
+        try:
+            import pygame
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+            pygame.mixer.music.load(tmp_path)
+            pygame.mixer.music.play()
+            time.sleep(0.06)
+            while pygame.mixer.music.get_busy():
+                time.sleep(0.03)
+            pygame.mixer.music.stop()
+            pygame.mixer.music.unload()
+            played = True
+        except Exception as e:
+            logger.debug(f"pygame çalma hatası: {e}")
+
+        try:
+            os.remove(tmp_path)
+        except Exception:
+            pass
+        return played
+
+    def _speak_streaming_pipeline(self, sentences: list[str]) -> bool:
+        """Cümleleri kuyruğa alarak ilk cümleyi hemen çalar, diğerlerini paralel sentezler."""
+        import queue
+
+        audio_queue: queue.Queue[Optional[tuple[str, str]]] = queue.Queue(maxsize=3)
+        producer_failed = False
+
+        def _producer():
+            nonlocal producer_failed
+            for sent in sentences:
+                tmp = self._generate_neural_mp3(sent)
+                if tmp:
+                    audio_queue.put((tmp, sent))
+                else:
+                    producer_failed = True
+                    break
+            audio_queue.put(None)
+
+        prod_thread = threading.Thread(target=_producer, daemon=True)
+        prod_thread.start()
+
+        all_played = True
+        while True:
+            item = audio_queue.get()
+            if item is None:
+                break
+            tmp_path, sent_text = item
+            success = self._play_single_mp3(tmp_path, sent_text)
+            if not success:
+                all_played = False
+
+        return all_played and not producer_failed
+
+    def _speak_neural_sync(self, text: str) -> bool:
+        """Tek parça Neural TTS seslendirme."""
+        tmp_path = self._generate_neural_mp3(text)
+        if not tmp_path:
             return False
+        return self._play_single_mp3(tmp_path, text)
 
     def _speak_sapi_sync(self, text: str) -> None:
         """Windows yerel SAPI ile seslendirme (Yedek motor)."""

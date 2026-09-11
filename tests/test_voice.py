@@ -22,6 +22,16 @@ class VoiceServiceTests(unittest.TestCase):
         self.assertNotIn("https://", cleaned)
         self.assertIn("Merhaba!", cleaned)
 
+    def test_split_into_sentences(self):
+        speaker = VoiceOutputService(enabled=True)
+        text = "Merhaba! <think>gizli düşünce</think> Bugün nasılsınız? Size nasıl yardımcı olabilirim."
+        sentences = speaker.split_into_sentences(text)
+        self.assertEqual(len(sentences), 3)
+        self.assertEqual(sentences[0], "Merhaba!")
+        self.assertEqual(sentences[1], "Bugün nasılsınız?")
+        self.assertEqual(sentences[2], "Size nasıl yardımcı olabilirim.")
+        self.assertNotIn("gizli düşünce", " ".join(sentences))
+
     def test_voice_output_disabled_by_default_or_toggle(self):
         speaker = VoiceOutputService(enabled=False)
         self.assertFalse(speaker.enabled)
@@ -43,6 +53,23 @@ class VoiceServiceTests(unittest.TestCase):
         result = listener.listen_once()
         self.assertEqual(result, "merhaba börü nasılsın")
         mock_recognizer.recognize_google.assert_called_once()
+
+    def test_voice_input_offline_fallback(self):
+        import speech_recognition as sr
+        mock_recognizer = MagicMock()
+        mock_microphone = MagicMock()
+        mock_recognizer.recognize_google.side_effect = sr.RequestError("Network down")
+
+        listener = VoiceInputService(
+            recognizer=mock_recognizer,
+            microphone=mock_microphone,
+        )
+        listener._initialized = True
+        listener._recognize_offline_fallback = MagicMock(return_value="çevrimdışı algılanan metin")
+
+        result = listener.listen_once()
+        self.assertEqual(result, "çevrimdışı algılanan metin")
+        listener._recognize_offline_fallback.assert_called_once()
 
     def test_patch_speech_recognition_windows_console(self):
         from unittest.mock import patch

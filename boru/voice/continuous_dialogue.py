@@ -134,12 +134,14 @@ class ContinuousVoiceController:
         on_user_speech: Callable[[str], str],
         on_status_change: Optional[Callable[[str, str], None]] = None,
         on_dialogue_ended: Optional[Callable[[], None]] = None,
+        audio_cues: Optional[Any] = None,
     ):
         self._voice_input = voice_input
         self._voice_output = voice_output
         self._on_user_speech = on_user_speech
         self._on_status_change = on_status_change
         self._on_dialogue_ended = on_dialogue_ended
+        self._audio_cues = audio_cues
 
         self._running = False
         self._thread: Optional[threading.Thread] = None
@@ -196,12 +198,17 @@ class ContinuousVoiceController:
         try:
             while self._running:
                 self._set_status("🎙️ Dinliyor (Konuşun)...", "#ecc94b")
+                if self._audio_cues:
+                    self._audio_cues.play_listen_start()
+                    time.sleep(0.12)
 
                 try:
                     text = self._voice_input.listen_once(timeout=10.0, phrase_time_limit=45.0)
                     consecutive_timeouts = 0
                     consecutive_unknowns = 0
                     consecutive_errors = 0
+                    if self._audio_cues:
+                        self._audio_cues.play_listen_stop()
                 except TimeoutError:
                     consecutive_timeouts += 1
                     if consecutive_timeouts >= 3:
@@ -217,6 +224,8 @@ class ContinuousVoiceController:
                     # Söylenen anlaşılamadı (gürültü veya belirsiz fısıltı)
                     consecutive_unknowns += 1
                     self._set_status("❓ Anlaşılamadı", "#f56565")
+                    if self._audio_cues:
+                        self._audio_cues.play_error()
                     if consecutive_unknowns >= 2:
                         self._voice_output.speak(
                             "Sizi tam anlayamadım, lütfen tekrar eder misiniz?",
