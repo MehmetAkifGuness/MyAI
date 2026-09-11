@@ -149,7 +149,10 @@ def get_current_time_and_date(mode: str = "both") -> str:
     if mode == "time":
         return f"Şu anda saat {time_str}."
     elif mode == "date":
-        return f"Bugünün tarihi: {date_str}."
+        return (
+            f"Bugün: {now.day} {month_name} {now.year}, {day_name} "
+            f"(Gün: {now.day}, Ay: {month_name} [{now.month}. ay], Yıl: {now.year})."
+        )
     elif mode == "day":
         return f"Bugün günlerden {day_name}."
     elif mode == "year":
@@ -275,8 +278,8 @@ def resolve_quick_info(user_text: str) -> Optional[str]:
     if any(k in cleaned for k in ("saat kaç", "şu an saat", "saati söyler", "saat kaç oldu", "bana saati söyle", "saat nedir")):
         return get_current_time_and_date("time")
 
-    # Gün soruları
-    if any(k in cleaned for k in ("bugün günlerden ne", "hangi gündeyiz", "bugün hangi gün")):
+    # Gün soruları ("bugün günlerden ne", "peki günlerden ne", "hangi gün")
+    if any(k in cleaned for k in ("günlerden ne", "hangi gündeyiz", "hangi gün", "bugün hangi gün", "günü nedir")):
         return get_current_time_and_date("day")
 
     # Yıl soruları
@@ -287,8 +290,12 @@ def resolve_quick_info(user_text: str) -> Optional[str]:
     if any(k in cleaned for k in ("hangi aydayız", "şu an hangi aydayız")):
         return get_current_time_and_date("month")
 
-    # Tarih soruları
-    if any(k in cleaned for k in ("bugünün tarihi", "bugün ayın kaçı", "tarih ne", "tarihi söyler", "tarih nedir", "günün tarihi")):
+    # Tarih, Takvim & Gün-Ay-Yıl Sorguları ("bugünü gün ay yıl olarak göster", "ay gün yıl olarak", "tarih ne")
+    if any(k in cleaned for k in (
+        "bugünün tarihi", "bugün ayın kaçı", "tarih ne", "tarihi söyler", "tarih nedir",
+        "günün tarihi", "hangi tarihteyiz", "tarihi göster", "tarih bilgisi",
+        "gün ay yıl", "ay gün yıl", "yıl ay gün", "tarihi ver", "bugün tarih", "takvim"
+    )) or cleaned in ("tarih", "tarih nedir", "tarih ne", "gün ay yıl", "ay gün yıl"):
         return get_current_time_and_date("date")
 
     # 0.1 Hızlı Matematik Hesaplamaları ("125 çarpı 48 kaç eder", "%18'i ne kadar")

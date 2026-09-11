@@ -106,6 +106,26 @@ class ConversationContextBuilder:
                 marker = '\n[bağlam kısaltıldı]\n'
                 space = max(0, limit - len(marker))
                 content = content[:space // 2] + marker + (content[-(space - space // 2):] if space else '')
-                content = content[:limit]
-            result.append(ChatMessage(message.role, content))
         return result
+
+
+class SystemClockContextProvider:
+    """Modele gerçek zamanlı sistem saati, günü ve yılını aktaran bağlam sağlayıcı."""
+
+    _DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+    _MONTHS = [
+        "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+        "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+    ]
+
+    def build_context(self, user_message: str = "") -> str:
+        from datetime import datetime
+        now = datetime.now()
+        day_name = self._DAYS[now.weekday()]
+        month_name = self._MONTHS[now.month]
+        return (
+            f"[GÜNCEL SİSTEM ZAMANI]: {now.day} {month_name} {now.year}, {day_name} "
+            f"Saat {now.strftime('%H:%M')}. Geçerli takvim yılı {now.year}'dir. "
+            f"Tarih, gün, ay veya yılla ilgili soruları bu gerçek zamanlı bilgiye göre yanıtla."
+        )
+

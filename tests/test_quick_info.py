@@ -46,8 +46,17 @@ class TestQuickInfo:
         day_res = resolve_quick_info("bugün günlerden ne")
         assert day_res is not None and "günlerden" in day_res
 
+        day_res2 = resolve_quick_info("Peki günlerden ne")
+        assert day_res2 is not None and "günlerden" in day_res2
+
         year_res = resolve_quick_info("hangi yıldayız")
         assert year_res is not None and "yılındayız" in year_res
+
+        date_res1 = resolve_quick_info("ay gün yıl olarak")
+        assert date_res1 is not None and "Gün:" in date_res1 and "Yıl:" in date_res1
+
+        date_res2 = resolve_quick_info("bugünü gün ay yıl olarak göster")
+        assert date_res2 is not None and "Gün:" in date_res2 and "Yıl:" in date_res2
 
         # Matematik testleri
         assert resolve_quick_info("125 çarpı 48 kaç eder") == "125 × 48 = 6000 eder."

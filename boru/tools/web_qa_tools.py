@@ -123,8 +123,9 @@ def resolve_web_qa_command(user_text: str) -> Optional[str]:
     # Sistem komutlarını ve özel durumları filtrele
     if any(k in cleaned for k in (
         "ram", "bellek", "pil", "şarj", "ses", "müzik", "masaüstü", "ekran",
-        "hava durumu", "dolar", "euro", "notlarım", "not al", "kapat", "aç"
-    )):
+        "hava durumu", "dolar", "euro", "notlarım", "not al", "kapat", "aç",
+        "web oku", "web araştır", "web ara", "ara:"
+    )) or "|" in cleaned:
         return None
 
     # 1. "X kimdir?", "X nedir?", "X neresidir?", "X hangisidir?"

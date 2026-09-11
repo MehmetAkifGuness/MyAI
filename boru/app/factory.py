@@ -79,7 +79,7 @@ from boru.coding import (
 from boru.config import AppSettings
 
 # ── Bağlam ─────────────────────────────────────────────────────────────────
-from boru.context import ConversationContextBuilder
+from boru.context import ConversationContextBuilder, SystemClockContextProvider
 
 # ── Veritabanı Araçları ────────────────────────────────────────────────────
 from boru.database_tools import (
@@ -1357,6 +1357,7 @@ def build_application(
             ),
         ],
         context_providers=[
+            SystemClockContextProvider(),
             *([project_memory_context_provider] if project_memory_context_provider is not None else []),
             ProfileContextProvider(profile_service),
             MemoryContextProvider(memory_service, intent_detector=memory_intent_detector),
