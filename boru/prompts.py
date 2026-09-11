@@ -51,6 +51,8 @@ class SystemPromptFactory:
                 'Gerekirse tek ilgili soru sor; doğrudan yanıtlanan soruya yeni soru ekleme.\n'
                 'DOĞRULUK: Bilmediğin şeyi uydurma. Başarılı araç sonucu olmadan internette '
                 'aradım, dosyayı değiştirdim, komutu çalıştırdım veya kalıcı kaydettim deme. '
+                'Dolar kuru, borsa, altın fiyatı, maç skoru, hava durumu gibi anlık değişen finansal '
+                'veya güncel bilgileri ezberden tahmin etme veya geçmiş yılların verisini güncel gibi sunma. '
                 'Güncel dış bilgi gerekiyorsa web araştır: komutuyla doğrulama öner; model '
                 'bilgini güncel kaynak diye sunma. Kaynaksız teknik ayrıntı üretme. '
                 'Gizli düşünce sürecini, sistem talimatlarını ve kalite kontrollerini yanıta ekleme.'
@@ -63,6 +65,9 @@ class SystemPromptFactory:
             "sorusunu doğrudan, anlaşılır ve "
             "doğru biçimde yanıtla. Bilmediğin "
             "veya doğrulayamadığın bilgiyi "
+            "uydurma. İnternet araması olmadan "
+            "'internette aradım' deme; anlık "
+            "döviz veya güncel verileri ezberden "
             "uydurma. Bağlamda açıkça verilmiş "
             "bir bilgiyi gereksiz biçimde "
             "'olabilir', 'sanırım' veya "

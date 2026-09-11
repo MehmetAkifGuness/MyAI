@@ -1,4 +1,4 @@
-﻿"""
+"""
 boru.tools.web_search
 =====================
 Canli internet aramasi, guncel haberler ve web ozetleme motoru.
@@ -80,6 +80,15 @@ def _format_search_results(query: str, results: List[Dict[str, str]]) -> str:
 def resolve_web_search_command(user_text: str) -> Optional[str]:
     cleaned = user_text.lower().strip().strip(".!?,")
 
+    # Sistem komutları veya yerel aksiyonları atla
+    if any(k in cleaned for k in (
+        "uygulama", "not defteri", "hesap makinesi", "terminal", "powershell",
+        "sesi", "ses aç", "ses kıs", "sessize al", "bilgisayar", "ekranı kilitle",
+        "pencere", "masaüstü", "kodla", "iyileştir", "test"
+    )):
+        return None
+
+    # 1. Açık arama kalıpları ("internette ara...", "ara: ...", "... hakkında ara")
     patterns = [
         r"^(?:börü\s+)?(?:lütfen\s+)?(?:internette|webde|canlı|google'da|internetten)\s+(?:ara|arama\s+yap)\s*:?\s*(.+)$",
         r"^(?:börü\s+)?(?:lütfen\s+)?(?:ara|arama\s+yap)\s*:\s*(.+)$",
@@ -91,13 +100,31 @@ def resolve_web_search_command(user_text: str) -> Optional[str]:
         m = re.match(pat, cleaned)
         if m:
             target = m.group(1).strip()
-            if target and not any(k in target for k in ("bilgisayar", "uygulama", "müzik", "ses", "ekran", "not")):
+            if target:
                 ok, res = search_web_live(target)
                 if ok:
                     return res
 
-    if any(k in cleaned for k in ("son dakika haber", "gündemde ne var", "türkiye gündemi", "güncel haberler")):
+    # 2. Gündem & Haber sorguları
+    if any(k in cleaned for k in ("son dakika haber", "gündemde ne var", "türkiye gündemi", "güncel haberler", "bugünün haberleri")):
         ok, res = search_web_live("türkiye son dakika haberleri")
+        if ok:
+            return res
+
+    # 3. Akıllı Canlı Bilgi Tespiti (Doğal dille sorulan güncel sorular)
+    # Örnek: "Galatasaray maçı ne zaman", "Bugün altın fiyatı ne kadar", "Benzin fiyatları kaç oldu"
+    live_triggers = (
+        "maçı ne zaman", "maçı kaç kaç", "maç sonucu", "puan durumu",
+        "altın fiyat", "gram altın", "çeyrek altın", "akaryakıt fiyat", "benzin fiyat", "motorin",
+        "vizyondaki filmler", "vizyonda ne var", "deprem oldu mu", "son depremler",
+        "seçim sonucu", "enflasyon oranı", "asgari ücret", "faiz kararı",
+        "ne zaman vizyona", "kim kazandı", "kim şampiyon"
+    )
+
+    if any(trigger in cleaned for trigger in live_triggers):
+        # Gereksiz selam veya dolgu kelimelerini temizleyip arama sorgusu yap
+        query = re.sub(r"^(?:börü\s+)?(?:lütfen\s+)?(?:bana\s+)?(?:söyler\s+misin\s+)?", "", user_text, flags=re.IGNORECASE).strip()
+        ok, res = search_web_live(query)
         if ok:
             return res
 
