@@ -6,7 +6,32 @@ from boru.release import build_release, _RELEASES
 logger = logging.getLogger(__name__)
 
 
+def _cleanup_stale_processes():
+    try:
+        import os
+        import subprocess
+        current_pid = os.getpid()
+        cmd = "Get-CimInstance Win32_Process -Filter \"Name = 'python.exe' or Name = 'pythonw.exe'\" | Select-Object ProcessId, CommandLine"
+        proc = subprocess.run(["powershell", "-NoProfile", "-Command", cmd], capture_output=True, text=True, timeout=4)
+        for line in proc.stdout.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            parts = line.split(maxsplit=1)
+            if len(parts) == 2 and parts[0].isdigit():
+                pid = int(parts[0])
+                cmdline = parts[1].lower()
+                if pid != current_pid and ("run_daemon.py" in cmdline or ("main.py" in cmdline and "pytest" not in cmdline)):
+                    try:
+                        subprocess.run(["taskkill", "/F", "/PID", str(pid)], capture_output=True, timeout=2)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+
 def main():
+    _cleanup_stale_processes()
     parser = argparse.ArgumentParser(description="Börü - Yerel Yapay Zekâ ve Otonom Kodlama Asistanı")
     parser.add_argument(
         "--version",

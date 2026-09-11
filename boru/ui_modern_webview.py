@@ -1027,6 +1027,8 @@ Komut çalıştırmak için aşağıya yazıp Enter'a basın (örn: pytest, git 
       scroll.innerHTML = '';
       const hero = document.getElementById('welcome-hero');
       if (hero) hero.style.display = 'flex';
+    }
+
     function updateMicState(active) {
       const btn = document.getElementById('mic-btn');
       if (btn) {
