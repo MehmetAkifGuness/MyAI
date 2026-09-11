@@ -71,6 +71,20 @@ class TestSystemTools:
             res = resolve_system_command("aç youtube")
             assert res == "YouTube açıldı."
 
+            res = resolve_system_command("YouTube'u açar mısın")
+            assert res == "YouTube açıldı."
+
+            res = resolve_system_command("Google'dan YouTube'u aç")
+            assert res == "YouTube açıldı."
+
+            res_ac = resolve_system_command("aç")
+            assert "Hangi uygulamayı" in res_ac
+
+        with patch("boru.tools.system_tools.open_application", return_value=(True, "YouTube Music açıldı.")) as mock_music:
+            res = resolve_system_command("müzik aç")
+            assert "YouTube Music açıldı." in res
+            mock_music.assert_called_with("müzik")
+
         with patch("boru.tools.system_tools.open_application", return_value=(True, "Not defteri açıldı.")) as mock_open:
             res = resolve_system_command("not defterini aç")
             assert res == "Not defteri açıldı."

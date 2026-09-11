@@ -43,7 +43,8 @@ def get_weather(location: str = "Istanbul") -> Tuple[bool, str]:
         return True, cached
 
     try:
-        encoded_loc = urllib.parse.quote_plus(clean_loc)
+        ascii_loc = clean_loc.lower().translate(str.maketrans("ğüşıöç", "gusioc"))
+        encoded_loc = urllib.parse.quote_plus(ascii_loc)
         url = f"https://wttr.in/{encoded_loc}?format=%C+%t&lang=tr"
         req = urllib.request.Request(
             url,
@@ -58,8 +59,40 @@ def get_weather(location: str = "Istanbul") -> Tuple[bool, str]:
 
         return False, f"{clean_loc.capitalize()} için hava durumu bilgisi alınamadı."
     except Exception as e:
-        logger.debug(f"Hava durumu çekme hatası: {e}")
-        return False, "Hava durumu servisine şu anda ulaşılamıyor."
+        logger.debug(f"wttr.in hava durumu çekme hatası: {e}")
+
+    # Fallback: Canlı web arama motoru üzerinden çek (MGM / Google Weather)
+    try:
+        from boru.tools.web_search import search_web_live
+        ok_w, search_text = search_web_live(f"{clean_loc} hava durumu", max_results=1)
+        if ok_w and search_text:
+            lines = [l.strip() for l in search_text.splitlines() if l.strip() and not l.startswith("🌐") and not l.startswith("1.")]
+            if lines:
+                res = f"{clean_loc.capitalize()} için güncel hava durumu: {lines[0][:140]}."
+                _set_cached(cache_key, res)
+                return True, res
+    except Exception:
+        pass
+
+    return False, f"{clean_loc.capitalize()} için hava durumu servisine şu anda ulaşılamıyor."
+
+
+CURRENCY_NAMES = {
+    "USD": "Dolar",
+    "EUR": "Euro",
+    "GBP": "İngiliz Sterlini",
+    "AZN": "Azerbaycan Manatı",
+    "JPY": "Japon Yeni",
+    "CHF": "İsviçre Frangı",
+    "KWD": "Kuveyt Dinarı",
+    "SAR": "Suudi Arabistan Riyali",
+    "AED": "BAE Dirhemi",
+    "RUB": "Rus Rublesi",
+    "CNY": "Çin Yuanı",
+    "CAD": "Kanada Doları",
+    "AUD": "Avustralya Doları",
+    "TRY": "Türk Lirası",
+}
 
 
 def get_currency_rate(base: str = "USD", target: str = "TRY") -> Tuple[bool, str]:
@@ -73,6 +106,9 @@ def get_currency_rate(base: str = "USD", target: str = "TRY") -> Tuple[bool, str
     if cached:
         return True, cached
 
+    base_name = CURRENCY_NAMES.get(base_code, base_code)
+    target_name = CURRENCY_NAMES.get(target_code, target_code)
+
     # 1. Öncelikli Güvenilir Servis: open.er-api.com (Ücretsiz, limitsiz ve güncel)
     try:
         url = f"https://open.er-api.com/v6/latest/{base_code}"
@@ -85,19 +121,11 @@ def get_currency_rate(base: str = "USD", target: str = "TRY") -> Tuple[bool, str
             rates = data.get("rates", {})
             val = rates.get(target_code)
             if val is not None:
-                currency_names = {
-                    "USD": "Dolar",
-                    "EUR": "Euro",
-                    "GBP": "İngiliz Sterlini",
-                    "TRY": "Türk Lirası",
-                }
-                base_name = currency_names.get(base_code, base_code)
-                target_name = currency_names.get(target_code, target_code)
                 result = f"1 {base_name} şu anda yaklaşık {val:.2f} {target_name} seviyesinde."
                 _set_cached(cache_key, result)
                 return True, result
     except Exception as e:
-        logger.debug(f"Birincil döviz API hatası: {e}")
+        logger.debug(f"Birincil döviz API hatası ({base_code}): {e}")
 
     # 2. Fallback: Frankfurter API
     try:
@@ -111,24 +139,43 @@ def get_currency_rate(base: str = "USD", target: str = "TRY") -> Tuple[bool, str
             rates = data.get("rates", {})
             val = rates.get(target_code)
             if val is not None:
-                result = f"1 {base_code} şu anda yaklaşık {val:.2f} {target_code} seviyesinde."
+                result = f"1 {base_name} şu anda yaklaşık {val:.2f} {target_name} seviyesinde."
                 _set_cached(cache_key, result)
                 return True, result
     except Exception as e:
         logger.debug(f"Fallback döviz API hatası: {e}")
 
-    return False, "Döviz kuru servisine şu anda ulaşılamıyor."
+    # 3. Fallback: Canlı web arama motoru
+    try:
+        from boru.tools.web_search import search_web_live
+        ok_live, live_text = search_web_live(f"1 {base_name} kaç tl canlı döviz kuru", max_results=1)
+        if ok_live and live_text:
+            return True, f"{base_name} canlı kuru:\n{live_text}"
+    except Exception:
+        pass
+
+    return False, f"{base_name} kuru servisine şu anda ulaşılamıyor."
 
 
-# Türkiye'nin popüler illeri (şehir çıkarımı için)
+# Türkiye'nin 81 ili ve popüler dünya şehirleri
 KNOWN_CITIES = [
-    "istanbul", "ankara", "izmir", "bursa", "antalya", "adana", "konya",
-    "gaziantep", "şanlıurfa", "kocaeli", "mersin", "diyarbakır", "hatay",
-    "manisa", "kayseri", "samsun", "balıkesir", "kahramanmaraş", "van",
-    "aydın", "tekirdağ", "denizli", "sakarya", "muğla", "eskişehir",
-    "mardin", "malatya", "trabzon", "erzurum", "ordu", "afyon", "sivas",
-    "rize", "edirne", "çanakkale", "zonguldak", "tokat", "elazığ"
+    "kahramanmaraş", "afyonkarahisar", "şanlıurfa", "diyarbakır",
+    "adana", "adıyaman", "afyon", "ağrı", "aksaray", "amasya", "ankara",
+    "antalya", "ardahan", "artvin", "aydın", "balıkesir", "bartın",
+    "batman", "bayburt", "bilecik", "bingöl", "bitlis", "bolu", "burdur",
+    "bursa", "çanakkale", "çankırı", "çorum", "denizli", "düzce",
+    "edirne", "elazığ", "erzincan", "erzurum", "eskişehir", "gaziantep",
+    "antep", "giresun", "gümüşhane", "hakkari", "hatay", "antakya", "ığdır",
+    "isparta", "istanbul", "izmir", "maraş", "karabük", "karaman", "kars",
+    "kastamonu", "kayseri", "kilis", "kırıkkale", "kırklareli", "kırşehir",
+    "kocaeli", "izmit", "konya", "kütahya", "malatya", "manisa", "mardin",
+    "mersin", "içel", "muğla", "muş", "nevşehir", "niğde", "ordu", "osmaniye",
+    "rize", "sakarya", "adapazarı", "samsun", "urfa", "siirt", "sinop", "sivas",
+    "şırnak", "tekirdağ", "tokat", "trabzon", "tunceli", "uşak", "van", "yalova",
+    "yozgat", "zonguldak",
+    "londra", "paris", "berlin", "roma", "madrid", "tokyo", "bakü", "new york", "moskova"
 ]
+KNOWN_CITIES_SORTED = sorted(KNOWN_CITIES, key=len, reverse=True)
 
 
 TURKISH_DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
@@ -305,37 +352,67 @@ def resolve_quick_info(user_text: str) -> Optional[str]:
 
     # 1. Hava Durumu Sorguları
     if any(k in cleaned for k in ("hava durumu", "hava nasıl", "kaç derece", "hava sıcaklığı")):
-        target_city = "Istanbul"
-        for city in KNOWN_CITIES:
-            if city in cleaned:
+        target_city = None
+        # 1.1 Öncelikli Doğrudan Eşleşme: Bilinen şehir listesi (uzunluk sırasına göre)
+        for city in KNOWN_CITIES_SORTED:
+            if re.search(rf"\b{re.escape(city)}", cleaned):
                 target_city = city
                 break
 
-        # Şehir belirleme regex (örn: "londra'da hava nasıl")
-        city_match = re.search(r"([a-zğüşıöç]+)(?:'da|'de|'ta|'te|'daki|'deki)?\s+(?:hava\s+durumu|hava\s+nasıl)", cleaned)
-        if city_match:
-            cand = city_match.group(1).strip()
-            if cand not in ("bugün", "yarın", "şu", "an", "bu"):
-                target_city = cand
+        # 1.2 Bilinenlerde yoksa regex dene (örn: "tokyo'da hava nasıl")
+        if not target_city:
+            city_match = re.search(r"([a-zğüşıöç]+)(?:'da|'de|'ta|'te|'daki|'deki)?\s+(?:hava\s+durumu|hava\s+nasıl)", cleaned)
+            if city_match:
+                cand = city_match.group(1).strip()
+                STOPWORDS = {
+                    "bugün", "yarın", "şu", "an", "bu", "o", "anki", "zaman",
+                    "için", "bana", "lütfen", "durumu", "nasıl", "sıcaklığı",
+                    "hava", "bir", "peki", "ise", "ve", "de", "da", "göre", "sonra"
+                }
+                if cand not in STOPWORDS and len(cand) >= 3:
+                    target_city = cand
+
+        if not target_city:
+            target_city = "Istanbul"
 
         ok, msg = get_weather(target_city)
         return msg
 
-    # 2. Döviz Kuru Sorguları
-    # Dolar (Her türlü serbest kalıp: "dolar kurunu söyler misin", "dolar kuru ne", "dolar kaç tl", "dolar ne kadar")
-    if ("dolar" in cleaned and any(k in cleaned for k in ("kur", "kaç", "ne kadar", "söyle", "fiyat", "değer", "eder", "tl"))) or cleaned in ("dolar", "dolar kuru"):
-        ok, msg = get_currency_rate("USD", "TRY")
-        return msg
+    # 2. Döviz & Altın Kuru Sorguları
+    CURRENCY_TRIGGERS = [
+        (["manat", "azn", "azerbaycan manatı", "azerbaycan manat"], "AZN"),
+        (["dolar", "usd", "amerikan doları", "amerikan dolari"], "USD"),
+        (["euro", "avro", "eur"], "EUR"),
+        (["sterlin", "pound", "gbp", "ingiliz sterlini"], "GBP"),
+        (["yen", "jpy", "japon yeni"], "JPY"),
+        (["frank", "chf", "isviçre frangı", "isvicre frangi"], "CHF"),
+        (["riyal", "sar", "suudi riyali", "suudi arabistan riyali"], "SAR"),
+        (["dinar", "kwd", "kuveyt dinarı", "kuveyt dinari"], "KWD"),
+        (["dirhem", "aed", "bae dirhemi"], "AED"),
+        (["ruble", "rub", "rus rublesi"], "RUB"),
+        (["yuan", "cny", "çin yuanı", "cin yuani"], "CNY"),
+        (["kanada doları", "kanada dolari", "cad"], "CAD"),
+        (["avustralya doları", "avustralya dolari", "aud"], "AUD"),
+    ]
 
-    # Euro / Avro
-    if (any(k in cleaned for k in ("euro", "avro")) and any(k in cleaned for k in ("kur", "kaç", "ne kadar", "söyle", "fiyat", "değer", "eder", "tl"))) or cleaned in ("euro", "euro kuru", "avro"):
-        ok, msg = get_currency_rate("EUR", "TRY")
-        return msg
+    # Altın kontrolü ("gram altın ne kadar", "çeyrek altın kaç tl")
+    if any(k in cleaned for k in ("altın", "altin", "çeyrek", "ceyrek", "gram altın")):
+        if any(k in cleaned for k in ("kaç", "kac", "ne kadar", "fiyat", "kur", "tl", "lira", "söyle")):
+            try:
+                from boru.tools.web_search import search_web_live
+                ok_g, g_text = search_web_live("canlı gram altın çeyrek altın fiyatı kaç tl", max_results=1)
+                if ok_g and g_text:
+                    return f"Canlı Altın Piyasası:\n{g_text}"
+            except Exception:
+                pass
 
-    # Sterlin / Pound
-    if any(k in cleaned for k in ("sterlin", "pound")) and any(k in cleaned for k in ("kur", "kaç", "ne kadar", "söyle", "fiyat", "tl")):
-        ok, msg = get_currency_rate("GBP", "TRY")
-        return msg
+    # Döviz kurları kontrolü ("azerbaycan manatı ne kadar", "dolar kaç tl", "1 manat kaç lira")
+    for keywords, iso_code in CURRENCY_TRIGGERS:
+        for kw in keywords:
+            if kw in cleaned:
+                if any(q in cleaned for q in ("kur", "kaç", "kac", "ne kadar", "fiyat", "değer", "deger", "eder", "tl", "lira", "söyle", "nedir", "ne")) or cleaned in (kw, f"{kw} kuru"):
+                    ok, msg = get_currency_rate(iso_code, "TRY")
+                    return msg
 
     return None
 

@@ -58,6 +58,28 @@ class TestQuickInfo:
         date_res2 = resolve_quick_info("bugünü gün ay yıl olarak göster")
         assert date_res2 is not None and "Gün:" in date_res2 and "Yıl:" in date_res2
 
+        # Gelişmiş Şehir Çıkarımı Testleri (Stopword ve Bilinen Şehirler)
+        with patch("boru.tools.quick_info.get_weather", return_value=(True, "Kahramanmaraş için hava durumu: Açık +29°C.")) as mock_w:
+            res = resolve_quick_info("Kahramanmaraş için şu anki hava durumunu söyle")
+            assert "Kahramanmaraş" in res
+            mock_w.assert_called_with("kahramanmaraş")
+
+            # "o zaman hava durumu" -> "zaman" kelimesi stopword olduğundan şehir olarak alınmamalıdır
+            res_zaman = resolve_quick_info("o zaman hava durumu")
+            mock_w.assert_called_with("Istanbul")
+
+        # Gelişmiş Döviz Kuru Testleri (Azerbaycan Manatı, Japon Yeni vb.)
+        with patch("boru.tools.quick_info.get_currency_rate", return_value=(True, "1 Azerbaycan Manatı: 28.51 TL")) as mock_fx:
+            res_manat = resolve_quick_info("Peki Azerbaycan manatı ne kadar")
+            assert "Azerbaycan Manatı" in res_manat
+            mock_fx.assert_called_with("AZN", "TRY")
+
+            resolve_quick_info("1 manat kaç tl")
+            mock_fx.assert_called_with("AZN", "TRY")
+
+            resolve_quick_info("japon yeni kaç lira")
+            mock_fx.assert_called_with("JPY", "TRY")
+
         # Matematik testleri
         assert resolve_quick_info("125 çarpı 48 kaç eder") == "125 × 48 = 6000 eder."
         assert resolve_quick_info("840 bölü 12 kaçtır") == "840 ÷ 12 = 70 eder."

@@ -1,3 +1,4 @@
+import re
 from collections.abc import Sequence
 
 from boru.context import ConversationContextBuilder
@@ -13,6 +14,19 @@ from boru.contracts import (
 from boru.conversation import ConversationHistory
 from boru.models import ChatMessage
 from boru.prompts import SystemPromptFactory
+
+
+def _clean_metaprompt_leaks(text: str) -> str:
+    cleaned = text.strip()
+    patterns = [
+        r"^(?:Doğru bilgi için sistem tarafından sağlanan [^\n\.\!]+[\.\!]\s*)",
+        r"^(?:Sistem tarafından sağlanan güncel sistem saatini [^\n\.\!]+[\.\!]\s*)",
+        r"^(?:Doğru bilgi için [^\n\.\!]+ esas alıyorum[\.\!]\s*)",
+        r"^(?:Güncel sistem saatini ve [^\n\.\!]+ esas alıyorum[\.\!]\s*)",
+    ]
+    for p in patterns:
+        cleaned = re.sub(p, "", cleaned, flags=re.IGNORECASE).strip()
+    return cleaned
 
 
 class AssistantService:
@@ -105,6 +119,7 @@ class AssistantService:
             .generate(messages)
             .strip()
         )
+        assistant_text = _clean_metaprompt_leaks(assistant_text)
 
         if not assistant_text:
             raise RuntimeError(
@@ -167,6 +182,7 @@ class AssistantService:
                 yield chunk
 
             full_text = "".join(accumulated_chunks).strip()
+            full_text = _clean_metaprompt_leaks(full_text)
             if not full_text:
                 raise RuntimeError(
                     "Dil modeli boş yanıt döndürdü."
@@ -183,6 +199,7 @@ class AssistantService:
                 .generate(messages)
                 .strip()
             )
+            assistant_text = _clean_metaprompt_leaks(assistant_text)
             if not assistant_text:
                 raise RuntimeError(
                     "Dil modeli boş yanıt döndürdü."

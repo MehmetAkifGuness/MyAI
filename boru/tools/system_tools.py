@@ -25,10 +25,14 @@ VK_D = 0x44
 KEYEVENTF_KEYUP = 0x0002
 
 APP_COMMAND_MAP = {
-    # Medya & Web Siteleri
     "youtube": "https://www.youtube.com",
     "youtube.com": "https://www.youtube.com",
     "yt": "https://www.youtube.com",
+    "müzik": "https://music.youtube.com",
+    "şarkı": "https://music.youtube.com",
+    "youtube music": "https://music.youtube.com",
+    "yt music": "https://music.youtube.com",
+    "video": "https://www.youtube.com",
     "spotify": "spotify:",
     "netflix": "https://www.netflix.com",
     "google": "https://www.google.com",
@@ -123,7 +127,7 @@ def open_application(app_name: str) -> Tuple[bool, str]:
         if cmd:
             if cmd.startswith(("http://", "https://")):
                 webbrowser.open(cmd)
-                display_name = "YouTube" if "youtube" in cleaned else app_name.capitalize()
+                display_name = "YouTube Music" if "music" in cmd else ("YouTube" if "youtube" in cleaned else app_name.capitalize())
                 return True, f"{display_name} açıldı."
             if cmd.endswith(":"):
                 os.startfile(cmd)
@@ -523,11 +527,32 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     except Exception as e:
         logger.debug(f"Dosya düzenleyici çözme hatası: {e}")
 
-    # 1. Uygulama ve Web Sitelerini Açma Komutları ("... aç", "aç ...", "... başlat")
-    # Örnek: "youtube aç", "youtube'u aç", "lütfen spotify aç", "aç youtube", "not defterini aç"
+    # 1. Uygulama ve Web Sitelerini Açma Komutları
+    # Standalone açma talepleri: "aç", "aç lütfen", "lütfen aç"
+    if cleaned in ("aç", "aç lütfen", "lütfen aç", "aç bakalım", "program aç", "uygulama aç"):
+        return (
+            "Hangi uygulamayı veya web sitesini açmamı istersiniz? "
+            "Örneğin: YouTube, Spotify, Chrome, Not Defteri veya Hesap Makinesi açabilirim."
+        )
+
+    # Doğal Türkçe açma eylem fiilleri (emir, rica, kibar ve gelecek zaman)
+    OPEN_VERBS_REGEX = (
+        r"(?:açabilir\s+misiniz|açabilir\s+misin|açar\s+mısınız|açar\s+mısın|açarmısın(?:ız)?|"
+        r"açıver(?:sene)?|açsana|aç|başlatabilir\s+misiniz|başlatabilir\s+misin|başlatır\s+mısınız|"
+        r"başlatır\s+mısın|başlat|çalıştırabilir\s+misiniz|çalıştırabilir\s+misin|çalıştırır\s+mısınız|"
+        r"çalıştırır\s+mısın|çalıştır|girer\s+misiniz|girer\s+misin|gir)"
+    )
+
+    # Ön ek temizleme (örn: "google'dan youtube'u açar mısın", "bana spotify aç")
+    cleaned_open = re.sub(
+        r"^(?:börü\s+)?(?:lütfen\s+)?(?:bana\s+)?(?:google'dan|google\s+üzerinden|internetten|web'den|webden|tarayıcıdan)?\s*",
+        "",
+        cleaned
+    ).strip()
+
     target_cand = None
-    open_suffix_match = re.match(r"^(?:lütfen\s+)?(.+?)\s+(?:aç|başlat|çalıştır)$", cleaned)
-    open_prefix_match = re.match(r"^(?:aç|başlat|çalıştır)\s+(?:lütfen\s+)?(.+?)$", cleaned)
+    open_suffix_match = re.match(rf"^(.+?)\s+{OPEN_VERBS_REGEX}\s*(?:lütfen)?$", cleaned_open)
+    open_prefix_match = re.match(rf"^{OPEN_VERBS_REGEX}\s+(?:lütfen\s+)?(.+?)$", cleaned_open)
 
     if open_suffix_match:
         target_cand = open_suffix_match.group(1).strip()
@@ -554,6 +579,16 @@ def resolve_system_command(user_text: str) -> Optional[str]:
         if target_cand in APP_COMMAND_MAP:
             ok, msg = open_application(target_cand)
             return msg
+
+    # Fallback Intent Scan: Eğer cümlede açma fiili geçiyorsa ve bilinen bir uygulama varsa
+    # (Örn: "YouTube'u açar mısın", "Google'dan YouTube'u aç", "arkada müzik açar mısın")
+    if re.search(rf"\b{OPEN_VERBS_REGEX}\b", cleaned):
+        # Arama komutları (örn: "youtube'da ara", "google'da ara") ile çakışmasın
+        if not re.search(r"\b(?:ara|arama\s+yap)\b", cleaned):
+            for app_key in sorted(APP_COMMAND_MAP.keys(), key=len, reverse=True):
+                if re.search(rf"\b{re.escape(app_key)}", cleaned):
+                    ok, msg = open_application(app_key)
+                    return msg
 
     # 1.1 Uygulama Kapatma Komutları ("... kapat", "kapat ...", "... sonlandır")
     # Örnek: "chrome'u kapat", "not defterini kapat", "spotify'ı kapat", "kapat vscode", "discord sonlandır"
