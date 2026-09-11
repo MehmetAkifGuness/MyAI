@@ -1320,7 +1320,9 @@ class ChatAppUI(ctk.CTk):
                 self.mic_button.configure(fg_color="#e53e3e", text="🛑")
             except Exception:
                 pass
-            if not getattr(self, "_suppress_tk_overlay", False) and getattr(self, "_jarvis_overlay", None):
+            # Modern modda WebView2 overlay devreye girer; Tkinter overlay atla
+            _modern_mode = getattr(self, "_on_voice_state_changed_listener", None) is not None
+            if not _modern_mode and not getattr(self, "_suppress_tk_overlay", False) and getattr(self, "_jarvis_overlay", None):
                 try:
                     if self.winfo_exists() and not self.winfo_viewable():
                         self._jarvis_overlay.show()
@@ -1371,23 +1373,25 @@ class ChatAppUI(ctk.CTk):
             return err_msg
 
     def _on_voice_status_change(self, text: str, color: str) -> None:
-        try:
-            if getattr(self, "_jarvis_overlay", None):
-                self.after(0, lambda: self._jarvis_overlay.set_status(text, color))
-            self.after(0, lambda: self.live_indicator.configure(text=text, text_color=color))
+        _modern_mode = getattr(self, "_on_voice_state_changed_listener", None) is not None
+        if not _modern_mode:
+            try:
+                if getattr(self, "_jarvis_overlay", None):
+                    self.after(0, lambda: self._jarvis_overlay.set_status(text, color))
+                self.after(0, lambda: self.live_indicator.configure(text=text, text_color=color))
 
-            t_low = text.lower()
-            if hasattr(self, "visualizer"):
-                if "dinliyor" in t_low:
-                    self.after(0, lambda: self.visualizer.set_mode("listening"))
-                elif "konuşuyor" in t_low:
-                    self.after(0, lambda: self.visualizer.set_mode("speaking"))
-                elif "düşünüyor" in t_low or "işleniyor" in t_low:
-                    self.after(0, lambda: self.visualizer.set_mode("thinking"))
-                else:
-                    self.after(0, lambda: self.visualizer.set_mode("idle"))
-        except Exception:
-            pass
+                t_low = text.lower()
+                if hasattr(self, "visualizer"):
+                    if "dinliyor" in t_low:
+                        self.after(0, lambda: self.visualizer.set_mode("listening"))
+                    elif "konuşuyor" in t_low:
+                        self.after(0, lambda: self.visualizer.set_mode("speaking"))
+                    elif "düşünüyor" in t_low or "işleniyor" in t_low:
+                        self.after(0, lambda: self.visualizer.set_mode("thinking"))
+                    else:
+                        self.after(0, lambda: self.visualizer.set_mode("idle"))
+            except Exception:
+                pass
 
         if getattr(self, "_on_voice_status_listener", None):
             try:
@@ -1396,9 +1400,10 @@ class ChatAppUI(ctk.CTk):
                 pass
 
     def _on_voice_dialogue_ended(self) -> None:
+        _modern_mode = getattr(self, "_on_voice_state_changed_listener", None) is not None
         try:
             self.after(0, lambda: self.mic_button.configure(fg_color="#2b6cb0", text="🎙️"))
-            if getattr(self, "_jarvis_overlay", None):
+            if not _modern_mode and getattr(self, "_jarvis_overlay", None):
                 self.after(0, lambda: self._jarvis_overlay.set_mic_active(False))
                 self.after(0, lambda: self._jarvis_overlay.set_status("🟢 Hazır", "#48bb78"))
                 # Eğer ana pencere küçültülmüş/gizliyse overlay'i 1.5 sn sonra geri gizle

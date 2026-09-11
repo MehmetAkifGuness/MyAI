@@ -74,6 +74,15 @@ def main():
                         modern_window_ref[0].evaluate_js(f"updateMicState({str(is_active).lower()})")
                     except Exception:
                         pass
+                # Win32 hotkey yoluyla tetiklendiğinde de overlay göster/gizle
+                if overlay_window_ref[0]:
+                    try:
+                        if is_active:
+                            overlay_window_ref[0].show()
+                        else:
+                            overlay_window_ref[0].hide()
+                    except Exception:
+                        pass
 
             def _on_speech_recognized(user_text: str, bot_reply: str):
                 import json
