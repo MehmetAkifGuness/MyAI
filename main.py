@@ -25,39 +25,77 @@ def main():
 
     if args.ui == "modern":
         try:
+            import threading
+            import time
             from boru.ui_modern_webview import run_modern_app
 
             app.withdraw()
             app._suppress_tk_overlay = True
 
+            # Tkinter olay döngüsünü ve arka plan servislerini canlı tutan pompa
+            def _pump_tkinter():
+                while True:
+                    time.sleep(0.04)
             modern_window_ref = [None]
 
             def _on_voice_state_changed(is_active: bool):
                 if modern_window_ref[0]:
                     try:
+                        app.update_idletasks()
+                        app.update()
                         modern_window_ref[0].evaluate_js(f"updateMicState({str(is_active).lower()})")
                     except Exception:
+                        break
                         pass
+
+            threading.Thread(target=_pump_tkinter, daemon=True, name="BoruTkPump").start()
+
+            modern_window_ref = [None]
 
             def _toggle_voice():
                 if getattr(app, "_toggle_continuous_voice", None):
                     app._toggle_continuous_voice()
+                    is_active = bool(getattr(app, "_continuous_voice", None) and app._continuous_voice.is_active)
+                    if modern_window_ref[0]:
+                        try:
+                            modern_window_ref[0].evaluate_js(f"updateMicState({str(is_active).lower()})")
+                        except Exception:
+                            pass
+                    return is_active
                     return bool(getattr(app, "_continuous_voice", None) and app._continuous_voice.is_active)
                 return False
 
             def _open_spotlight():
+                if getattr(app, "_jarvis_overlay", None):
+                    app._jarvis_overlay.show()
                 if modern_window_ref[0]:
                     try:
                         modern_window_ref[0].evaluate_js("switchTab('actions')")
                     except Exception:
                         pass
 
+            # Global hotkey'leri doğrudan modern UI ve ses sistemine bağla
+            if getattr(app, "_hotkey_mgr", None):
+                app._hotkey_mgr.stop()
+                from boru.hotkey import GlobalHotkeyManager
+                modern_hotkey_mgr = GlobalHotkeyManager()
+                modern_hotkey_mgr.register("ctrl+shift+j", _toggle_voice)
+                modern_hotkey_mgr.register("ctrl+shift+b", _open_spotlight)
+                modern_hotkey_mgr.start()
+                app._hotkey_mgr = modern_hotkey_mgr
             app._on_voice_state_changed_listener = _on_voice_state_changed
             app._on_spotlight_custom = _open_spotlight
 
             def _on_window_created(win):
                 modern_window_ref[0] = win
 
+            run_modern_app(
+                assistant=app._assistant,
+                title=f"Börü {args.version} — Yeni Nesil Yapay Zekâ",
+                on_voice_toggle=_toggle_voice,
+                on_open_spotlight=_open_spotlight,
+                on_window_created=_on_window_created,
+            )
             try:
                 run_modern_app(
                     assistant=app._assistant,

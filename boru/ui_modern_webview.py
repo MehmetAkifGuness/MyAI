@@ -1129,6 +1129,7 @@ def run_modern_app(
     on_voice_toggle: Optional[Callable[[], bool]] = None,
     on_open_spotlight: Optional[Callable[[], None]] = None,
     on_window_created: Optional[Callable[[webview.Window], None]] = None,
+    on_closing: Optional[Callable[[], bool]] = None,
 ) -> None:
     """Next-Gen WebView2 Börü masaüstü uygulamasını başlatır."""
     api = BoruModernApi(
@@ -1148,6 +1149,8 @@ def run_modern_app(
         background_color="#07090E",
     )
     api.set_window(window)
+    if on_closing:
+        window.events.closing += on_closing
     if on_window_created:
         on_window_created(window)
     webview.start(debug=False)
