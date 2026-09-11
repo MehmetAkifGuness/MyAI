@@ -39,5 +39,21 @@ class TestQuickInfo:
             assert resolve_quick_info("dolar kaç tl") == "1 Dolar: 34.5 TL"
             assert resolve_quick_info("dolar ne kadar") == "1 Dolar: 34.5 TL"
 
+        # Saat & Tarih testleri
+        time_res = resolve_quick_info("saat kaç")
+        assert time_res is not None and "saat" in time_res
+
+        day_res = resolve_quick_info("bugün günlerden ne")
+        assert day_res is not None and "günlerden" in day_res
+
+        year_res = resolve_quick_info("hangi yıldayız")
+        assert year_res is not None and "yılındayız" in year_res
+
+        # Matematik testleri
+        assert resolve_quick_info("125 çarpı 48 kaç eder") == "125 × 48 = 6000 eder."
+        assert resolve_quick_info("840 bölü 12 kaçtır") == "840 ÷ 12 = 70 eder."
+        assert resolve_quick_info("1500 liranın yüzde 20'si kaç") == "1500 sayısının %20'si = 300 eder."
+        assert resolve_quick_info("100 / 0") == "Sıfıra bölme işlemi tanımsızdır."
+
         assert resolve_quick_info("merhaba nasılsın") is None
 

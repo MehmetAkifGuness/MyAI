@@ -127,15 +127,24 @@ def resolve_web_qa_command(user_text: str) -> Optional[str]:
     )):
         return None
 
-    # 1. "X kimdir?" veya "X nedir?"
-    match_who_what = re.match(r"^(?:börü\s+)?(?:lütfen\s+)?(.+?)\s+(kimdir|nedir)$", cleaned)
+    # 1. "X kimdir?", "X nedir?", "X neresidir?", "X hangisidir?"
+    match_who_what = re.match(r"^(?:börü\s+)?(?:lütfen\s+)?(?:bana\s+)?(.+?)\s+(kimdir|nedir|neresidir|hangisidir)$", cleaned)
     if match_who_what:
         query = match_who_what.group(1).strip()
         # "bu nedir", "o kimdir", "şu nedir" gibi belirsiz zamirleri ele
-        if len(query) >= 2 and query not in ("bu", "o", "şu", "kim", "ne"):
+        if len(query) >= 2 and query not in ("bu", "o", "şu", "kim", "ne", "neresi", "hangisi"):
             ok, summary = search_wikipedia_summary(query)
             if ok:
                 return summary
+
+            # Wikipedia'da bulunamadıysa canlı DuckDuckGo web aramasına devret
+            try:
+                from boru.tools.web_search import search_web_live
+                ok_web, web_res = search_web_live(f"{query} {match_who_what.group(2)}")
+                if ok_web:
+                    return web_res
+            except Exception as e:
+                logger.debug(f"Web fallback arama hatası: {e}")
 
     # 2. "X hakkında bilgi ver" veya "X hakkında bilgi"
     match_about = re.match(r"^(?:börü\s+)?(?:bana\s+)?(.+?)\s+(?:hakkında|ile ilgili)\s+bilgi(?:\s+ver)?$", cleaned)
@@ -145,6 +154,14 @@ def resolve_web_qa_command(user_text: str) -> Optional[str]:
             ok, summary = search_wikipedia_summary(query)
             if ok:
                 return summary
+
+            try:
+                from boru.tools.web_search import search_web_live
+                ok_web, web_res = search_web_live(f"{query} hakkında bilgi")
+                if ok_web:
+                    return web_res
+            except Exception as e:
+                logger.debug(f"Web fallback arama hatası: {e}")
 
     return None
 

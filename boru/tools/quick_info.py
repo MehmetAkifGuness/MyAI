@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import ast
+import datetime
 import json
 import logging
+import operator
 import re
 import time
 import urllib.parse
@@ -128,12 +131,170 @@ KNOWN_CITIES = [
 ]
 
 
+TURKISH_DAYS = ["Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi", "Pazar"]
+TURKISH_MONTHS = [
+    "", "Ocak", "Şubat", "Mart", "Nisan", "Mayıs", "Haziran",
+    "Temmuz", "Ağustos", "Eylül", "Ekim", "Kasım", "Aralık"
+]
+
+
+def get_current_time_and_date(mode: str = "both") -> str:
+    """Sistem yerel saatini ve Türkçe tarihini döndürür."""
+    now = datetime.datetime.now()
+    day_name = TURKISH_DAYS[now.weekday()]
+    month_name = TURKISH_MONTHS[now.month]
+    time_str = now.strftime("%H:%M")
+    date_str = f"{now.day} {month_name} {now.year}, {day_name}"
+
+    if mode == "time":
+        return f"Şu anda saat {time_str}."
+    elif mode == "date":
+        return f"Bugünün tarihi: {date_str}."
+    elif mode == "day":
+        return f"Bugün günlerden {day_name}."
+    elif mode == "year":
+        return f"Şu anda {now.year} yılındayız."
+    elif mode == "month":
+        return f"Şu anda {month_name} ayındayız."
+    else:
+        return f"Bugün {date_str}, saat {time_str}."
+
+
+_SAFE_OPERATORS = {
+    ast.Add: operator.add,
+    ast.Sub: operator.sub,
+    ast.Mult: operator.mul,
+    ast.Div: operator.truediv,
+    ast.FloorDiv: operator.floordiv,
+    ast.Mod: operator.mod,
+    ast.Pow: operator.pow,
+    ast.USub: operator.neg,
+    ast.UAdd: operator.pos,
+}
+
+
+def _eval_ast_node(node):
+    if isinstance(node, ast.Constant) and isinstance(node.value, (int, float)):
+        return node.value
+    elif isinstance(node, ast.BinOp):
+        left = _eval_ast_node(node.left)
+        right = _eval_ast_node(node.right)
+        op_type = type(node.op)
+        if op_type in _SAFE_OPERATORS:
+            if op_type in (ast.Div, ast.FloorDiv, ast.Mod) and right == 0:
+                raise ZeroDivisionError("Sıfıra bölme hatası")
+            if op_type == ast.Pow and (right > 1000 or left > 100000):
+                raise ValueError("Hesaplanamayacak kadar büyük üs")
+            return _SAFE_OPERATORS[op_type](left, right)
+    elif isinstance(node, ast.UnaryOp):
+        operand = _eval_ast_node(node.operand)
+        op_type = type(node.op)
+        if op_type in _SAFE_OPERATORS:
+            return _SAFE_OPERATORS[op_type](operand)
+    raise ValueError("Desteklenmeyen ifade")
+
+
+def _turkish_percent_suffix(num_str: str) -> str:
+    """Yüzde sayıları için doğru Türkçe iyelik eki üretir (%20'si, %18'i, %10'u vb.)"""
+    last = num_str.strip()
+    if last.endswith(("2", "5", "7", "8", "20", "50", "70", "80")):
+        return "'si"
+    elif last.endswith(("6", "40", "60", "90")):
+        return "'sı"
+    elif last.endswith(("3", "4", "100")):
+        return "'ü"
+    elif last.endswith(("9", "10", "30")):
+        return "'u"
+    return "'i"
+
+
+def evaluate_math_expression(text: str) -> Optional[str]:
+    """Türkçe veya sembolik matematiksel hesaplama sorularını güvenli çözer."""
+    cleaned = text.lower().strip().strip(".!?,")
+    if any(k in cleaned for k in ("def ", "import ", "python", "kod", "satır", "fonksiyon", "dosya", "class ")):
+        return None
+
+    # 1. Yüzde Hesaplama (Örn: "1500'ün yüzde 20'si", "500 liranın yüzde 18'i kaç eder")
+    pct_match = re.search(
+        r"(\d+(?:[.,]\d+)?)\s*(?:'nin|'nın|'nun|'nün|'ün|'in|in|nin)?\s*(?:liranın|tl'nin)?\s*yüzde\s*(\d+(?:[.,]\d+)?)(?:'si|'sı|'su|'sü)?(?:\s+(?:kaç|kaçtır|eder|ne kadar))?",
+        cleaned
+    )
+    if pct_match:
+        try:
+            base_val = float(pct_match.group(1).replace(",", "."))
+            pct_val = float(pct_match.group(2).replace(",", "."))
+            res = (base_val * pct_val) / 100.0
+            res_str = f"{int(res)}" if res.is_integer() else f"{res:.2f}"
+            base_str = f"{int(base_val)}" if base_val.is_integer() else f"{base_val}"
+            pct_str = f"{int(pct_val)}" if pct_val.is_integer() else f"{pct_val}"
+            suffix = _turkish_percent_suffix(pct_str)
+            return f"{base_str} sayısının %{pct_str}{suffix} = {res_str} eder."
+        except Exception:
+            pass
+
+    # 2. Standart Dört İşlem
+    has_math = any(k in cleaned for k in (
+        "çarpı", "kere", "bölü", "artı", "eksi", "üssü", "üzeri",
+        "kaç eder", "kaçtır", "hesapla"
+    ))
+    if not has_math and not re.search(r"^\s*[\d\s\+\-\*\/\(\)\.\,]+\s*$", cleaned):
+        return None
+
+    expr = cleaned
+    expr = re.sub(r"^(?:börü\s+)?(?:lütfen\s+)?(?:hesapla\s*:?|ne\s+kadar\s*:?)", "", expr)
+    expr = re.sub(r"\s*(?:kaç\s+eder|kaçtır|ne\s+kadar|eder|sonucu\s+ne|sonucu\s+nedir)\s*$", "", expr)
+    expr = expr.replace("çarpı", "*").replace("kere", "*")
+    expr = expr.replace("bölü", "/").replace("bölüm", "/")
+    expr = expr.replace("artı", "+").replace("eksi", "-")
+    expr = expr.replace("üssü", "**").replace("üzeri", "**")
+    expr = re.sub(r"(\d+),(\d+)", r"\1.\2", expr)
+
+    if not re.search(r"[\d]", expr) or re.search(r"[^\d\s\+\-\*\/\(\)\.]", expr):
+        return None
+
+    try:
+        val = _eval_ast_node(ast.parse(expr.strip(), mode="eval").body)
+        val_str = f"{int(val)}" if isinstance(val, (int, float)) and float(val).is_integer() else f"{val:.4g}"
+        disp_expr = expr.strip().replace("**", "^").replace("*", "×").replace("/", "÷")
+        return f"{disp_expr} = {val_str} eder."
+    except ZeroDivisionError:
+        return "Sıfıra bölme işlemi tanımsızdır."
+    except Exception:
+        return None
+
+
 def resolve_quick_info(user_text: str) -> Optional[str]:
     """
-    Kullanıcının hava durumu veya döviz kuru gibi hızlı bilgi sorularını çözümler.
-    Eşleşirse doğrudan söylenecek metni döndürür. Eşleşmezse None döner.
+    Kullanıcının saat/tarih, matematik, hava durumu veya döviz kuru gibi
+    hızlı bilgi sorularını anlık çözer.
     """
     cleaned = user_text.lower().strip().strip(".!?,")
+
+    # 0. Zaman & Tarih Sorguları (Sıfır gecikmeli, %100 doğru sistem saati)
+    # Saat soruları
+    if any(k in cleaned for k in ("saat kaç", "şu an saat", "saati söyler", "saat kaç oldu", "bana saati söyle", "saat nedir")):
+        return get_current_time_and_date("time")
+
+    # Gün soruları
+    if any(k in cleaned for k in ("bugün günlerden ne", "hangi gündeyiz", "bugün hangi gün")):
+        return get_current_time_and_date("day")
+
+    # Yıl soruları
+    if any(k in cleaned for k in ("hangi yıldayız", "şu an hangi yıldayız", "kaç yılındayız")):
+        return get_current_time_and_date("year")
+
+    # Ay soruları
+    if any(k in cleaned for k in ("hangi aydayız", "şu an hangi aydayız")):
+        return get_current_time_and_date("month")
+
+    # Tarih soruları
+    if any(k in cleaned for k in ("bugünün tarihi", "bugün ayın kaçı", "tarih ne", "tarihi söyler", "tarih nedir", "günün tarihi")):
+        return get_current_time_and_date("date")
+
+    # 0.1 Hızlı Matematik Hesaplamaları ("125 çarpı 48 kaç eder", "%18'i ne kadar")
+    math_res = evaluate_math_expression(user_text)
+    if math_res is not None:
+        return math_res
 
     # 1. Hava Durumu Sorguları
     if any(k in cleaned for k in ("hava durumu", "hava nasıl", "kaç derece", "hava sıcaklığı")):

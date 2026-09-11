@@ -400,9 +400,32 @@ class _SYSTEM_POWER_STATUS(ctypes.Structure):
 
 
 def get_system_status() -> Tuple[bool, str]:
-    """Pil, bellek ve sistem durumu hakkında anlık rapor üretir."""
+    """İşlemci, bellek, disk ve pil durumu hakkında anlık rapor üretir."""
     details = []
     try:
+        # 0. İşlemci (CPU) Kullanımı (GetSystemTimes ile 80ms ölçüm)
+        try:
+            import time
+
+            class _FILETIME(ctypes.Structure):
+                _fields_ = [("dwLowDateTime", ctypes.c_uint), ("dwHighDateTime", ctypes.c_uint)]
+
+            def _to_int(ft):
+                return (ft.dwHighDateTime << 32) | ft.dwLowDateTime
+
+            i1, k1, u1 = _FILETIME(), _FILETIME(), _FILETIME()
+            i2, k2, u2 = _FILETIME(), _FILETIME(), _FILETIME()
+            ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(i1), ctypes.byref(k1), ctypes.byref(u1))
+            time.sleep(0.08)
+            ctypes.windll.kernel32.GetSystemTimes(ctypes.byref(i2), ctypes.byref(k2), ctypes.byref(u2))
+            idle_diff = _to_int(i2) - _to_int(i1)
+            total_diff = (_to_int(k2) - _to_int(k1)) + (_to_int(u2) - _to_int(u1))
+            if total_diff > 0:
+                cpu_load = max(0.0, min(100.0, (1.0 - (idle_diff / total_diff)) * 100.0))
+                details.append(f"İşlemci (CPU): %{cpu_load:.0f} kullanımda")
+        except Exception:
+            pass
+
         # 1. Bellek Durumu
         mem = _MEMORYSTATUSEX()
         mem.dwLength = ctypes.sizeof(_MEMORYSTATUSEX)
@@ -412,7 +435,19 @@ def get_system_status() -> Tuple[bool, str]:
             avail_gb = mem.ullAvailPhys / (1024 ** 3)
             details.append(f"RAM: %{used_pct} kullanımda ({avail_gb:.1f} GB boş / {total_gb:.1f} GB toplam)")
 
-        # 2. Pil Durumu
+        # 2. Disk Durumu (C:\)
+        try:
+            free_bytes = ctypes.c_ulonglong()
+            total_bytes = ctypes.c_ulonglong()
+            total_free = ctypes.c_ulonglong()
+            if ctypes.windll.kernel32.GetDiskFreeSpaceExW("C:\\", ctypes.byref(free_bytes), ctypes.byref(total_bytes), ctypes.byref(total_free)):
+                c_free_gb = free_bytes.value / (1024 ** 3)
+                c_total_gb = total_bytes.value / (1024 ** 3)
+                details.append(f"Disk (C:): {c_free_gb:.1f} GB boş / {c_total_gb:.1f} GB toplam")
+        except Exception:
+            pass
+
+        # 3. Pil Durumu
         power = _SYSTEM_POWER_STATUS()
         if ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(power)):
             pct = power.BatteryLifePercent
@@ -574,8 +609,14 @@ def resolve_system_command(user_text: str) -> Optional[str]:
         _, msg = get_top_processes()
         return msg
 
-    # Örnek: "şarjım kaç", "pil durumu", "sistem durumu", "ram kullanımı", "ram durumu", "bellek durumu", "donanım durumu"
-    if any(k in cleaned for k in ("pil durumu", "şarjım kaç", "şarj ne kadar", "sistem durumu", "ram kullanımı", "ram durumu", "bellek durumu", "donanım durumu", "bilgisayar durumu", "ne kadar ram")):
+    # Örnek: "şarjım kaç", "pil durumu", "sistem durumu", "ram kullanımı", "ram durumu", "bellek durumu", "donanım durumu", "işlemci kullanımı", "cpu durumu", "disk durumu"
+    if any(k in cleaned for k in (
+        "pil durumu", "şarjım kaç", "şarj ne kadar", "sistem durumu",
+        "ram kullanımı", "ram durumu", "bellek durumu", "donanım durumu",
+        "bilgisayar durumu", "ne kadar ram", "cpu durumu", "cpu kullanımı",
+        "işlemci kullanımı", "işlemci durumu", "disk durumu", "depolama durumu",
+        "harddisk", "bilgisayarın durumu"
+    )):
         _, msg = get_system_status()
         return msg
 

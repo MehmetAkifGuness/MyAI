@@ -67,19 +67,19 @@ def install_startup(project_dir: Path | None = None) -> None:
         else:
             project_dir = Path(__file__).resolve().parent
 
-    daemon_script = project_dir / "run_daemon.py"
-    if not daemon_script.exists():
-        raise FileNotFoundError(f"Daemon başlatıcısı bulunamadı: {daemon_script}")
+    main_script = project_dir / "main.py"
+    if not main_script.exists():
+        raise FileNotFoundError(f"Ana uygulama dosyası bulunamadı: {main_script}")
 
     startup_dir = get_startup_folder()
     pythonw = get_pythonw_path()
     target_vbs = startup_dir / "Boru_AI_Asistan.vbs"
 
-    # Sessiz VBScript içeriği
+    # Sessiz VBScript içeriği (modern WebView2 arayüzünü ve tepsi servisini sessizce başlatır)
     vbs_content = (
         'Set WshShell = CreateObject("WScript.Shell")\n'
         f'WshShell.CurrentDirectory = "{str(project_dir)}"\n'
-        f'WshShell.Run """{str(pythonw)}"" ""{str(daemon_script)}""", 0, False\n'
+        f'WshShell.Run """{str(pythonw)}"" ""{str(main_script)}"" --silent", 0, False\n'
     )
 
     with open(target_vbs, "w", encoding="utf-8") as f:
