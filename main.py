@@ -44,6 +44,13 @@ def main():
         choices=["modern", "classic"],
         help="Arayüz stili: 'modern' (2026 WebView2 Glassmorphic Arayüz) veya 'classic' (CustomTkinter)",
     )
+    parser.add_argument(
+        "--silent",
+        "--minimized",
+        action="store_true",
+        dest="silent",
+        help="Uygulamayı ekranda pencere açmadan, doğrudan sistem tepsisinde (arka planda) başlatır.",
+    )
     args = parser.parse_args()
     _cleanup_stale_processes()
     app = build_release(version=args.version)
@@ -236,6 +243,7 @@ def main():
                     on_window_created=_on_window_created,
                     on_closing=_on_window_closing,
                     on_overlay_window_created=_on_overlay_window_created,
+                    hidden=bool(args.silent),
                 )
             finally:
                 _full_exit()

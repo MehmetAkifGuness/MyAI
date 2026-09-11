@@ -1548,12 +1548,14 @@ def run_modern_app(
     on_window_created: Optional[Callable[[webview.Window], None]] = None,
     on_closing: Optional[Callable[[], bool]] = None,
     on_overlay_window_created: Optional[Callable[[webview.Window, "VoiceOverlayApi"], None]] = None,
+    hidden: bool = False,
 ) -> None:
     """Next-Gen WebView2 Börü masaüstü uygulamasını başlatır.
 
     İsteğe bağlı olarak yüzen sesli diyalog overlay'i de oluşturur.
     on_overlay_window_created(overlay_window, overlay_api) callback'i
     ile dış kod overlay'e JS çağrısı yapabilir, göster/gizle kontrolü sağlar.
+    hidden=True olduğunda ana pencere açılışta gizli (tepsi modu) başlar.
     """
     api = BoruModernApi(
         assistant=assistant,
@@ -1570,6 +1572,7 @@ def run_modern_app(
         height=780,
         min_size=(900, 640),
         background_color="#07090E",
+        hidden=hidden,
     )
     api.set_window(window)
     if on_closing:

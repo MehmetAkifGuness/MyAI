@@ -1246,15 +1246,31 @@ class ChatAppUI(ctk.CTk):
     def _on_background_wake_word(self, remaining_cmd: str) -> None:
         """Kullanıcı arka planda 'Börü' dediğinde tetiklenir."""
         if getattr(self, "_audio_cues", None):
-            self._audio_cues.play_wake()
+            try:
+                self._audio_cues.play_wake()
+            except Exception:
+                pass
         self.log_terminal(f"🐺 'Börü' uyandırma kelimesi algılandı! Komut: '{remaining_cmd}'", "success")
-        self.after(0, self._handle_wake_up_trigger, remaining_cmd)
+        _modern_mode = getattr(self, "_on_voice_state_changed_listener", None) is not None
+        if _modern_mode:
+            # Modern modda Tkinter main loop çalışmaz, doğrudan thread içinde çalıştır
+            threading.Thread(target=self._handle_wake_up_trigger, args=(remaining_cmd,), daemon=True).start()
+        else:
+            try:
+                self.after(0, self._handle_wake_up_trigger, remaining_cmd)
+            except Exception:
+                threading.Thread(target=self._handle_wake_up_trigger, args=(remaining_cmd,), daemon=True).start()
 
     def _handle_wake_up_trigger(self, remaining_cmd: str) -> None:
         """Uyandırma gerçekleştiğinde gerekirse overlay'i açar ve sesli diyaloğu başlatır."""
-        if not self.winfo_viewable() and getattr(self, "_jarvis_overlay", None):
-            self._jarvis_overlay.show()
-            self._jarvis_overlay.set_mic_active(True)
+        _modern_mode = getattr(self, "_on_voice_state_changed_listener", None) is not None
+        if not _modern_mode:
+            try:
+                if not self.winfo_viewable() and getattr(self, "_jarvis_overlay", None):
+                    self._jarvis_overlay.show()
+                    self._jarvis_overlay.set_mic_active(True)
+            except Exception:
+                pass
 
         try:
             self.mic_button.configure(fg_color="#e53e3e", text="🛑")
@@ -1401,19 +1417,20 @@ class ChatAppUI(ctk.CTk):
 
     def _on_voice_dialogue_ended(self) -> None:
         _modern_mode = getattr(self, "_on_voice_state_changed_listener", None) is not None
-        try:
-            self.after(0, lambda: self.mic_button.configure(fg_color="#2b6cb0", text="🎙️"))
-            if not _modern_mode and getattr(self, "_jarvis_overlay", None):
-                self.after(0, lambda: self._jarvis_overlay.set_mic_active(False))
-                self.after(0, lambda: self._jarvis_overlay.set_status("🟢 Hazır", "#48bb78"))
-                # Eğer ana pencere küçültülmüş/gizliyse overlay'i 1.5 sn sonra geri gizle
-                if not self.winfo_viewable():
-                    self.after(1500, self._jarvis_overlay.hide)
-            self.after(0, lambda: self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78"))
-            if hasattr(self, "visualizer"):
-                self.after(0, lambda: self.visualizer.set_mode("idle"))
-        except Exception:
-            pass
+        if not _modern_mode:
+            try:
+                self.after(0, lambda: self.mic_button.configure(fg_color="#2b6cb0", text="🎙️"))
+                if getattr(self, "_jarvis_overlay", None):
+                    self.after(0, lambda: self._jarvis_overlay.set_mic_active(False))
+                    self.after(0, lambda: self._jarvis_overlay.set_status("🟢 Hazır", "#48bb78"))
+                    # Eğer ana pencere küçültülmüş/gizliyse overlay'i 1.5 sn sonra geri gizle
+                    if not self.winfo_viewable():
+                        self.after(1500, self._jarvis_overlay.hide)
+                self.after(0, lambda: self.live_indicator.configure(text="🟢 Çevrimiçi & Hazır", text_color="#48bb78"))
+                if hasattr(self, "visualizer"):
+                    self.after(0, lambda: self.visualizer.set_mode("idle"))
+            except Exception:
+                pass
 
         if getattr(self, "_on_voice_state_changed_listener", None):
             try:
