@@ -182,14 +182,12 @@ def start_service() -> bool:
     time.sleep(0.5)
 
     project_root = get_project_root()
-    vbs_path = project_root / "Boru_ArkaPlan.vbs"
-
-    if not vbs_path.exists():
-        install_service()
+    pythonw = get_pythonw()
+    main_py = project_root / "main.py"
 
     try:
         subprocess.Popen(
-            ["wscript.exe", str(vbs_path)],
+            [str(pythonw), str(main_py), "--silent"],
             cwd=str(project_root),
             creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
         )

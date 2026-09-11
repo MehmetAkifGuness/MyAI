@@ -16,6 +16,11 @@ from boru.tools.builtins import (
 from boru.tools.coordinator import (
     ToolCoordinator,
 )
+from boru.tools.os_controller import (
+    AutonomousComputerAgent,
+    get_autonomous_computer_agent,
+    resolve_os_controller_command,
+)
 from boru.tools.autofix_coordinator import (
     ControlledAutoFixCoordinator,
 )
@@ -379,4 +384,7 @@ __all__ = [
     "WriteOutcome",
     "WriteRequest",
     "WriteRequestParser",
+    "AutonomousComputerAgent",
+    "get_autonomous_computer_agent",
+    "resolve_os_controller_command",
 ]

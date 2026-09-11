@@ -566,6 +566,15 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     except Exception as e:
         logger.debug(f"Reflection çözme hatası: {e}")
 
+    # 0.6 Otonom Bilgisayar ve OS Kontrol Ajanı (Video açma, Spotify müzik çalma, klasör açma, ekran görüntüsü kaydetme)
+    try:
+        from boru.tools.os_controller import resolve_os_controller_command
+        os_res = resolve_os_controller_command(user_text)
+        if os_res is not None:
+            return os_res
+    except Exception as e:
+        logger.debug(f"OS controller çözme hatası: {e}")
+
     # 1. Uygulama ve Web Sitelerini Açma Komutları
     # Standalone açma talepleri: "aç", "aç lütfen", "lütfen aç"
     if cleaned in ("aç", "aç lütfen", "lütfen aç", "aç bakalım", "program aç", "uygulama aç"):
