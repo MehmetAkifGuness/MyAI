@@ -1027,16 +1027,20 @@ Komut çalıştırmak için aşağıya yazıp Enter'a basın (örn: pytest, git 
       scroll.innerHTML = '';
       const hero = document.getElementById('welcome-hero');
       if (hero) hero.style.display = 'flex';
+    function updateMicState(active) {
+      const btn = document.getElementById('mic-btn');
+      if (btn) {
+        if (active) {
+          btn.classList.add('active');
+        } else {
+          btn.classList.remove('active');
+        }
+      }
     }
 
     async function toggleVoice() {
       const res = await window.pywebview.api.toggle_voice();
-      const btn = document.getElementById('mic-btn');
-      if (res.active) {
-        btn.classList.add('active');
-      } else {
-        btn.classList.remove('active');
-      }
+      updateMicState(res.active);
     }
 
     function openSpotlight() {
@@ -1124,6 +1128,7 @@ def run_modern_app(
     project_root: Path | None = None,
     on_voice_toggle: Optional[Callable[[], bool]] = None,
     on_open_spotlight: Optional[Callable[[], None]] = None,
+    on_window_created: Optional[Callable[[webview.Window], None]] = None,
 ) -> None:
     """Next-Gen WebView2 Börü masaüstü uygulamasını başlatır."""
     api = BoruModernApi(
@@ -1143,4 +1148,6 @@ def run_modern_app(
         background_color="#07090E",
     )
     api.set_window(window)
+    if on_window_created:
+        on_window_created(window)
     webview.start(debug=False)

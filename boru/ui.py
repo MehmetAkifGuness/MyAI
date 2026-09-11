@@ -1204,9 +1204,9 @@ class ChatAppUI(ctk.CTk):
             )
             self._hotkey_mgr = GlobalHotkeyManager()
             # Ctrl+Shift+B -> Börü Spotlight Overlay Aç/Kapat
-            self._hotkey_mgr.register("ctrl+shift+b", lambda: self.after(0, self._toggle_jarvis))
+            self._hotkey_mgr.register("ctrl+shift+b", self._on_hotkey_spotlight)
             # Ctrl+Shift+J -> Doğrudan Kesintisiz Hands-Free Sesli Sohbeti Başlat/Durdur
-            self._hotkey_mgr.register("ctrl+shift+j", lambda: self.after(0, self._toggle_continuous_voice))
+            self._hotkey_mgr.register("ctrl+shift+j", self._on_hotkey_voice)
             self._hotkey_mgr.start()
 
             # Arka planda sürekli 'Börü' / 'Hey Börü' sesli uyandırma dinleyicisi
@@ -1221,6 +1221,18 @@ class ChatAppUI(ctk.CTk):
         except Exception as e:
             self.log_terminal(f"⚠️ Börü Kısayol veya Uyandırma başlatılamadı: {e}", "info")
 
+    def _on_hotkey_spotlight(self) -> None:
+        try:
+            self.after(0, self._toggle_jarvis)
+        except Exception:
+            self._toggle_jarvis()
+
+    def _on_hotkey_voice(self) -> None:
+        try:
+            self.after(0, self._toggle_continuous_voice)
+        except Exception:
+            self._toggle_continuous_voice()
+
     def _toggle_jarvis(self) -> None:
         if getattr(self, "_jarvis_overlay", None):
             self._jarvis_overlay.toggle()
@@ -1234,12 +1246,14 @@ class ChatAppUI(ctk.CTk):
 
     def _handle_wake_up_trigger(self, remaining_cmd: str) -> None:
         """Uyandırma gerçekleştiğinde gerekirse overlay'i açar ve sesli diyaloğu başlatır."""
-        # Yalnızca ana pencere küçültülmüş veya görünür değilse Spotlight overlay'ini öne çıkar
         if not self.winfo_viewable() and getattr(self, "_jarvis_overlay", None):
             self._jarvis_overlay.show()
             self._jarvis_overlay.set_mic_active(True)
 
-        self.mic_button.configure(fg_color="#e53e3e", text="🛑")
+        try:
+            self.mic_button.configure(fg_color="#e53e3e", text="🛑")
+        except Exception:
+            pass
 
         if not remaining_cmd:
             def _greet_and_listen():
@@ -1265,22 +1279,43 @@ class ChatAppUI(ctk.CTk):
 
         if self._continuous_voice.is_active:
             self._continuous_voice.stop()
-            self.mic_button.configure(fg_color="#2b6cb0", text="🎙️")
+            try:
+                self.mic_button.configure(fg_color="#2b6cb0", text="🎙️")
+            except Exception:
+                pass
             if getattr(self, "_jarvis_overlay", None):
-                self._jarvis_overlay.set_mic_active(False)
+                try:
+                    self._jarvis_overlay.set_mic_active(False)
+                except Exception:
+                    pass
             if getattr(self, "_wake_listener", None):
-                self._wake_listener.resume()
+                try:
+                    self._wake_listener.resume()
+                except Exception:
+                    pass
             self.log_terminal("🛑 Kesintisiz sesli sohbet sonlandırıldı.", "info")
         else:
             if getattr(self, "_audio_cues", None):
-                self._audio_cues.play_wake()
+                try:
+                    self._audio_cues.play_wake()
+                except Exception:
+                    pass
             if getattr(self, "_wake_listener", None):
-                self._wake_listener.pause()
-            self.mic_button.configure(fg_color="#e53e3e", text="🛑")
+                try:
+                    self._wake_listener.pause()
+                except Exception:
+                    pass
+            try:
+                self.mic_button.configure(fg_color="#e53e3e", text="🛑")
+            except Exception:
+                pass
             if getattr(self, "_jarvis_overlay", None):
-                if not self.winfo_viewable():
-                    self._jarvis_overlay.show()
-                self._jarvis_overlay.set_mic_active(True)
+                try:
+                    if not self.winfo_viewable():
+                        self._jarvis_overlay.show()
+                    self._jarvis_overlay.set_mic_active(True)
+                except Exception:
+                    pass
             self._continuous_voice.start()
             self.log_terminal("🎙️ Kesintisiz Hands-Free sesli sohbet başlatıldı.", "success")
 
