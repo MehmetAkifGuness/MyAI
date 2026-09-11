@@ -135,7 +135,7 @@ class AutonomousWebGroundingContextProvider:
     """
     Kullanıcının dış dünya, güncel olaylar, olgusal bilgi veya araştırma gerektiren
     sorularında canlı internet / web araştırması yaparak doğrulanmış bilgiyi modele aktarır.
-    Yerel dil modelinin eski eğitim verilerinden veya ezberinden uydurma yapmasını engeller.
+    Yerel dil modelinin eski eğitim hafızasından uydurma yapmasını veya ezberden yanıt vermesini engeller.
     """
 
     _GREETINGS = {
@@ -149,17 +149,14 @@ class AutonomousWebGroundingContextProvider:
         "aç", "kapat", "sesi", "ses aç", "ses kıs", "sessize", "uygulama",
         "not defteri", "hesap makinesi", "terminal", "powershell", "masaüstü",
         "hafıza", "beni unut", "hatırla", "kodla:", "iyileştir:", "test:",
-        "bağımlılıklar:", "git ", "def ", "class ", "import "
+        "bağımlılıklar:", "sembol ara:", "git ", "def ", "class ", "import "
     )
 
-    _RESEARCH_KEYWORDS = (
-        "araştır", "araştırma", "web", "internet", "google", "bakmam lazım",
-        "2024", "2025", "2026", "2027", "2028", "kimdir", "nedir", "nerede",
-        "neresidir", "hangisidir", "kaç yılında", "ne zaman", "kaç para",
-        "kaç tl", "ne kadar", "fiyatı", "ücreti", "enflasyon", "asgari ücret",
-        "faiz", "borsa", "dolar", "euro", "altın", "togg", "seçim", "şampiyon",
-        "haber", "nüfus", "hakkında bilgi", "ile ilgili bilgi", "neler oldu",
-        "kim kazandı", "tarihi nedir", "son dakika", "güncel"
+    _MEMORY_CHAT_REFERENCES = (
+        "hatırla", "hatırlıyor musun", "az önce", "demin", "ne demiştim",
+        "ne konuştuk", "benim adım", "adım ne", "beni tanıyor musun",
+        "bahsettiğim", "söylediğim", "anlatayım mı", "sence", "fikrin ne",
+        "fıkra anlat", "moralim bozuk", "canım sıkkın", "sohbet edelim"
     )
 
     def __init__(self, search_fn=None):
@@ -171,9 +168,9 @@ class AutonomousWebGroundingContextProvider:
             return ""
 
         cleaned = text.lower().strip(".!?, ")
+        words = cleaned.split()
 
         # 1. Selamlaşma ve genel sohbet ifadelerini ele
-        words = cleaned.split()
         if len(words) <= 3 and any(w in self._GREETINGS for w in words):
             return ""
 
@@ -181,14 +178,33 @@ class AutonomousWebGroundingContextProvider:
         if any(cmd in cleaned for cmd in self._SYSTEM_COMMANDS):
             return ""
 
-        # 3. Canlı bilgi / araştırma gerektiriyor mu kontrol et
-        if not any(kw in cleaned for kw in self._RESEARCH_KEYWORDS):
+        # 3. Konuşma geçmişi, hafıza ve kişisel dertleşme ifadelerini ele
+        if any(ref in cleaned for ref in self._MEMORY_CHAT_REFERENCES):
             return ""
 
-        # 4. Arama sorgusunu filtrele ve hazırla
+        # 4. Bilgi / Soru / Araştırma niyeti kontrolü
+        has_info_intent = (
+            "?" in text
+            or any(w in cleaned for w in (
+                "ne", "nedir", "kimdir", "nerede", "nerededir", "nasıl", "neden", "niçin",
+                "kaç", "hangi", "ne zaman", "ne demek", "mı", "mi", "mu", "mü", "misin", "mısın"
+            ))
+            or any(kw in cleaned for kw in (
+                "araştır", "araştırma", "bilgi", "hakkında", "ile ilgili", "tarihi", "fiyatı",
+                "kur", "dolar", "euro", "altın", "borsa", "enflasyon", "asgari ücret", "faiz",
+                "2024", "2025", "2026", "2027", "2028", "haber", "güncel", "son durum",
+                "anlat", "açıkla", "özetle", "bakmam lazım", "öğrenmek istiyorum"
+            ))
+            or len(words) >= 4
+        )
+
+        if not has_info_intent:
+            return ""
+
+        # 5. Arama sorgusunu filtrele ve hazırla
         import re
         query = re.sub(r"^(?:börü\s+)?(?:lütfen\s+)?(?:bana\s+)?(?:senin\s+)?", "", text, flags=re.IGNORECASE).strip()
-        query = re.sub(r"(?:bakmam\s+lazım|öğrenmek\s+istiyorum|merak\s+ettim|söyler\s+misin|bakar\s+mısın)[?.!]*$", "", query, flags=re.IGNORECASE).strip()
+        query = re.sub(r"(?:bakmam\s+lazım|öğrenmek\s+istiyorum|merak\s+ettim|söyler\s+misin|bakar\s+mısın|bilgi\s+ver)[?.!]*$", "", query, flags=re.IGNORECASE).strip()
         if not query or len(query) < 3:
             query = text
 
@@ -204,9 +220,16 @@ class AutonomousWebGroundingContextProvider:
                     f"[GÜNCEL DOĞRULANMIŞ WEB VE ARAŞTIRMA VERİLERİ]\n"
                     f"Araştırma Konusu: {query}\n"
                     f"{search_result}\n"
-                    f"ÖNEMLİ KURAL: Yanıtını kendi eski yerel model bilgine veya varsayımlarına göre DEĞİL, "
-                    f"yukarıdaki güncel ve güvenilir web araştırma verilerine dayandırarak oluştur. "
-                    f"Doğrulanmamış geçmiş bilgileri asla güncelmiş gibi sunma."
+                    f"ÖNEMLİ TALİMAT: Kendi yerel model eğitim hafızandaki eski/tahmini bilgileri KESİNLİKLE KULLANMA. "
+                    f"Yanıtını YALNIZCA yukarıdaki güncel ve güvenilir web araştırma sonuçlarına dayandır."
+                )
+            else:
+                return (
+                    f"[BİLGİ VE ARAŞTIRMA KISITI]\n"
+                    f"Kullanıcının araştırılmasını istediği konu ('{query}') hakkında dış web kaynaklarından "
+                    f"doğrulanmış bir veri henüz temin edilemedi.\n"
+                    f"ÖNEMLİ KURAL: Kendi yerel model eğitim hafızandan ezberden bilgi uydurma veya eski verilerle tahmin yürütme. "
+                    f"Kullanıcıya bu konuda doğrulanmış güncel bir araştırma verisi bulunamadığını dürüstçe belirt."
                 )
         except Exception:
             pass

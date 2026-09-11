@@ -15,6 +15,7 @@ class TestAutonomousWebGrounding(unittest.TestCase):
         self.assertEqual(provider.build_context('selam börü'), '')
         self.assertEqual(provider.build_context('kodla: def hello(): pass'), '')
         self.assertEqual(provider.build_context('sesi aç'), '')
+        self.assertEqual(provider.build_context('az önce ne demiştim hatırlıyor musun'), '')
         search_mock.assert_not_called()
 
     def test_factual_and_research_queries_trigger_web_grounding(self):
@@ -24,6 +25,16 @@ class TestAutonomousWebGrounding(unittest.TestCase):
         context = provider.build_context('2026 yılı asgari ücreti ne kadar olacak?')
         self.assertIn('[GÜNCEL DOĞRULANMIŞ WEB VE ARAŞTIRMA VERİLERİ]', context)
         self.assertIn('2026 asgari ücreti', context)
+        self.assertIn('KESİNLİKLE KULLANMA', context)
+        search_mock.assert_called_once()
+
+    def test_failed_search_injects_anti_hallucination_constraint(self):
+        search_mock = Mock(return_value=(False, 'Sonuç yok'))
+        provider = AutonomousWebGroundingContextProvider(search_fn=search_mock)
+
+        context = provider.build_context('Bilinmeyen bir konuda soru nedir?')
+        self.assertIn('[BİLGİ VE ARAŞTIRMA KISITI]', context)
+        self.assertIn('ezberden bilgi uydurma', context)
         search_mock.assert_called_once()
 
     def test_intent_router_transforms_arastir_prefix(self):
