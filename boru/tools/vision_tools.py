@@ -97,3 +97,4 @@ def analyze_screen(query: str = "Şu anda ekranda ne var, hata veya önemli bilg
                 os.remove(screenshot_path)
         except Exception:
             pass
+

@@ -45,3 +45,4 @@ class TestAudioCueService:
             import time
             time.sleep(0.3)
             assert mock_sound.play.call_count >= 1
+

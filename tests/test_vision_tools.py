@@ -61,3 +61,4 @@ class TestVisionTools:
             res = analyze_screen()
             assert "Ekran İncelendi (llava:latest)" in res
             assert "Python kod editörü" in res
+

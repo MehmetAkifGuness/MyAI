@@ -60,6 +60,22 @@ class TestSystemTools:
             res = resolve_system_command("lütfen spotify'ı aç")
             assert res == "Spotify açıldı."
 
+        with patch("boru.tools.system_tools.open_application", return_value=(True, "YouTube açıldı.")) as mock_open:
+            res = resolve_system_command("youtube aç")
+            assert res == "YouTube açıldı."
+            mock_open.assert_called_with("youtube")
+
+            res = resolve_system_command("youtube'u aç")
+            assert res == "YouTube açıldı."
+
+            res = resolve_system_command("aç youtube")
+            assert res == "YouTube açıldı."
+
+        with patch("boru.tools.system_tools.open_application", return_value=(True, "Not defteri açıldı.")) as mock_open:
+            res = resolve_system_command("not defterini aç")
+            assert res == "Not defteri açıldı."
+            mock_open.assert_called_with("not defteri")
+
         with patch("boru.tools.system_tools.control_volume", return_value=(True, "Ses artırıldı.")):
             res = resolve_system_command("sesi yükselt")
             assert res == "Ses artırıldı."
@@ -68,5 +84,14 @@ class TestSystemTools:
             res = resolve_system_command("pil durumu")
             assert res == "Pil: %100"
 
+        with patch("boru.tools.system_tools.search_web", return_value=(True, "Google'da arama açıldı.")) as mock_search:
+            res = resolve_system_command("google'da hava durumu ara")
+            assert res == "Google'da arama açıldı."
+            mock_search.assert_called_with("hava durumu", platform="google")
+
+            res = resolve_system_command("internette yapay zeka ara")
+            assert res == "Google'da arama açıldı."
+
         # Eşleşmeyen komut None dönmeli
         assert resolve_system_command("Python fonksiyonu nasıl yazılır?") is None
+

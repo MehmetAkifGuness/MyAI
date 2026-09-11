@@ -31,3 +31,4 @@ class TestBoruSystemTray:
             tray.stop()
             assert not tray.is_running
             mock_icon.stop.assert_called_once()
+

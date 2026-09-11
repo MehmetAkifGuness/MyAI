@@ -108,3 +108,4 @@ class BoruSystemTray:
                 self._on_exit()
             except Exception as e:
                 logger.debug(f"Tray exit hatası: {e}")
+

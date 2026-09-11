@@ -114,3 +114,4 @@ class AudioCueService:
     def play_error(self) -> None:
         """Anlaşılamadığında veya zaman aşımında çalan yumuşak uyarı tonu."""
         self._play_sound("error", [(392.0, 311.13)], duration=0.25)
+

@@ -19,16 +19,36 @@ VK_VOLUME_UP = 0xAF
 KEYEVENTF_KEYUP = 0x0002
 
 APP_COMMAND_MAP = {
+    # Medya & Web Siteleri
+    "youtube": "https://www.youtube.com",
+    "youtube.com": "https://www.youtube.com",
+    "yt": "https://www.youtube.com",
     "spotify": "spotify:",
+    "netflix": "https://www.netflix.com",
+    "google": "https://www.google.com",
+    "google.com": "https://www.google.com",
+    "github": "https://www.github.com",
+    "github.com": "https://www.github.com",
+    "twitter": "https://www.x.com",
+    "x": "https://www.x.com",
+    "instagram": "https://www.instagram.com",
+    "whatsapp": "https://web.whatsapp.com",
+    "discord": "discord:",
+    "gmail": "https://mail.google.com",
+    "ekşi": "https://eksisozluk.com",
+    "ekşisözlük": "https://eksisozluk.com",
+    "tarayıcı": "https://www.google.com",
+    # Tarayıcılar
     "chrome": "chrome",
     "google chrome": "chrome",
-    "tarayıcı": "https://www.google.com",
     "edge": "msedge",
+    # Kod & Editör
     "vscode": "code",
     "vs code": "code",
     "kod editörü": "code",
     "not defteri": "notepad",
     "notepad": "notepad",
+    # Sistem Araçları
     "hesap makinesi": "calc",
     "hesap": "calc",
     "calculator": "calc",
@@ -48,9 +68,18 @@ APP_COMMAND_MAP = {
 
 
 def open_application(app_name: str) -> Tuple[bool, str]:
-    """İstenen uygulamayı Windows üzerinde güvenle ve arka planda başlatır."""
+    """İstenen uygulama veya web sitesini Windows üzerinde güvenle ve arka planda başlatır."""
     cleaned = app_name.lower().strip()
     cmd = APP_COMMAND_MAP.get(cleaned)
+
+    # Eğer bir domain / URL ise (örn: youtube.com, google.com vb.)
+    if not cmd and ("." in cleaned and not cleaned.endswith((".exe", ".bat", ".cmd", ".py"))):
+        url = cleaned if cleaned.startswith(("http://", "https://")) else f"https://{cleaned}"
+        try:
+            webbrowser.open(url)
+            return True, f"{cleaned} açıldı."
+        except Exception as e:
+            return False, f"{cleaned} açılamadı: {e}"
 
     try:
         startupinfo = subprocess.STARTUPINFO()
@@ -61,7 +90,8 @@ def open_application(app_name: str) -> Tuple[bool, str]:
         if cmd:
             if cmd.startswith(("http://", "https://")):
                 webbrowser.open(cmd)
-                return True, f"{app_name.capitalize()} açıldı."
+                display_name = "YouTube" if "youtube" in cleaned else app_name.capitalize()
+                return True, f"{display_name} açıldı."
             if cmd.endswith(":"):
                 os.startfile(cmd)
                 return True, f"{app_name.capitalize()} açıldı."
@@ -184,17 +214,36 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     """
     cleaned = user_text.lower().strip().strip(".!?,")
 
-    # 1. Uygulama Açma Komutları ("... aç", "... başlat")
-    # Örnek: "spotify aç", "spotify'ı aç", "chrome'u başlat", "hesap makinesini aç"
-    app_patterns = [
-        r"^(?:lütfen\s+)?(spotify|chrome|google chrome|tarayıcı|edge|vscode|vs code|kod editörü|not defteri|notepad|hesap makinesi|hesap|calculator|terminal|powershell|cmd|görev yöneticisi|dosya gezgini|ayarlar|denetim masası)(?:'ı|'i|'u|'ü|'yi|'yı)?\s+(?:aç|başlat|çalıştır)$",
-        r"^(?:aç|başlat|çalıştır)\s+(?:lütfen\s+)?(spotify|chrome|google chrome|tarayıcı|edge|vscode|vs code|kod editörü|not defteri|notepad|hesap makinesi|hesap|calculator|terminal|powershell|cmd|görev yöneticisi|dosya gezgini|ayarlar|denetim masası)$",
-    ]
-    for pattern in app_patterns:
-        match = re.match(pattern, cleaned)
-        if match:
-            app_target = match.group(1)
-            ok, msg = open_application(app_target)
+    # 1. Uygulama ve Web Sitelerini Açma Komutları ("... aç", "aç ...", "... başlat")
+    # Örnek: "youtube aç", "youtube'u aç", "lütfen spotify aç", "aç youtube", "not defterini aç"
+    target_cand = None
+    open_suffix_match = re.match(r"^(?:lütfen\s+)?(.+?)\s+(?:aç|başlat|çalıştır)$", cleaned)
+    open_prefix_match = re.match(r"^(?:aç|başlat|çalıştır)\s+(?:lütfen\s+)?(.+?)$", cleaned)
+
+    if open_suffix_match:
+        target_cand = open_suffix_match.group(1).strip()
+    elif open_prefix_match:
+        target_cand = open_prefix_match.group(1).strip()
+
+    if target_cand:
+        # Ekleri temizle (youtube'u -> youtube, spotify'ı -> spotify, not defterini -> not defteri)
+        normalized = re.sub(r"'(?:[ıiuüae]|y[ıiuüae]|n[ıiuüae])?$", "", target_cand).strip()
+        if normalized not in APP_COMMAND_MAP:
+            # Türkçe tamlayan/iyelik eklerini ayıkla: not defterini -> not defteri, hesap makinesini -> hesap makinesi
+            if normalized.endswith(("ini", "ını", "unu", "ünü")):
+                cand = normalized[:-2]
+                if cand in APP_COMMAND_MAP:
+                    normalized = cand
+            elif normalized.endswith(("i", "ı", "u", "ü", "yi", "yı", "yu", "yü")):
+                cand = re.sub(r"(?:yi|yı|yu|yü|[ıiuü])$", "", normalized).strip()
+                if cand in APP_COMMAND_MAP:
+                    normalized = cand
+
+        if normalized in APP_COMMAND_MAP or "." in normalized:
+            ok, msg = open_application(normalized)
+            return msg
+        if target_cand in APP_COMMAND_MAP:
+            ok, msg = open_application(target_cand)
             return msg
 
     # 2. Ses Kontrolü
@@ -216,7 +265,7 @@ def resolve_system_command(user_text: str) -> Optional[str]:
         return msg
 
     # 4. YouTube / Google Arama Komutları
-    # Örnek: "youtube'da duman ara", "youtube aç duman", "google'da python nedir ara"
+    # Örnek: "youtube'da duman ara", "youtube aç duman", "google'da python nedir ara", "google'da ara python"
     yt_match = re.search(r"(?:youtube(?:'da|'de)?\s+(?:arama\s+yap|ara|çal|aç)\s*:?\s*|youtube'da\s+)(.+?)(?:\s+(?:ara|çal|aç))?$", cleaned)
     if yt_match and "youtube" in cleaned:
         query = yt_match.group(1).replace("youtube", "").strip()
@@ -224,9 +273,16 @@ def resolve_system_command(user_text: str) -> Optional[str]:
             _, msg = search_web(query, platform="youtube")
             return msg
 
-    google_match = re.search(r"(?:google(?:'da|'de)?\s+(?:ara|arama yap)\s*:?\s*)(.+?)$", cleaned)
-    if google_match:
-        query = google_match.group(1).strip()
+    google_match = re.search(r"(?:google(?:'da|'de)?\s+(?:ara|arama yap)\s*:?\s*|google(?:'da|'de)?\s+)(.+?)(?:\s+(?:ara|arama yap))?$", cleaned)
+    if google_match and "google" in cleaned:
+        query = google_match.group(1).replace("google", "").strip()
+        if query:
+            _, msg = search_web(query, platform="google")
+            return msg
+
+    web_match = re.search(r"(?:internette|webde|internetten)\s+(?:ara|arama yap)\s*:?\s*(.+?)$", cleaned) or re.search(r"(?:internette|webde|internetten)\s+(.+?)\s+(?:ara|arama yap)$", cleaned)
+    if web_match:
+        query = web_match.group(1).strip()
         if query:
             _, msg = search_web(query, platform="google")
             return msg
