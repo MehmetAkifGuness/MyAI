@@ -12,3 +12,4 @@ __pycache__/
 /repositories/
 /data/verified_experience/
 /data/conversation_evals/
+user_notes.json

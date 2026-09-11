@@ -20,6 +20,8 @@ VK_MEDIA_NEXT_TRACK = 0xB0
 VK_MEDIA_PREV_TRACK = 0xB1
 VK_MEDIA_STOP = 0xB2
 VK_MEDIA_PLAY_PAUSE = 0xB3
+VK_LWIN = 0x5B
+VK_D = 0x44
 KEYEVENTF_KEYUP = 0x0002
 
 APP_COMMAND_MAP = {
@@ -180,6 +182,76 @@ def control_media(action: str) -> Tuple[bool, str]:
     except Exception as e:
         logger.debug(f"Medya kontrol hatası: {e}")
         return False, f"Medya kontrol edilemedi: {e}"
+
+
+def show_desktop() -> Tuple[bool, str]:
+    """Tüm pencereleri küçülterek masaüstünü gösterir (Win+D)."""
+    try:
+        user32 = ctypes.windll.user32
+        user32.keybd_event(VK_LWIN, 0, 0, 0)
+        user32.keybd_event(VK_D, 0, 0, 0)
+        user32.keybd_event(VK_D, 0, KEYEVENTF_KEYUP, 0)
+        user32.keybd_event(VK_LWIN, 0, KEYEVENTF_KEYUP, 0)
+        return True, "Masaüstü gösterildi."
+    except Exception as e:
+        logger.debug(f"Masaüstünü gösterme hatası: {e}")
+        return False, f"Masaüstü gösterilemedi: {e}"
+
+
+def lock_workstation() -> Tuple[bool, str]:
+    """Windows oturumunu/ekranını kilitler (Win+L)."""
+    try:
+        ok = ctypes.windll.user32.LockWorkStation()
+        if ok:
+            return True, "Bilgisayar kilitlendi."
+        return False, "Bilgisayar kilitlenemedi."
+    except Exception as e:
+        logger.debug(f"Kilitleme hatası: {e}")
+        return False, f"Bilgisayar kilitlenemedi: {e}"
+
+
+def schedule_shutdown(seconds: int, action: str = "shutdown") -> Tuple[bool, str]:
+    """Bilgisayarı belirtilen süre sonra kapatılacak veya yeniden başlatılacak şekilde zamanlar."""
+    try:
+        flag = "/s" if action == "shutdown" else "/r"
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        subprocess.run(
+            ["shutdown.exe", flag, "/t", str(seconds)],
+            creationflags=creationflags,
+            startupinfo=startupinfo,
+            close_fds=True,
+            check=True,
+        )
+        mins = seconds // 60
+        act_name = "kapanacak" if action == "shutdown" else "yeniden başlayacak"
+        dur_str = f"{mins} dakika" if mins > 0 else f"{seconds} saniye"
+        return True, f"Bilgisayar {dur_str} sonra {act_name} şekilde ayarlandı."
+    except Exception as e:
+        logger.debug(f"Kapatma zamanlama hatası: {e}")
+        return False, f"Kapatma zamanlanamadı: {e}"
+
+
+def cancel_shutdown() -> Tuple[bool, str]:
+    """Planlanmış bilgisayar kapatma/yeniden başlatma işlemini iptal eder."""
+    try:
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        subprocess.run(
+            ["shutdown.exe", "/a"],
+            creationflags=creationflags,
+            startupinfo=startupinfo,
+            close_fds=True,
+            check=False,
+        )
+        return True, "Bilgisayarı kapatma işlemi iptal edildi."
+    except Exception as e:
+        logger.debug(f"Kapatma iptal hatası: {e}")
+        return False, f"Kapatma iptal edilemedi: {e}"
 
 
 class _MEMORYSTATUSEX(ctypes.Structure):
@@ -365,5 +437,64 @@ def resolve_system_command(user_text: str) -> Optional[str]:
             return quick_res
     except Exception as e:
         logger.debug(f"Hızlı bilgi çözme hatası: {e}")
+
+    # 7. Akıllı Sayaç & Hatırlatıcı
+    try:
+        from boru.tools.reminder_tools import resolve_reminder_command
+        reminder_res = resolve_reminder_command(user_text)
+        if reminder_res is not None:
+            return reminder_res
+    except Exception as e:
+        logger.debug(f"Hatırlatıcı çözme hatası: {e}")
+
+    # 8. Pano (Clipboard) Asistanı
+    try:
+        from boru.tools.clipboard_tools import resolve_clipboard_command
+        clip_res = resolve_clipboard_command(user_text)
+        if clip_res is not None:
+            return clip_res
+    except Exception as e:
+        logger.debug(f"Pano çözme hatası: {e}")
+
+    # 9. Sesli Hızlı Not Defteri
+    try:
+        from boru.tools.notes_tools import resolve_notes_command
+        notes_res = resolve_notes_command(user_text)
+        if notes_res is not None:
+            return notes_res
+    except Exception as e:
+        logger.debug(f"Not defteri çözme hatası: {e}")
+
+    # 10. Windows Masaüstü & Güç Makroları
+    if any(k in cleaned for k in ("masaüstünü göster", "masaüstüne dön", "pencereleri küçült", "masaüstünü aç")):
+        _, msg = show_desktop()
+        return msg
+
+    if any(k in cleaned for k in ("bilgisayarı kilitle", "bilgisayarı kitle", "ekranı kilitle", "oturumu kilitle")):
+        _, msg = lock_workstation()
+        return msg
+
+    if any(k in cleaned for k in ("kapatmayı iptal et", "kapatmayı durdur", "kapatma iptal", "kapanmayı iptal et")):
+        _, msg = cancel_shutdown()
+        return msg
+
+    shutdown_match = re.search(r"^(?:(\d+)\s*(dakika|saat|sn|saniye)\s+sonra\s+)?bilgisayarı\s+(kapat|yeniden başlat)(?:\s+(\d+)\s*(dakika|saat|sn|saniye)\s+sonra)?$", cleaned)
+    if shutdown_match:
+        p1_val, p1_u, act, p2_val, p2_u = shutdown_match.groups()
+        dur_val = p1_val or p2_val
+        dur_u = p1_u or p2_u
+        secs = 60
+        if dur_val:
+            v = int(dur_val)
+            if dur_u in ("dakika", "dk"):
+                secs = v * 60
+            elif dur_u in ("saat",):
+                secs = v * 3600
+            else:
+                secs = v
+
+        action_type = "restart" if "yeniden" in act else "shutdown"
+        _, msg = schedule_shutdown(secs, action=action_type)
+        return msg
 
     return None

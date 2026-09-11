@@ -105,6 +105,21 @@ class TestSystemTools:
             assert res == "Medya oynatıldı / duraklatıldı."
             mock_media.assert_called_with("prev")
 
+        with patch("boru.tools.system_tools.show_desktop", return_value=(True, "Masaüstü gösterildi.")) as mock_desk:
+            res = resolve_system_command("masaüstünü göster")
+            assert res == "Masaüstü gösterildi."
+            mock_desk.assert_called_once()
+
+        with patch("boru.tools.system_tools.lock_workstation", return_value=(True, "Bilgisayar kilitlendi.")) as mock_lock:
+            res = resolve_system_command("bilgisayarı kilitle")
+            assert res == "Bilgisayar kilitlendi."
+            mock_lock.assert_called_once()
+
+        with patch("boru.tools.system_tools.cancel_shutdown", return_value=(True, "İptal edildi.")) as mock_cancel:
+            res = resolve_system_command("kapatmayı iptal et")
+            assert res == "İptal edildi."
+            mock_cancel.assert_called_once()
+
         # Eşleşmeyen komut None dönmeli
         assert resolve_system_command("Python fonksiyonu nasıl yazılır?") is None
 
