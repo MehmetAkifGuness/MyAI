@@ -61,7 +61,7 @@ def get_weather(location: str = "Istanbul") -> Tuple[bool, str]:
 
 def get_currency_rate(base: str = "USD", target: str = "TRY") -> Tuple[bool, str]:
     """
-    Frankfurter API üzerinden anlık resmi döviz kurunu çeker.
+    Güncel ve güvenilir döviz kurlarını anlık API üzerinden çeker.
     """
     base_code = base.upper().strip()
     target_code = target.upper().strip()
@@ -70,13 +70,14 @@ def get_currency_rate(base: str = "USD", target: str = "TRY") -> Tuple[bool, str
     if cached:
         return True, cached
 
+    # 1. Öncelikli Güvenilir Servis: open.er-api.com (Ücretsiz, limitsiz ve güncel)
     try:
-        url = f"https://api.frankfurter.app/latest?from={base_code}&to={target_code}"
+        url = f"https://open.er-api.com/v6/latest/{base_code}"
         req = urllib.request.Request(
             url,
             headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
         )
-        with urllib.request.urlopen(req, timeout=3.5) as resp:
+        with urllib.request.urlopen(req, timeout=4.0) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="replace"))
             rates = data.get("rates", {})
             val = rates.get(target_code)
@@ -92,11 +93,28 @@ def get_currency_rate(base: str = "USD", target: str = "TRY") -> Tuple[bool, str
                 result = f"1 {base_name} şu anda yaklaşık {val:.2f} {target_name} seviyesinde."
                 _set_cached(cache_key, result)
                 return True, result
-
-        return False, f"{base_code} kuru alınamadı."
     except Exception as e:
-        logger.debug(f"Döviz kuru çekme hatası: {e}")
-        return False, "Döviz kuru servisine şu anda ulaşılamıyor."
+        logger.debug(f"Birincil döviz API hatası: {e}")
+
+    # 2. Fallback: Frankfurter API
+    try:
+        url = f"https://api.frankfurter.app/latest?from={base_code}&to={target_code}"
+        req = urllib.request.Request(
+            url,
+            headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"},
+        )
+        with urllib.request.urlopen(req, timeout=3.5) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+            rates = data.get("rates", {})
+            val = rates.get(target_code)
+            if val is not None:
+                result = f"1 {base_code} şu anda yaklaşık {val:.2f} {target_code} seviyesinde."
+                _set_cached(cache_key, result)
+                return True, result
+    except Exception as e:
+        logger.debug(f"Fallback döviz API hatası: {e}")
+
+    return False, "Döviz kuru servisine şu anda ulaşılamıyor."
 
 
 # Türkiye'nin popüler illeri (şehir çıkarımı için)
@@ -136,18 +154,18 @@ def resolve_quick_info(user_text: str) -> Optional[str]:
         return msg
 
     # 2. Döviz Kuru Sorguları
-    # Dolar
-    if re.search(r"\b(?:dolar(?:ın)?|1\s*dolar)\b.*\b(?:kaç|ne kadar|fiyatı|kuru|seviyesinde)\b", cleaned) or cleaned in ("dolar", "dolar kuru", "dolar kaç tl", "dolar ne kadar"):
+    # Dolar (Her türlü serbest kalıp: "dolar kurunu söyler misin", "dolar kuru ne", "dolar kaç tl", "dolar ne kadar")
+    if ("dolar" in cleaned and any(k in cleaned for k in ("kur", "kaç", "ne kadar", "söyle", "fiyat", "değer", "eder", "tl"))) or cleaned in ("dolar", "dolar kuru"):
         ok, msg = get_currency_rate("USD", "TRY")
         return msg
 
-    # Euro
-    if re.search(r"\b(?:euro(?:nun)?|avro(?:nun)?|1\s*euro)\b.*\b(?:kaç|ne kadar|fiyatı|kuru|seviyesinde)\b", cleaned) or cleaned in ("euro", "euro kuru", "euro kaç tl", "euro ne kadar", "avro"):
+    # Euro / Avro
+    if (any(k in cleaned for k in ("euro", "avro")) and any(k in cleaned for k in ("kur", "kaç", "ne kadar", "söyle", "fiyat", "değer", "eder", "tl"))) or cleaned in ("euro", "euro kuru", "avro"):
         ok, msg = get_currency_rate("EUR", "TRY")
         return msg
 
-    # Sterlin
-    if re.search(r"\b(?:sterlin(?:in)?|pound(?:un)?)\b.*\b(?:kaç|ne kadar|fiyatı|kuru)\b", cleaned):
+    # Sterlin / Pound
+    if any(k in cleaned for k in ("sterlin", "pound")) and any(k in cleaned for k in ("kur", "kaç", "ne kadar", "söyle", "fiyat", "tl")):
         ok, msg = get_currency_rate("GBP", "TRY")
         return msg
 
