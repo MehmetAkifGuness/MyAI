@@ -32,10 +32,13 @@ TASK_NAME = "BoruAIService"
 
 
 def get_project_root() -> Path:
+    here = Path(__file__).resolve().parent
+    if (here / "main.py").exists():
+        return here
     primary = Path(r"C:\Users\gunes\KendiYapayZekam")
-    if primary.exists():
+    if (primary / "main.py").exists():
         return primary
-    return Path(__file__).resolve().parent
+    return here
 
 
 def get_pythonw() -> Path:

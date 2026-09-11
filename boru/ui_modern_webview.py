@@ -1758,9 +1758,14 @@ def run_modern_app(
         height=780,
         min_size=(900, 640),
         background_color="#07090E",
-        hidden=hidden,
+        minimized=True if hidden else False,
     )
     api.set_window(window)
+    if hidden:
+        try:
+            window.events.loaded += lambda: window.hide()
+        except Exception:
+            pass
     if on_closing:
         window.events.closing += on_closing
     if on_window_created:
