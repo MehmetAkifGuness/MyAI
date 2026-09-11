@@ -31,7 +31,6 @@ def _cleanup_stale_processes():
 
 
 def main():
-    _cleanup_stale_processes()
     parser = argparse.ArgumentParser(description="Börü - Yerel Yapay Zekâ ve Otonom Kodlama Asistanı")
     parser.add_argument(
         "--version",
@@ -46,6 +45,7 @@ def main():
         help="Arayüz stili: 'modern' (2026 WebView2 Glassmorphic Arayüz) veya 'classic' (CustomTkinter)",
     )
     args = parser.parse_args()
+    _cleanup_stale_processes()
     app = build_release(version=args.version)
 
     if args.ui == "modern":
