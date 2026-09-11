@@ -72,6 +72,28 @@ APP_COMMAND_MAP = {
     "denetim masası": "control",
 }
 
+APP_PROCESS_MAP = {
+    "chrome": "chrome.exe",
+    "google chrome": "chrome.exe",
+    "edge": "msedge.exe",
+    "msedge": "msedge.exe",
+    "spotify": "Spotify.exe",
+    "discord": "Discord.exe",
+    "not defteri": "notepad.exe",
+    "notepad": "notepad.exe",
+    "vscode": "Code.exe",
+    "vs code": "Code.exe",
+    "kod editörü": "Code.exe",
+    "hesap makinesi": "CalculatorApp.exe",
+    "hesap": "CalculatorApp.exe",
+    "calculator": "CalculatorApp.exe",
+    "terminal": "powershell.exe",
+    "powershell": "powershell.exe",
+    "cmd": "cmd.exe",
+    "görev yöneticisi": "Taskmgr.exe",
+    "task manager": "Taskmgr.exe",
+}
+
 
 def open_application(app_name: str) -> Tuple[bool, str]:
     """İstenen uygulama veya web sitesini Windows üzerinde güvenle ve arka planda başlatır."""
@@ -122,6 +144,99 @@ def open_application(app_name: str) -> Tuple[bool, str]:
     except Exception as e:
         logger.debug(f"Uygulama başlatma hatası ({app_name}): {e}")
         return False, f"{app_name} açılamadı: {e}"
+
+
+def close_application(app_name: str) -> Tuple[bool, str]:
+    """İstenen uygulamayı Windows üzerinde güvenle ve arka planda sonlandırır."""
+    cleaned = app_name.lower().strip()
+    normalized = re.sub(r"'(?:[ıiuüae]|y[ıiuüae]|n[ıiuüae])?$", "", cleaned).strip()
+    if normalized not in APP_PROCESS_MAP:
+        if normalized.endswith(("ini", "ını", "unu", "ünü")):
+            cand = normalized[:-2]
+            if cand in APP_PROCESS_MAP:
+                normalized = cand
+        elif normalized.endswith(("i", "ı", "u", "ü", "yi", "yı", "yu", "yü")):
+            cand = re.sub(r"(?:yi|yı|yu|yü|[ıiuü])$", "", normalized).strip()
+            if cand in APP_PROCESS_MAP:
+                normalized = cand
+
+    proc_name = APP_PROCESS_MAP.get(normalized)
+    if not proc_name:
+        proc_name = APP_PROCESS_MAP.get(cleaned)
+    if not proc_name:
+        if cleaned.endswith(".exe"):
+            proc_name = cleaned
+        else:
+            proc_name = f"{cleaned}.exe"
+
+    try:
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008
+
+        res = subprocess.run(
+            ["taskkill", "/F", "/IM", proc_name],
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        display_name = normalized.capitalize() if normalized in APP_PROCESS_MAP else app_name.capitalize()
+        if res.returncode == 0:
+            return True, f"{display_name} kapatıldı."
+        else:
+            return False, f"{display_name} açık değil veya kapatılamadı."
+    except Exception as e:
+        logger.debug(f"Uygulama kapatma hatası ({app_name}): {e}")
+        return False, f"{app_name} kapatılamadı: {e}"
+
+
+def get_top_processes(limit: int = 3) -> Tuple[bool, str]:
+    """En çok bellek tüketen aktif işlemleri tespit eder."""
+    try:
+        import csv
+        import io
+        startupinfo = subprocess.STARTUPINFO()
+        startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+        startupinfo.wShowWindow = subprocess.SW_HIDE
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008
+
+        out = subprocess.check_output(
+            ["tasklist", "/FO", "CSV", "/NH"],
+            startupinfo=startupinfo,
+            creationflags=creationflags,
+            text=True,
+            encoding="cp1254",
+            errors="ignore",
+            timeout=5,
+        )
+        reader = csv.reader(io.StringIO(out))
+        procs: dict[str, int] = {}
+        for row in reader:
+            if len(row) >= 5:
+                name = row[0]
+                mem_str = row[4].replace(".", "").replace(" ", "").replace("K", "").replace("\xa0", "").strip()
+                try:
+                    mem_kb = int(mem_str)
+                    procs[name] = procs.get(name, 0) + mem_kb
+                except Exception:
+                    pass
+        if not procs:
+            return False, "İşlem listesi alınamadı."
+
+        sorted_procs = sorted(procs.items(), key=lambda x: x[1], reverse=True)[:limit]
+        items = []
+        for name, kb in sorted_procs:
+            mb = kb / 1024
+            items.append(f"{name} ({mb:.0f} MB)")
+
+        msg = "En çok bellek kullanan uygulamalar: " + ", ".join(items) + "."
+        return True, msg
+    except Exception as e:
+        logger.debug(f"İşlem listesi alma hatası: {e}")
+        return False, f"İşlem listesi alınamadı: {e}"
 
 
 def control_volume(action: str, steps: int = 5) -> Tuple[bool, str]:
@@ -332,6 +447,15 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     """
     cleaned = user_text.lower().strip().strip(".!?,")
 
+    # 0. Günlük Brifing (Jarvis Briefing)
+    try:
+        from boru.tools.briefing_tools import resolve_briefing_command
+        brf_res = resolve_briefing_command(user_text)
+        if brf_res is not None:
+            return brf_res
+    except Exception as e:
+        logger.debug(f"Brifing çözme hatası: {e}")
+
     # 1. Uygulama ve Web Sitelerini Açma Komutları ("... aç", "aç ...", "... başlat")
     # Örnek: "youtube aç", "youtube'u aç", "lütfen spotify aç", "aç youtube", "not defterini aç"
     target_cand = None
@@ -364,6 +488,27 @@ def resolve_system_command(user_text: str) -> Optional[str]:
             ok, msg = open_application(target_cand)
             return msg
 
+    # 1.1 Uygulama Kapatma Komutları ("... kapat", "kapat ...", "... sonlandır")
+    # Örnek: "chrome'u kapat", "not defterini kapat", "spotify'ı kapat", "kapat vscode", "discord sonlandır"
+    close_suffix = re.match(r"^(?:lütfen\s+)?(.+?)\s+(?:kapat|sonlandır|durdur)$", cleaned)
+    close_prefix = re.match(r"^(?:kapat|sonlandır|durdur)\s+(?:lütfen\s+)?(.+?)$", cleaned)
+    close_cand = None
+    if close_suffix:
+        close_cand = close_suffix.group(1).strip()
+    elif close_prefix:
+        close_cand = close_prefix.group(1).strip()
+
+    if close_cand and not any(k in close_cand for k in ("bilgisayar", "pc", "ekran", "müzik", "şarkı", "kapatmayı", "kapanma", "oturumu", "ses")):
+        norm_cand = re.sub(r"'(?:[ıiuüae]|y[ıiuüae]|n[ıiuüae])?$", "", close_cand).strip()
+        if norm_cand.endswith(("ini", "ını", "unu", "ünü")):
+            norm_cand = norm_cand[:-2]
+        elif norm_cand.endswith(("i", "ı", "u", "ü", "yi", "yı", "yu", "yü")):
+            norm_cand = re.sub(r"(?:yi|yı|yu|yü|[ıiuü])$", "", norm_cand).strip()
+
+        if norm_cand in APP_PROCESS_MAP or close_cand in APP_PROCESS_MAP or norm_cand.endswith(".exe"):
+            _, msg = close_application(norm_cand)
+            return msg
+
     # 2. Medya & Müzik Kontrolü (Spotify, YouTube, VLC vb.)
     # Örnek: "müziği durdur", "şarkıyı duraklat", "devam ettir", "müziği çal", "sonraki şarkı", "şarkıyı geç", "önceki parça"
     if re.search(r"\b(?:müziği|şarkıyı|parçayı|medyayı)?\s*(?:durdur|duraklat|pause)\b", cleaned) and "uygulama" not in cleaned:
@@ -391,9 +536,14 @@ def resolve_system_command(user_text: str) -> Optional[str]:
         _, msg = control_volume("mute")
         return msg
 
-    # 3. Sistem / Pil / Donanım Durumu
-    # Örnek: "şarjım kaç", "pil durumu", "sistem durumu", "ram kullanımı", "bilgisayarın durumu"
-    if any(k in cleaned for k in ("pil durumu", "şarjım kaç", "şarj ne kadar", "sistem durumu", "ram kullanımı", "donanım durumu", "bilgisayar durumu")):
+    # 3.1 Sistem / RAM / Pil / Donanım Durumu
+    # Örnek: "hangi program çok ram yiyor", "en çok bellek harcayanlar"
+    if any(k in cleaned for k in ("hangi program çok ram", "en çok bellek", "en çok ram", "belleği kim kullanıyor", "ram sömüren", "en çok kaynak")):
+        _, msg = get_top_processes()
+        return msg
+
+    # Örnek: "şarjım kaç", "pil durumu", "sistem durumu", "ram kullanımı", "ram durumu", "bellek durumu", "donanım durumu"
+    if any(k in cleaned for k in ("pil durumu", "şarjım kaç", "şarj ne kadar", "sistem durumu", "ram kullanımı", "ram durumu", "bellek durumu", "donanım durumu", "bilgisayar durumu", "ne kadar ram")):
         _, msg = get_system_status()
         return msg
 

@@ -244,6 +244,34 @@ class AssistantService:
 
             return cleaned_answer
 
+        # 2. Zincirleme / Çoklu Komutlar (örn: "müziği durdur ve masaüstünü göster")
+        try:
+            from boru.tools.compound_tools import resolve_compound_commands
+
+            def _sub_resolve(text: str) -> str | None:
+                try:
+                    from boru.tools.system_tools import resolve_system_command
+                    s = resolve_system_command(text)
+                    if s is not None:
+                        return s
+                except Exception:
+                    pass
+
+                for res_item in self._direct_response_resolvers:
+                    try:
+                        ans = res_item.resolve(text)
+                        if ans:
+                            return ans.strip()
+                    except Exception:
+                        pass
+                return None
+
+            comp_ans = resolve_compound_commands(user_message, resolver_fn=_sub_resolve)
+            if comp_ans is not None:
+                return comp_ans
+        except Exception:
+            pass
+
         return None
 
     def _build_model_messages(

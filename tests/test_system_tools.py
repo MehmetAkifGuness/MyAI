@@ -120,6 +120,31 @@ class TestSystemTools:
             assert res == "İptal edildi."
             mock_cancel.assert_called_once()
 
+        with patch("boru.tools.system_tools.close_application", return_value=(True, "Chrome kapatıldı.")) as mock_close:
+            res = resolve_system_command("chrome'u kapat")
+            assert res == "Chrome kapatıldı."
+            mock_close.assert_called_with("chrome")
+
+            res = resolve_system_command("not defterini kapat")
+            assert res == "Chrome kapatıldı."
+
+        with patch("boru.tools.system_tools.get_top_processes", return_value=(True, "En çok bellek kullananlar: Code.exe")) as mock_top:
+            res = resolve_system_command("hangi program çok ram yiyor")
+            assert "Code.exe" in res
+
         # Eşleşmeyen komut None dönmeli
         assert resolve_system_command("Python fonksiyonu nasıl yazılır?") is None
+
+    def test_close_application_mock(self):
+        from boru.tools.system_tools import close_application
+        with patch("subprocess.run") as mock_run:
+            mock_run.return_value = MagicMock(returncode=0)
+            ok, msg = close_application("chrome")
+            assert ok
+            assert "Chrome kapatıldı" in msg
+
+            mock_run.return_value = MagicMock(returncode=1)
+            ok, msg = close_application("bilinmeyen_app")
+            assert not ok
+            assert "açık değil veya kapatılamadı" in msg
 
