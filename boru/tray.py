@@ -20,6 +20,32 @@ def _create_boru_tray_icon():
     return img
 
 
+def is_startup_installed() -> bool:
+    """Windows Başlangıç klasöründe Börü VBS dosyasının kurulu olup olmadığını kontrol eder."""
+    try:
+        import os
+        from pathlib import Path
+        appdata = os.environ.get("APPDATA")
+        if appdata:
+            p = Path(appdata) / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "Boru_AI_Asistan.vbs"
+            return p.exists()
+    except Exception:
+        pass
+    return False
+
+
+def toggle_startup_setting() -> None:
+    """Windows Başlangıç ayarını tersine çevirir (Aktif <-> Pasif)."""
+    try:
+        from install_startup import install_startup, remove_startup
+        if is_startup_installed():
+            remove_startup()
+        else:
+            install_startup()
+    except Exception as e:
+        logger.debug(f"Başlangıç ayarı değiştirilemedi: {e}")
+
+
 class BoruSystemTray:
     """
     Börü Windows Sistem Tepsisi (System Tray / Saatin Yanı) Yöneticisi.
@@ -55,6 +81,12 @@ class BoruSystemTray:
                 pystray.MenuItem("🐺 Börü'yü Göster", lambda: self._safe_call(self._on_open), default=True),
                 pystray.MenuItem("🎙️ Sesli Sohbet (Ctrl+Shift+J)", lambda: self._safe_call(self._on_voice)),
                 pystray.MenuItem("⚡ Börü Spotlight (Ctrl+Shift+B)", lambda: self._safe_call(self._on_spotlight)),
+                pystray.Menu.SEPARATOR,
+                pystray.MenuItem(
+                    "🚀 Windows ile Başlat",
+                    lambda: toggle_startup_setting(),
+                    checked=lambda item: is_startup_installed(),
+                ),
                 pystray.Menu.SEPARATOR,
                 pystray.MenuItem("❌ Tamamen Kapat", lambda: self._handle_exit()),
             )

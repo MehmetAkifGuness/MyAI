@@ -23,11 +23,14 @@ project_root = Path(__file__).resolve().parent
 if str(project_root) not in sys.path:
     sys.path.insert(0, str(project_root))
 
-import main_v170
-
-
 def main():
-    app = main_v170.build_application()
+    try:
+        from boru.release import build_release
+        app = build_release(version="V13.0")
+    except Exception:
+        import main_v170
+        app = main_v170.build_application()
+
     # Ana pencereyi gizle (tamamen arka planda çalış)
     app.withdraw()
     app.mainloop()
