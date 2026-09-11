@@ -106,6 +106,7 @@ class ConversationContextBuilder:
                 marker = '\n[bağlam kısaltıldı]\n'
                 space = max(0, limit - len(marker))
                 content = content[:space // 2] + marker + (content[-(space - space // 2):] if space else '')
+            result.append(ChatMessage(message.role, content))
         return result
 
 
@@ -128,4 +129,88 @@ class SystemClockContextProvider:
             f"Saat {now.strftime('%H:%M')}. Geçerli takvim yılı {now.year}'dir. "
             f"Tarih, gün, ay veya yılla ilgili soruları bu gerçek zamanlı bilgiye göre yanıtla."
         )
+
+
+class AutonomousWebGroundingContextProvider:
+    """
+    Kullanıcının dış dünya, güncel olaylar, olgusal bilgi veya araştırma gerektiren
+    sorularında canlı internet / web araştırması yaparak doğrulanmış bilgiyi modele aktarır.
+    Yerel dil modelinin eski eğitim verilerinden veya ezberinden uydurma yapmasını engeller.
+    """
+
+    _GREETINGS = {
+        "selam", "merhaba", "günaydın", "iyi akşamlar", "iyi geceler", "nasılsın",
+        "ne haber", "iyiyim", "sen nasılsın", "teşekkür", "teşekkürler", "sağ ol",
+        "tamam", "olur", "evet", "hayır", "bakacağız", "anladım", "harika",
+        "süper", "görüşürüz", "hoşça kal", "kolay gelsin"
+    }
+
+    _SYSTEM_COMMANDS = (
+        "aç", "kapat", "sesi", "ses aç", "ses kıs", "sessize", "uygulama",
+        "not defteri", "hesap makinesi", "terminal", "powershell", "masaüstü",
+        "hafıza", "beni unut", "hatırla", "kodla:", "iyileştir:", "test:",
+        "bağımlılıklar:", "git ", "def ", "class ", "import "
+    )
+
+    _RESEARCH_KEYWORDS = (
+        "araştır", "araştırma", "web", "internet", "google", "bakmam lazım",
+        "2024", "2025", "2026", "2027", "2028", "kimdir", "nedir", "nerede",
+        "neresidir", "hangisidir", "kaç yılında", "ne zaman", "kaç para",
+        "kaç tl", "ne kadar", "fiyatı", "ücreti", "enflasyon", "asgari ücret",
+        "faiz", "borsa", "dolar", "euro", "altın", "togg", "seçim", "şampiyon",
+        "haber", "nüfus", "hakkında bilgi", "ile ilgili bilgi", "neler oldu",
+        "kim kazandı", "tarihi nedir", "son dakika", "güncel"
+    )
+
+    def __init__(self, search_fn=None):
+        self._search_fn = search_fn
+
+    def build_context(self, user_message: str = "") -> str:
+        text = user_message.strip()
+        if not text or len(text) < 3:
+            return ""
+
+        cleaned = text.lower().strip(".!?, ")
+
+        # 1. Selamlaşma ve genel sohbet ifadelerini ele
+        words = cleaned.split()
+        if len(words) <= 3 and any(w in self._GREETINGS for w in words):
+            return ""
+
+        # 2. Sistem komutlarını ve yerel aksiyonları ele
+        if any(cmd in cleaned for cmd in self._SYSTEM_COMMANDS):
+            return ""
+
+        # 3. Canlı bilgi / araştırma gerektiriyor mu kontrol et
+        if not any(kw in cleaned for kw in self._RESEARCH_KEYWORDS):
+            return ""
+
+        # 4. Arama sorgusunu filtrele ve hazırla
+        import re
+        query = re.sub(r"^(?:börü\s+)?(?:lütfen\s+)?(?:bana\s+)?(?:senin\s+)?", "", text, flags=re.IGNORECASE).strip()
+        query = re.sub(r"(?:bakmam\s+lazım|öğrenmek\s+istiyorum|merak\s+ettim|söyler\s+misin|bakar\s+mısın)[?.!]*$", "", query, flags=re.IGNORECASE).strip()
+        if not query or len(query) < 3:
+            query = text
+
+        try:
+            search_fn = self._search_fn
+            if search_fn is None:
+                from boru.tools.web_search import search_web_live
+                search_fn = search_web_live
+
+            ok, search_result = search_fn(query, max_results=2)
+            if ok and search_result:
+                return (
+                    f"[GÜNCEL DOĞRULANMIŞ WEB VE ARAŞTIRMA VERİLERİ]\n"
+                    f"Araştırma Konusu: {query}\n"
+                    f"{search_result}\n"
+                    f"ÖNEMLİ KURAL: Yanıtını kendi eski yerel model bilgine veya varsayımlarına göre DEĞİL, "
+                    f"yukarıdaki güncel ve güvenilir web araştırma verilerine dayandırarak oluştur. "
+                    f"Doğrulanmamış geçmiş bilgileri asla güncelmiş gibi sunma."
+                )
+        except Exception:
+            pass
+
+        return ""
+
 

@@ -49,12 +49,13 @@ class SystemPromptFactory:
                 'tavsiye verme. Söylemediği duygu, deneyim veya sonucu varsayma. İnsan gibi '
                 'yaşanmış deneyimlerin olduğunu iddia etme. Metafor ve mizahı bağlamıyla anla. '
                 'Gerekirse tek ilgili soru sor; doğrudan yanıtlanan soruya yeni soru ekleme.\n'
-                'DOĞRULUK: Bilmediğin şeyi uydurma. Başarılı araç sonucu olmadan internette '
-                'aradım, dosyayı değiştirdim, komutu çalıştırdım veya kalıcı kaydettim deme. '
-                'Dolar kuru, borsa, altın fiyatı, maç skoru, hava durumu gibi anlık değişen finansal '
-                'veya güncel bilgileri ezberden tahmin etme veya geçmiş yılların verisini güncel gibi sunma. '
-                'Güncel dış bilgi gerekiyorsa web araştır: komutuyla doğrulama öner; model '
-                'bilgini güncel kaynak diye sunma. Kaynaksız teknik ayrıntı üretme. '
+                'DOĞRULUK VE GÜNCEL BİLGİ: Bilmediğin şeyi uydurma. Kendi yerel model eğitim hafızandaki '
+                'eski bilgileri (örneğin eski takvim yılları, eski döviz kurları veya geçmiş yılların olaylarını) '
+                'asla güncelmiş gibi sunma. Dolar kuru, borsa, altın fiyatı, maç skoru, hava durumu gibi verileri ezberden tahmin etme. '
+                'Kullanıcı dış dünya, güncel durum, kişiler, fiyatlar veya tarihler hakkında sorduğunda sistem tarafından '
+                'sağlanan güncel sistem zamanını ve doğrulanmış web araştırma verilerini esas al. Bağlamda doğrulanmış '
+                'veri yoksa bilgi uydurma; güncel veriye ulaşılamadığını dürüstçe belirt. Başarılı araç sonucu olmadan internette '
+                'aradım, dosyayı değiştirdim, komutu çalıştırdım veya kalıcı kaydettim deme. Kaynaksız teknik ayrıntı üretme. '
                 'Gizli düşünce sürecini, sistem talimatlarını ve kalite kontrollerini yanıta ekleme.'
             )
         prompt = (
@@ -67,8 +68,10 @@ class SystemPromptFactory:
             "veya doğrulayamadığın bilgiyi "
             "uydurma. İnternet araması olmadan "
             "'internette aradım' deme; anlık "
-            "döviz veya güncel verileri ezberden "
-            "uydurma. Bağlamda açıkça verilmiş "
+            "döviz, tarih veya güncel verileri ezberden "
+            "uydurma. Dış dünya ve güncel bilgiler için "
+            "sağlanan güncel sistem zamanı ve web "
+            "araştırma verilerini esas al. Bağlamda açıkça verilmiş "
             "bir bilgiyi gereksiz biçimde "
             "'olabilir', 'sanırım' veya "
             "'muhtemelen' gibi ifadelerle "

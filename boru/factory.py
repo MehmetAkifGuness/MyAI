@@ -42,6 +42,10 @@ from boru.api_tools import (
 from boru.assistant import (
     AssistantService,
 )
+from boru.context import (
+    AutonomousWebGroundingContextProvider,
+    SystemClockContextProvider,
+)
 from boru.coding import (
     ControlledCodingCoordinator,
     RuleBasedCodingRequestParser,
@@ -1463,6 +1467,8 @@ def build_application(
                 ),
             ],
             context_providers=[
+                SystemClockContextProvider(),
+                AutonomousWebGroundingContextProvider(),
                 *(
                     [project_memory_context_provider]
                     if project_memory_context_provider is not None

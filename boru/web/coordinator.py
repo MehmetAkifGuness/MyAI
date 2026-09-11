@@ -10,9 +10,9 @@ from boru.web.search import WebSearch, SearchHit
 
 
 class WebResearchCoordinator:
-    _COMMAND = re.compile(r'^\s*(web ara|web oku|web araştır|internetten araştır)\s*:\s*(.*)$', re.I | re.S)
-    _NATURAL = re.compile(r'^\s*(?:internetten|webden|web üzerinde)\s+(.+?)\s+(?:araştır|araştırır mısın|araştır ve açıkla)[?.!]*\s*$', re.I)
-    _TRIGGERS = ('web ara', 'web oku', 'web araştır', 'internetten araştır')
+    _COMMAND = re.compile(r'^\s*(web ara|web oku|web araştır|internetten araştır|araştır)\s*:\s*(.*)$', re.I | re.S)
+    _NATURAL = re.compile(r'^\s*(?:(?:internetten|webden|web üzerinde)\s+(.+?)\s+(?:araştır|araştırır mısın|araştır ve açıkla)|(?:lütfen\s+)?(.+?)\s+(?:konusunu\s+araştır|hakkında\s+araştırma\s+yap))[?.!]*\s*$', re.I)
+    _TRIGGERS = ('web ara', 'web oku', 'web araştır', 'internetten araştır', 'araştır')
     HELP = ("WEB YARDIM\n'web ara: konu'; 'web oku: https://adres | soru'; "
             "'web araştır: soru'; 'internetten araştır: soru'; 'web durum'.\n"
             'Arama ve okuma salt-okunurdur. Sorgu arama sağlayıcısına gönderilir; yalnızca yazdığınız sorgu paylaşılır.')
@@ -41,7 +41,13 @@ class WebResearchCoordinator:
             else:
                 return None
         else:
-            command, value = (match.group(1).casefold(), match.group(2).strip()) if match else ('web araştır', natural.group(1).strip())
+            if match:
+                command, value = match.group(1).casefold(), match.group(2).strip()
+            else:
+                command = 'web araştır'
+                value = (natural.group(1) or natural.group(2)).strip()
+            if command == 'araştır':
+                command = 'web araştır'
         try:
             check_public_input(value)
             if command == 'web oku':

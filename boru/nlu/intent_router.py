@@ -108,6 +108,14 @@ class FreeFormIntentRouter:
                 intent = RoutedIntent.TEST_GENERATION
             elif "kod" in colon_prefix or "refactor" in colon_prefix:
                 intent = RoutedIntent.CODING
+            elif "araştır" in colon_prefix or "web" in colon_prefix:
+                query_val = raw.partition(":")[2].strip()
+                return IntentRouteResult(
+                    intent=RoutedIntent.GENERAL_CHAT,
+                    confidence=1.0,
+                    transformed_message=f"web araştır: {query_val}",
+                    original_message=raw,
+                )
             else:
                 intent = RoutedIntent.IMPROVEMENT
             return IntentRouteResult(
@@ -241,6 +249,22 @@ class FreeFormIntentRouter:
                 transformed_message="masaüstümü düzenle",
                 original_message=raw,
             )
+
+        # 4.2 Doğal Dil Araştırma / İnceleme Köprüsü
+        research_match = re.search(
+            r"^(?:börü\s+)?(?:lütfen\s+)?(?:bana\s+)?(.+?)\s+(?:konusunu\s+araştır|hakkında\s+araştırma\s+yap|hakkında\s+araştır|araştırır\s+mısın|araştır\s+ve\s+açıkla)[?.!]*$",
+            raw,
+            re.IGNORECASE
+        )
+        if research_match:
+            topic = (research_match.group(1) or "").strip()
+            if topic and not any(k in topic.lower() for k in ("test", "kod", "fonksiyon", "dosya", "class", "def ")):
+                return IntentRouteResult(
+                    intent=RoutedIntent.GENERAL_CHAT,
+                    confidence=0.92,
+                    transformed_message=f"web araştır: {topic}",
+                    original_message=raw,
+                )
 
         # 5. Varsayılan: Genel Sohbet
         return IntentRouteResult(
