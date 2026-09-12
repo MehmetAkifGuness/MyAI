@@ -1,0 +1,64 @@
+{
+  "schema": "boru.benchmark/v2",
+  "state": "completed",
+  "suite_sha256": "4e21d02c9ff9d96fdb33e0c8fcaa20adba286b6e120dd282ce772cca21d71851",
+  "progress": {
+    "completed": 1,
+    "total": 1
+  },
+  "configuration": {
+    "structured_attempts": 2,
+    "repair_attempts": 1,
+    "fallback_model": null
+  },
+  "scope": "bounded model-test-repair loop; clarification requires human quality review",
+  "summary": {
+    "qwen2.5-coder:7b": {
+      "attempted": 1,
+      "coding_passed": 0,
+      "coding_total": 1,
+      "coding_pass_rate": 0.0,
+      "model_calls": 4,
+      "structured_retries": 1,
+      "repair_attempts": 1,
+      "escalations": 0,
+      "human_interventions": 0,
+      "statuses": {
+        "model_error": 1
+      },
+      "seconds": 160.963,
+      "average_seconds": 160.963,
+      "first_pass_count": 0,
+      "recovered_count": 0,
+      "clarification_correct": 0
+    }
+  },
+  "results": [
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "repo_cache",
+      "category": "repository",
+      "repeat": 1,
+      "status": "model_error",
+      "detail": "Structured çıktı 2 denemede doğrulanamadı: timed out",
+      "seconds": 160.963,
+      "input_characters": 2642,
+      "output_characters": 908,
+      "model_calls": 4,
+      "structured_attempts": 3,
+      "structured_retries": 1,
+      "structured_errors": [
+        "timed out",
+        "timed out"
+      ],
+      "repair_attempts": 1,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 0,
+      "models_used": [
+        "qwen2.5-coder:7b"
+      ],
+      "escalations": 0
+    }
+  ]
+}

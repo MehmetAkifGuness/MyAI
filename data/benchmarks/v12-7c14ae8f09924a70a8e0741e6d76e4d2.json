@@ -1,0 +1,166 @@
+{
+  "schema": "boru.benchmark/v2",
+  "state": "completed",
+  "suite_sha256": "2c0ee513c84ded6da8f6a0c5a6882ea172669bf440a0efb1978623a287ab26c4",
+  "progress": {
+    "completed": 5,
+    "total": 5
+  },
+  "configuration": {
+    "structured_attempts": 2,
+    "repair_attempts": 1,
+    "fallback_model": "qwen3.5:9b"
+  },
+  "scope": "bounded model-test-repair loop; clarification requires human quality review",
+  "summary": {
+    "qwen2.5-coder:7b": {
+      "attempted": 5,
+      "coding_passed": 1,
+      "coding_total": 5,
+      "coding_pass_rate": 0.2,
+      "model_calls": 15,
+      "structured_retries": 2,
+      "repair_attempts": 4,
+      "escalations": 4,
+      "human_interventions": 4,
+      "statuses": {
+        "passed": 1,
+        "repair_abandoned": 1,
+        "unexpected_clarification": 3
+      },
+      "seconds": 522.979,
+      "average_seconds": 104.596,
+      "first_pass_count": 1,
+      "recovered_count": 0,
+      "clarification_correct": 0
+    }
+  },
+  "results": [
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "repo_alias",
+      "category": "repository",
+      "repeat": 1,
+      "status": "repair_abandoned",
+      "detail": "Test çıktısında `resolve(\"benchmark durum\")` çağrısı başarısız oluyor ancak kodda `normalize(text) == \"benchmark durumu\"` karşılaştırması var. Test dosyası henüz eklenmediği için mevcut testin içeriğini göremiyorum. Lütfen `acceptance_test.py` dosyasındaki `test_contract` metodunun tam kodunu ve beklenen davranışı (örneğin, giriş metninde büyük/küçük harf veya boşluk farkları olup olmadığı) belirtir misiniz?",
+      "seconds": 106.486,
+      "input_characters": 3350,
+      "output_characters": 1502,
+      "model_calls": 4,
+      "structured_attempts": 4,
+      "structured_retries": 0,
+      "structured_errors": [],
+      "repair_attempts": 2,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 1,
+      "models_used": [
+        "qwen2.5-coder:7b",
+        "qwen3.5:9b"
+      ],
+      "escalations": 1,
+      "initial_status": "failed"
+    },
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "repo_cache",
+      "category": "repository",
+      "repeat": 1,
+      "status": "unexpected_clarification",
+      "detail": "Önbellek bozulmaması ve iç içe listelerin bağımsız olması için `app/storage.py` dosyasındaki `CONFIG` değişkeni nasıl yönetilmeli? Bu değişken doğrudan bir sözlük mü olmalı yoksa özel bir sınıf mı? Ayrıca, `read_config` fonksiyonu çağrıldığında bu yapıya erişim sağlanırken hangi kısıtlamalar veya güvenlik önlemleri alınmalıdır?",
+      "seconds": 86.125,
+      "input_characters": 2008,
+      "output_characters": 1178,
+      "model_calls": 3,
+      "structured_attempts": 3,
+      "structured_retries": 0,
+      "structured_errors": [],
+      "repair_attempts": 1,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 1,
+      "models_used": [
+        "qwen2.5-coder:7b",
+        "qwen3.5:9b"
+      ],
+      "escalations": 1,
+      "initial_status": "failed"
+    },
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "repo_pagination",
+      "category": "repository",
+      "repeat": 1,
+      "status": "unexpected_clarification",
+      "detail": "Mevcut kod yapısında `bounds` fonksiyonu sayfalama mantığını doğru uyguluyor mu? Özellikle `page=0` durumunda başlangıç ve bitiş indekslerinin hesaplanması (örneğin, 1 tabanlı sayfalama mı yoksa 0 tabanlı mı?) netleştirilmeli. Ayrıca, boş liste (`items`) durumunu desteklemek için gerekli kontroller kodda mevcut mu yoksa eklenmesi gerekiyor mu? Bu detaylar doğrulanmalı.",
+      "seconds": 104.997,
+      "input_characters": 2212,
+      "output_characters": 1755,
+      "model_calls": 3,
+      "structured_attempts": 3,
+      "structured_retries": 0,
+      "structured_errors": [],
+      "repair_attempts": 1,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 1,
+      "models_used": [
+        "qwen2.5-coder:7b",
+        "qwen3.5:9b"
+      ],
+      "escalations": 1,
+      "initial_status": "failed"
+    },
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "repo_stock",
+      "category": "repository",
+      "repeat": 1,
+      "status": "passed",
+      "detail": ".\n----------------------------------------------------------------------\nRan 1 test in 0.000s\n\nOK\n",
+      "seconds": 31.938,
+      "input_characters": 632,
+      "output_characters": 607,
+      "model_calls": 1,
+      "structured_attempts": 1,
+      "structured_retries": 0,
+      "structured_errors": [],
+      "repair_attempts": 0,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 0,
+      "models_used": [
+        "qwen2.5-coder:7b"
+      ],
+      "escalations": 0
+    },
+    {
+      "model": "qwen2.5-coder:7b",
+      "case": "repo_settings",
+      "category": "repository",
+      "repeat": 1,
+      "status": "unexpected_clarification",
+      "detail": "Parse_config fonksiyonunun 'debug' parametresini işlerken 'true', 'false', 'True', 'False', 'TRUE', 'FALSE' gibi harf büyüklüğünden bağımsız olarak ayrıştırması isteniyor. Ancak mevcut kodda `boolean(text)` fonksiyonu sadece `bool(text)` kullanıyor ve bu Python'da boş string veya 0 için False, diğerleri için True döndürür; metin 'true' ise True olur ama 'TRUE' de True olur mu? Evet, `bool('TRUE')` True döner. Ancak 'debug' değeri 'true' ise True, 'false' ise False olmalı. Bilinmeyen değerler (örneğin 'yes', 'no', 'on', 'off') ValueError vermeli. Ayrıca 'timeout' parametresi verilmezse 30, verilirse pozitif int olmalı. Eğer timeout değeri negatif veya sıfır ise ne yapılmalı? Ayrıca 'debug' değeri string değil de başka bir veri tipi gelirse nasıl davranılmalı? Bu noktaları netleştirir misiniz?",
+      "seconds": 193.433,
+      "input_characters": 1072,
+      "output_characters": 1289,
+      "model_calls": 4,
+      "structured_attempts": 4,
+      "structured_retries": 2,
+      "structured_errors": [
+        "timed out",
+        "timed out"
+      ],
+      "repair_attempts": 0,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 1,
+      "models_used": [
+        "qwen2.5-coder:7b",
+        "qwen3.5:9b"
+      ],
+      "escalations": 1,
+      "initial_status": "unexpected_clarification"
+    }
+  ]
+}

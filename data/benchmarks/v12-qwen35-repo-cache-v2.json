@@ -1,0 +1,61 @@
+{
+  "schema": "boru.benchmark/v2",
+  "state": "completed",
+  "suite_sha256": "4e21d02c9ff9d96fdb33e0c8fcaa20adba286b6e120dd282ce772cca21d71851",
+  "progress": {
+    "completed": 1,
+    "total": 1
+  },
+  "configuration": {
+    "structured_attempts": 2,
+    "repair_attempts": 1,
+    "fallback_model": null
+  },
+  "scope": "bounded model-test-repair loop; clarification requires human quality review",
+  "summary": {
+    "qwen3.5:9b": {
+      "attempted": 1,
+      "coding_passed": 0,
+      "coding_total": 1,
+      "coding_pass_rate": 0.0,
+      "model_calls": 4,
+      "structured_retries": 2,
+      "repair_attempts": 1,
+      "escalations": 0,
+      "human_interventions": 0,
+      "statuses": {
+        "failed": 1
+      },
+      "seconds": 117.627,
+      "average_seconds": 117.627,
+      "first_pass_count": 0,
+      "recovered_count": 0,
+      "clarification_correct": 0
+    }
+  },
+  "results": [
+    {
+      "model": "qwen3.5:9b",
+      "case": "repo_cache",
+      "category": "repository",
+      "repeat": 1,
+      "status": "failed",
+      "detail": "F\n======================================================================\nFAIL: test_contract (acceptance_test.Acceptance.test_contract)\n----------------------------------------------------------------------\nTraceback (most recent call last):\n  File \"/workspace/acceptance_test.py\", line 7, in test_contract\n    self.assertEqual(subject.read_config()[\"features\"], [\"read\"])\n    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Lists differ: ['read', 'write'] != ['read']\n\nFirst list contains 1 additional elements.\nFirst extra element 1:\n'write'\n\n- ['read', 'write']\n+ ['read']\n\n----------------------------------------------------------------------\nRan 1 test in 0.007s\n\nFAILED (failures=1)\n",
+      "seconds": 117.627,
+      "input_characters": 3387,
+      "output_characters": 1692,
+      "model_calls": 4,
+      "structured_attempts": 4,
+      "structured_retries": 2,
+      "structured_errors": [],
+      "repair_attempts": 1,
+      "tokens": null,
+      "cost": null,
+      "human_interventions": 0,
+      "models_used": [
+        "qwen3.5:9b"
+      ],
+      "escalations": 0
+    }
+  ]
+}
