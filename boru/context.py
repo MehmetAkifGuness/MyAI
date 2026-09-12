@@ -237,3 +237,46 @@ class AutonomousWebGroundingContextProvider:
         return ""
 
 
+class ActiveScreenContextProvider:
+    """
+    Ekrandaki aktif uygulama ve sayfa durumunu dil modeline aktaran bağlam sağlayıcı.
+    Kullanıcı 'bu sayfada', 'burada', 'açılan sayfada' veya doğrudan medya/sayfa kontrolleri
+    istediğinde modelin ekrandaki bağlamı bilmesini sağlar.
+    """
+
+    def __init__(self, screen_agent=None) -> None:
+        self._screen_agent = screen_agent
+
+    def build_context(self, user_message: str = "") -> str:
+        agent = self._screen_agent
+        if agent is None:
+            try:
+                from boru.tools.screen_agent import get_screen_agent
+                agent = get_screen_agent()
+            except Exception:
+                return ""
+
+        ctx = agent.get_active_context()
+        if not ctx.app_name:
+            return ""
+
+        view_desc = {
+            "playlists": "Çalma Listeleri Görünümü",
+            "liked_songs": "Beğenilen Şarkılar",
+            "search": "Arama Sonuçları",
+            "video_player": "Video Oynatıcı",
+            "file_view": "Klasör / Dosya Görünümü",
+            "home": "Ana Sayfa / Başlangıç",
+        }.get(ctx.current_view, ctx.current_view)
+
+        return (
+            f"[AKTİF EKRAN VE PENCERE BAĞLAMI]\n"
+            f"Ön Plandaki Uygulama: {ctx.display_name} (Kategori: {ctx.category})\n"
+            f"Aktif Sayfa/Görünüm: {view_desc}\n"
+            f"Pencere Başlığı: {ctx.last_title or ctx.display_name}\n"
+            f"Kullanıcı 'bu sayfada', 'burada', 'açılan sayfada' veya doğrudan oynatma/arama komutları verdiğinde "
+            f"bu aktif ekranı temel alarak yanıt ver."
+        )
+
+
+

@@ -21,6 +21,12 @@ from boru.tools.os_controller import (
     get_autonomous_computer_agent,
     resolve_os_controller_command,
 )
+from boru.tools.screen_agent import (
+    InteractiveScreenAgent,
+    ScreenAppContext,
+    get_screen_agent,
+    resolve_screen_agent_command,
+)
 from boru.tools.autofix_coordinator import (
     ControlledAutoFixCoordinator,
 )
@@ -387,4 +393,8 @@ __all__ = [
     "AutonomousComputerAgent",
     "get_autonomous_computer_agent",
     "resolve_os_controller_command",
+    "InteractiveScreenAgent",
+    "ScreenAppContext",
+    "get_screen_agent",
+    "resolve_screen_agent_command",
 ]

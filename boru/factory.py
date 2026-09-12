@@ -43,6 +43,7 @@ from boru.assistant import (
     AssistantService,
 )
 from boru.context import (
+    ActiveScreenContextProvider,
     AutonomousWebGroundingContextProvider,
     SystemClockContextProvider,
 )
@@ -1490,6 +1491,7 @@ def build_application(
             ],
             context_providers=[
                 SystemClockContextProvider(),
+                ActiveScreenContextProvider(),
                 AutonomousWebGroundingContextProvider(),
                 *(
                     [project_memory_context_provider]

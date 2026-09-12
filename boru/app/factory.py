@@ -80,6 +80,7 @@ from boru.config import AppSettings
 
 # ── Bağlam ─────────────────────────────────────────────────────────────────
 from boru.context import (
+    ActiveScreenContextProvider,
     AutonomousWebGroundingContextProvider,
     ConversationContextBuilder,
     SystemClockContextProvider,
@@ -1384,6 +1385,7 @@ def build_application(
         ],
         context_providers=[
             SystemClockContextProvider(),
+            ActiveScreenContextProvider(),
             AutonomousWebGroundingContextProvider(),
             *([project_memory_context_provider] if project_memory_context_provider is not None else []),
             ProfileContextProvider(profile_service),

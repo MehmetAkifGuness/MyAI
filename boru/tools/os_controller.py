@@ -117,6 +117,17 @@ class AutonomousComputerAgent:
             encoded = urllib.parse.quote_plus(clean_query)
             target_url = f"https://www.youtube.com/results?search_query={encoded}"
             webbrowser.open(target_url)
+            try:
+                from boru.tools.screen_agent import get_screen_agent
+                get_screen_agent().update_active_app(
+                    "youtube",
+                    display_name="YouTube",
+                    category="video",
+                    current_view="video_player",
+                    action=f"play_video_{clean_query}",
+                )
+            except Exception:
+                pass
             return True, f"YouTube'da '{clean_query}' videosu açıldı."
         except Exception as e:
             return False, f"Video aranamadı: {e}"
@@ -149,6 +160,18 @@ class AutonomousComputerAgent:
         ).strip()
         if not clean_query:
             clean_query = cleaned
+
+        try:
+            from boru.tools.screen_agent import get_screen_agent
+            get_screen_agent().update_active_app(
+                "spotify" if platform.lower() == "spotify" else "youtube_music",
+                display_name="Spotify" if platform.lower() == "spotify" else "YouTube Music",
+                category="music",
+                current_view="search",
+                action=f"play_music_{clean_query}",
+            )
+        except Exception:
+            pass
 
         if platform.lower() == "spotify":
             try:
@@ -201,12 +224,34 @@ class AutonomousComputerAgent:
             if target_cmd.startswith("shell:"):
                 subprocess.Popen(["explorer.exe", target_cmd], shell=False)
                 disp_name = FOLDER_DISPLAY_NAMES.get(target_cmd, normalized.capitalize())
+                try:
+                    from boru.tools.screen_agent import get_screen_agent
+                    get_screen_agent().update_active_app(
+                        "explorer",
+                        display_name=f"{disp_name} Klasörü",
+                        category="file_manager",
+                        current_view="file_view",
+                        action="open_folder",
+                    )
+                except Exception:
+                    pass
                 return True, f"{disp_name} klasörü açıldı."
             else:
                 abs_path = os.path.abspath(target_cmd)
                 if os.path.isdir(abs_path):
                     subprocess.Popen(["explorer.exe", abs_path], shell=False)
                     disp_name = FOLDER_DISPLAY_NAMES.get(target_cmd, "Klasör")
+                    try:
+                        from boru.tools.screen_agent import get_screen_agent
+                        get_screen_agent().update_active_app(
+                            "explorer",
+                            display_name=f"{disp_name} Klasörü",
+                            category="file_manager",
+                            current_view="file_view",
+                            action="open_folder",
+                        )
+                    except Exception:
+                        pass
                     if disp_name != "Klasör":
                         return True, f"{disp_name} klasörü açıldı."
                     return True, f"Klasör açıldı: {abs_path}"

@@ -130,6 +130,17 @@ def open_application(app_name: str) -> Tuple[bool, str]:
         except Exception as e:
             return False, f"{cleaned} açılamadı: {e}"
 
+    def _notify_screen(target_name: str, disp: str = ""):
+        try:
+            from boru.tools.screen_agent import get_screen_agent
+            get_screen_agent().update_active_app(
+                target_name,
+                display_name=disp or target_name.capitalize(),
+                action="open_application",
+            )
+        except Exception:
+            pass
+
     try:
         startupinfo = subprocess.STARTUPINFO()
         startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
@@ -140,27 +151,33 @@ def open_application(app_name: str) -> Tuple[bool, str]:
             if cmd.startswith(("http://", "https://")):
                 webbrowser.open(cmd)
                 display_name = "YouTube Music" if "music" in cmd else ("YouTube" if "youtube" in cleaned else app_name.capitalize())
+                _notify_screen(cleaned, display_name)
                 return True, f"{display_name} açıldı."
             if cmd.endswith(":"):
                 os.startfile(cmd)
+                _notify_screen(cleaned, app_name.capitalize())
                 return True, f"{app_name.capitalize()} açıldı."
 
             # Windows ShellExecute (os.startfile) konsol açmadan yerel başlatır
             try:
                 os.startfile(cmd)
+                _notify_screen(cleaned, app_name.capitalize())
                 return True, f"{app_name.capitalize()} açıldı."
             except Exception:
                 pass
 
             subprocess.Popen([cmd], shell=True, startupinfo=startupinfo, creationflags=creationflags, close_fds=True)
+            _notify_screen(cleaned, app_name.capitalize())
             return True, f"{app_name.capitalize()} açıldı."
         else:
             try:
                 os.startfile(cleaned)
+                _notify_screen(cleaned, app_name.capitalize())
                 return True, f"{app_name.capitalize()} başlatıldı."
             except Exception:
                 pass
             subprocess.Popen([cleaned], shell=True, startupinfo=startupinfo, creationflags=creationflags, close_fds=True)
+            _notify_screen(cleaned, app_name.capitalize())
             return True, f"{app_name.capitalize()} başlatıldı."
     except Exception as e:
         logger.debug(f"Uygulama başlatma hatası ({app_name}): {e}")
@@ -574,6 +591,15 @@ def resolve_system_command(user_text: str) -> Optional[str]:
             return refl_res
     except Exception as e:
         logger.debug(f"Reflection çözme hatası: {e}")
+
+    # 0.58 Canlı Ekran & Sayfa Duyarlı Etkileşimli Kontroller (Çalma listemi aç, müziği durdur, ekranda ne var vb.)
+    try:
+        from boru.tools.screen_agent import resolve_screen_agent_command
+        screen_res = resolve_screen_agent_command(user_text)
+        if screen_res is not None:
+            return screen_res
+    except Exception as e:
+        logger.debug(f"Screen agent çözme hatası: {e}")
 
     # 0.6 Otonom Bilgisayar ve OS Kontrol Ajanı (Video açma, Spotify müzik çalma, klasör açma, ekran görüntüsü kaydetme)
     try:
