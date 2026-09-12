@@ -356,6 +356,15 @@ def resolve_os_controller_command(user_text: str) -> Optional[str]:
     Kullanıcının Türkçe doğal dildeki sesli / yazılı bilgisayar yönetim komutlarını çözer.
     Eğer tam erişimli otonom ajan eylemlerinden biriyle eşleşirse yürütür ve söylenecek cevabı döndürür.
     """
+    # 0. Geri bildirim, eleştiri ve hata şikayetlerini asla OS komutu olarak işletme
+    try:
+        from boru.tools.semantic_router import SemanticIntentResolver
+        fb_res = SemanticIntentResolver.resolve_feedback_intent(user_text)
+        if fb_res is not None:
+            return fb_res
+    except Exception:
+        pass
+
     raw_text = user_text.strip().strip(".!?,")
     cleaned = raw_text.lower()
     agent = get_autonomous_computer_agent()
@@ -401,7 +410,14 @@ def resolve_os_controller_command(user_text: str) -> Optional[str]:
             target = match.group(1).strip()
             if target.lower() in ("spotify", "müzik", "şarkı", "aç", "çal", "oynat", "başlat", ""):
                 continue
-            clean_target = re.sub(r"\s+(?:çal|aç|dinlet)$", "", target, flags=re.IGNORECASE).strip()
+            # Arama sorgusunu saf sanatçı/şarkı adına temizle
+            try:
+                from boru.tools.semantic_router import SemanticIntentResolver
+                clean_target = SemanticIntentResolver.sanitize_media_query(target)
+            except Exception:
+                clean_target = re.sub(r"\s+(?:çal|aç|dinlet)$", "", target, flags=re.IGNORECASE).strip()
+            if not clean_target or clean_target.lower() in ("çal", "aç", "dinlet", "oynat"):
+                continue
             _, msg = agent.play_music(clean_target, platform="spotify")
             return msg
 

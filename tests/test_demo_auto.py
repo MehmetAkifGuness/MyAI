@@ -4,17 +4,10 @@ Hedef modül: demo
 """
 
 import unittest
-try:
-    import demo as target_module
-except ImportError:
-    target_module = None
+import demo as target_module
 
 class TestDemoFunctions(unittest.TestCase):
     """demo modülündeki üst seviye fonksiyonlar için testler."""
-
-    def setUp(self):
-        if target_module is None:
-            self.skipTest("Hedef 'demo' modülü mevcut değil.")
 
     def test_check_callable(self):
         """target_module.check fonksiyonunun çağrılabilirliğini test eder."""

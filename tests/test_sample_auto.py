@@ -4,17 +4,10 @@ Hedef modül: sample
 """
 
 import unittest
-try:
-    import sample as target_module
-except ImportError:
-    target_module = None
+import sample as target_module
 
 class TestSampleFunctions(unittest.TestCase):
     """sample modülündeki üst seviye fonksiyonlar için testler."""
-
-    def setUp(self):
-        if target_module is None:
-            self.skipTest("Hedef 'sample' modülü mevcut değil.")
 
     def test_run_callable(self):
         """target_module.run fonksiyonunun çağrılabilirliğini test eder."""

@@ -93,6 +93,15 @@ def _format_search_results(query: str, results: List[Dict[str, str]]) -> str:
 
 
 def resolve_web_search_command(user_text: str) -> Optional[str]:
+    # 0. Geri bildirim, eleştiri ve hata şikayetlerini asla web araması olarak işletme
+    try:
+        from boru.tools.semantic_router import SemanticIntentResolver
+        fb_res = SemanticIntentResolver.resolve_feedback_intent(user_text)
+        if fb_res is not None:
+            return fb_res
+    except Exception:
+        pass
+
     cleaned = user_text.lower().strip().strip(".!?,")
 
     # Sistem komutları veya yerel aksiyonları atla

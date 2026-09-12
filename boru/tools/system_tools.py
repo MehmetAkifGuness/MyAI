@@ -518,6 +518,16 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     Eğer sistem komutuyla eşleşirse işlemi yürütür ve söylenecek cevabı döndürür.
     Eşleşmezse None döner.
     """
+    # 0. Geri Bildirim, Eleştiri ve Hata Bildirimi Kontrolü
+    # Kullanıcı hata bildirdiğinde veya eleştirdiğinde ASLA komut/arama çalıştırma!
+    try:
+        from boru.tools.semantic_router import SemanticIntentResolver
+        fb_res = SemanticIntentResolver.resolve_feedback_intent(user_text)
+        if fb_res is not None:
+            return fb_res
+    except Exception as e:
+        logger.debug(f"Geri bildirim niyet çözme hatası: {e}")
+
     cleaned = user_text.lower().strip().strip(".!?,")
 
     # 0. Günlük Brifing (Jarvis Briefing)

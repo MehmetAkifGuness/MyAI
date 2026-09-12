@@ -27,14 +27,19 @@ class SelfReflectionLearner:
     """
 
     _CORRECTION_TRIGGERS = [
-        re.compile(r"\b(?:yanlış\s+(?:kelimeyi|anladın|yaptın|çıkarım|bilgi|cevap|aldın))\b", re.IGNORECASE),
-        re.compile(r"\b(?:öyle\s+(?:değil|demedim|kastetmedim))\b", re.IGNORECASE),
-        re.compile(r"\b(?:bunu\s+(?:kastetmedim|demedim|sormadım))\b", re.IGNORECASE),
+        re.compile(r"\b(?:yanlış\s+(?:kelimeyi|anladın|yaptın|çıkarım|bilgi|cevap|aldın|şarkı|müzik|şey|şeyi))\b", re.IGNORECASE),
+        re.compile(r"\b(?:öyle\s+(?:değil|demedim|kastetmedim|istememiştim))\b", re.IGNORECASE),
+        re.compile(r"\b(?:bunu\s+(?:kastetmedim|demedim|sormadım|söylemedim|istemedim))\b", re.IGNORECASE),
         re.compile(r"\b(?:hatalı(?:sın|dır|ydı)?)\b", re.IGNORECASE),
         re.compile(r"\b(?:seni\s+düzeltiyorum|düzeltme\s+yapıyorum)\b", re.IGNORECASE),
         re.compile(r"\b(?:hayır\s+öyle\s+değil|yanlış\s+anlaşıldı)\b", re.IGNORECASE),
         re.compile(r"\b(?:ben\s+(?:sana|ondan)\s+bahsetmedim)\b", re.IGNORECASE),
         re.compile(r"\b(?:ne\s+alaka|alakası\s+yok)\b", re.IGNORECASE),
+        re.compile(r"\b(?:çalmadı|çalmıyor|açılmadı|çalışmadı|oynamadı|ses\s+gelmiyor)\b", re.IGNORECASE),
+        re.compile(r"\b(?:(?:bunu\s+)?(?:aramam|araman|açman|çalman)\s+için\s+(?:söylemedim|demedim))\b", re.IGNORECASE),
+        re.compile(r"\b(?:arama\s+(?:yap\s+demedim|yapma|yapmanı\s+istemedim|demedim))\b", re.IGNORECASE),
+        re.compile(r"\b(?:bu\s+bir\s+(?:sorun|hata|problem))\b", re.IGNORECASE),
+        re.compile(r"\b(?:böyle\s+olsun\s+dememiştim|böyle\s+istememiştim)\b", re.IGNORECASE),
     ]
 
     def __init__(self, storage_path: Optional[Path | str] = None):
@@ -111,7 +116,16 @@ class SelfReflectionLearner:
                 "bunu bağımsız bir eylem/komut emri olarak algılama; genel sohbet bağlamında değerlendir."
             )
 
-        # Durum 2: Hava durumu veya şehir karışıklığı ("anki", "zaman", "bugün" vs.)
+        # Durum 2: Eleştiri, Şikayet ve Hata Bildirimi ("şarkı çalmadı", "bunu araman için söylemedim" vb.)
+        elif any(w in corr_lower for w in ("çalmadı", "çalmıyor", "açılmadı", "çalışmadı", "arama yap demedim", "araman için", "aramam için", "böyle olsun dememiştim", "bu bir sorun")):
+            rule_type = "intent_separation_feedback"
+            trigger = "feedback_criticism_separation"
+            lesson = (
+                "Kullanıcı eleştiri, şikayet veya hata bildirdiğinde ('şarkı çalmadı', 'bunu araman için söylemedim' vb.) "
+                "bu girdiyi asla bir arama veya komut olarak yürütme; hatayı kabul et ve kibarca yardım teklif et."
+            )
+
+        # Durum 3: Hava durumu veya şehir karışıklığı ("anki", "zaman", "bugün" vs.)
         elif any(w in prev_asst_lower for w in ("anki", "hava durumu", "zaman için")) and any(w in corr_lower for w in ("derece", "bahsettim", "kastetmedim", "anladın")):
             rule_type = "entity_disambiguation"
             trigger = "hava_durumu_zaman_ekleri"
@@ -120,7 +134,7 @@ class SelfReflectionLearner:
                 "kesinlikle şehir veya konum ismi olarak algılanmamalıdır."
             )
 
-        # Durum 3: Doğal dil düzeltmesi
+        # Durum 4: Doğal dil düzeltmesi
         else:
             rule_type = "user_preference_correction"
             lesson = (

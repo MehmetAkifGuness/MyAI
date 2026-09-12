@@ -271,6 +271,16 @@ class AssistantService:
         self,
         user_message: str,
     ) -> str | None:
+        # 0. Öncelik: Kullanıcı Geri Bildirimi / Eleştiri / Hata Bildirimi (Feedback Intent)
+        # Kullanıcının eleştirilerini ve düzeltmelerini asla komut veya arama olarak işletme!
+        try:
+            from boru.tools.semantic_router import SemanticIntentResolver
+            fb_res = SemanticIntentResolver.resolve_feedback_intent(user_message)
+            if fb_res is not None:
+                return fb_res
+        except Exception:
+            pass
+
         # 1. Öncelik: PC Yönetim ve Sistem Araçları (Uygulama açma, ses, pil vb.)
         try:
             from boru.tools.system_tools import resolve_system_command
