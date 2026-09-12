@@ -1,8 +1,14 @@
 import unittest
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 from boru.voice.listener import VoiceInputService
-from boru.voice.speaker import VoiceOutputService
+from boru.voice.speaker import (
+    VoiceOutputService,
+    VOICE_AHMET,
+    VOICE_EMEL,
+    get_voice_output_service,
+    resolve_voice_settings_command,
+)
 
 
 class VoiceServiceTests(unittest.TestCase):
@@ -35,8 +41,47 @@ class VoiceServiceTests(unittest.TestCase):
     def test_voice_output_disabled_by_default_or_toggle(self):
         speaker = VoiceOutputService(enabled=False)
         self.assertFalse(speaker.enabled)
-        # Speak çağrıldığında hiçbir işlem yapmamalı
         speaker.speak("Deneme mesajı", async_mode=False)
+
+    def test_voice_switch_and_toggle(self):
+        speaker = VoiceOutputService(enabled=True, voice=VOICE_AHMET)
+        self.assertEqual(speaker.voice, VOICE_AHMET)
+        self.assertIn("Ahmet", speaker.get_current_voice())
+
+        # Kadın sesine geç
+        res = speaker.set_voice("kadın")
+        self.assertEqual(speaker.voice, VOICE_EMEL)
+        self.assertIn("Emel", res)
+
+        # Toggle ile tekrar erkek sesine geç
+        res2 = speaker.toggle_voice()
+        self.assertEqual(speaker.voice, VOICE_AHMET)
+        self.assertIn("Ahmet", res2)
+
+    def test_voice_cache_path(self, tmp_path=None):
+        speaker = VoiceOutputService(enabled=True)
+        cache_path = speaker._get_cache_file("kısa bir test cümlesi")
+        self.assertTrue(str(cache_path).endswith(".mp3"))
+
+    def test_resolve_voice_settings_command(self):
+        with patch.object(VoiceOutputService, "speak") as mock_speak:
+            res1 = resolve_voice_settings_command("kadın sesine geç")
+            self.assertIsNotNone(res1)
+            self.assertIn("Emel", res1)
+
+            res2 = resolve_voice_settings_command("erkek sesine geç")
+            self.assertIsNotNone(res2)
+            self.assertIn("Ahmet", res2)
+
+            res3 = resolve_voice_settings_command("sesini değiştir")
+            self.assertIsNotNone(res3)
+            self.assertIn("değiştirdim", res3)
+
+            res4 = resolve_voice_settings_command("hangi sesi kullanıyorsun")
+            self.assertIsNotNone(res4)
+            self.assertIn("aktif olan ses motorum", res4)
+
+            self.assertIsNone(resolve_voice_settings_command("bu başka bir soru"))
 
     def test_voice_input_mock_recognition(self):
         mock_recognizer = MagicMock()
@@ -47,7 +92,6 @@ class VoiceServiceTests(unittest.TestCase):
             recognizer=mock_recognizer,
             microphone=mock_microphone,
         )
-        # _initialized = True yaparak sr importunu baypas edelim
         listener._initialized = True
 
         result = listener.listen_once()

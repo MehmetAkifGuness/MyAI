@@ -4,7 +4,11 @@ boru.voice — Sesli Konuşma ve Dinleme Paketi
 """
 
 from boru.voice.listener import VoiceInputService, patch_speech_recognition_windows_console
-from boru.voice.speaker import VoiceOutputService
+from boru.voice.speaker import (
+    VoiceOutputService,
+    get_voice_output_service,
+    resolve_voice_settings_command,
+)
 from boru.voice.continuous_dialogue import (
     ContinuousVoiceController,
     WAKE_WORDS,
@@ -20,6 +24,8 @@ patch_speech_recognition_windows_console()
 __all__ = [
     "VoiceInputService",
     "VoiceOutputService",
+    "get_voice_output_service",
+    "resolve_voice_settings_command",
     "ContinuousVoiceController",
     "BackgroundWakeWordListener",
     "AudioCueService",

@@ -521,6 +521,15 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     except Exception as e:
         logger.debug(f"Sentinel çözme hatası: {e}")
 
+    # 0.15 Ses Ayarları & Neural Ses Profili ("sesini değiştir", "kadın sesine geç", "erkek sesine geç")
+    try:
+        from boru.voice import resolve_voice_settings_command
+        voice_res = resolve_voice_settings_command(user_text)
+        if voice_res is not None:
+            return voice_res
+    except Exception as e:
+        logger.debug(f"Ses ayarları çözme hatası: {e}")
+
     # 0.2 Canlı Web Bilgi & Ansiklopedi Motoru (Wikipedia / Kimdir / Nedir)
     try:
         from boru.tools.web_qa_tools import resolve_web_qa_command

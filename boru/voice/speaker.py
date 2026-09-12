@@ -1,25 +1,75 @@
 from __future__ import annotations
 
+import asyncio
+import hashlib
 import logging
+import os
+from pathlib import Path
+import queue
 import re
 import subprocess
+import tempfile
 import threading
-from typing import Sequence
+import time
+from typing import Optional, Sequence
 
 logger = logging.getLogger(__name__)
+
+VOICE_AHMET = "tr-TR-AhmetNeural"
+VOICE_EMEL = "tr-TR-EmelNeural"
 
 
 class VoiceOutputService:
     """
-    Börü'nün yanıtlarını Windows SAPI veya PowerShell üzerinden seslendiren servis.
-    Kod bloklarını ve gereksiz etiketleri konuşmadan önce otomatik temizler.
+    Börü'nün yanıtlarını Edge TTS (Ultra-Doğal Neural Ses) veya Windows SAPI üzerinden seslendiren servis.
+    - Çoklu ses desteği: Ahmet (Erkek) ve Emel (Kadın)
+    - 0 gecikmeli disk ses önbelleği (Audio Caching)
+    - Cümle bazlı akışkan seslendirme (Streaming TTS)
+    - Çevrimdışı SAPI fallback
     """
 
-    def __init__(self, enabled: bool = True, voice: str = "tr-TR-AhmetNeural", rate: str = "+0%"):
+    def __init__(
+        self,
+        enabled: bool = True,
+        voice: str = VOICE_AHMET,
+        rate: str = "+0%",
+        cache_dir: Optional[str | Path] = None,
+    ):
         self.enabled = enabled
         self.voice = voice
         self.rate = rate
         self._lock = threading.Lock()
+
+        # Ses önbellek dizini
+        if cache_dir:
+            self._cache_dir = Path(cache_dir)
+        else:
+            self._cache_dir = Path(tempfile.gettempdir()) / "boru_voice_cache"
+        try:
+            self._cache_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
+
+    def set_voice(self, voice_name: str) -> str:
+        """Aktif konuşma sesini değiştirir."""
+        v_low = voice_name.lower().strip()
+        if any(k in v_low for k in ("emel", "kadın", "bayan", "female")):
+            self.voice = VOICE_EMEL
+            return "Emel (Doğal Türkçe Kadın Sesi)"
+        else:
+            self.voice = VOICE_AHMET
+            return "Ahmet (Doğal Türkçe Erkek Sesi)"
+
+    def toggle_voice(self) -> str:
+        """Ahmet ve Emel sesleri arasında geçiş yapar."""
+        if self.voice == VOICE_AHMET:
+            return self.set_voice("emel")
+        else:
+            return self.set_voice("ahmet")
+
+    def get_current_voice(self) -> str:
+        """Mevcut aktif sesin adını döner."""
+        return "Emel (Kadın Sesi)" if "emel" in self.voice.lower() else "Ahmet (Erkek Sesi)"
 
     def stop(self) -> None:
         """Devam eden ses çalmayı anında durdurur."""
@@ -46,7 +96,6 @@ class VoiceOutputService:
         # Çoklu boşlukları sadeleştir
         clean = re.sub(r"\s+", " ", clean).strip()
 
-        # Eğer çok uzun bir metin ise (1500 karakterden fazla), en yakın cümle sonundan (.!?) zarifçe sınırla
         if len(clean) > 1500:
             truncated = clean[:1500]
             last_period = max(truncated.rfind("."), truncated.rfind("!"), truncated.rfind("?"))
@@ -82,53 +131,53 @@ class VoiceOutputService:
         else:
             self._speak_sync(cleaned)
 
-    def _speak_sync(self, text: str) -> None:
-        with self._lock:
-            sentences = self.split_into_sentences(text)
-            if not sentences:
-                return
-
-            # Çoklu cümlelerde ilk cümle hemen çalarken sonraki cümleler arka planda önceden sentezlenir (Streaming TTS)
-            if len(sentences) > 1:
-                if self._speak_streaming_pipeline(sentences):
-                    return
-
-            # Tek cümle veya fallback
-            if self._speak_neural_sync(text):
-                return
-
-            self._speak_sapi_sync(text)
+    def _get_cache_file(self, text: str) -> Path:
+        """Metin ve ses parametrelerine göre benzersiz önbellek dosya yolunu üretir."""
+        h = hashlib.sha256(f"{self.voice}:{self.rate}:{text.strip()}".encode("utf-8")).hexdigest()[:16]
+        return self._cache_dir / f"tts_{h}.mp3"
 
     def _generate_neural_mp3(self, text: str) -> Optional[str]:
-        """Tek bir metin/cümle için arka planda Edge TTS ile MP3 dosyası oluşturur."""
+        """Metin için Edge TTS ile MP3 oluşturur; önbellekte varsa hemen döner."""
+        cache_file = self._get_cache_file(text)
+        if cache_file.exists() and cache_file.stat().st_size > 100:
+            return str(cache_file)
+
         try:
-            import asyncio
-            import tempfile
             import edge_tts
 
+            async def _gen():
+                communicate = edge_tts.Communicate(text, voice=self.voice, rate=self.rate)
+                await communicate.save(str(cache_file))
+
+            asyncio.run(_gen())
+            if cache_file.exists() and cache_file.stat().st_size > 100:
+                return str(cache_file)
+        except Exception as err:
+            logger.debug(f"Neural MP3 sentez hatası ({self.voice}): {err}")
+
+        # Eğer önbellek dizinine yazılamadıysa temp dosya dene
+        try:
             with tempfile.NamedTemporaryFile(suffix=".mp3", delete=False) as f:
                 tmp_path = f.name
 
-            async def _generate():
+            async def _gen_tmp():
                 communicate = edge_tts.Communicate(text, voice=self.voice, rate=self.rate)
                 await communicate.save(tmp_path)
 
-            asyncio.run(_generate())
+            asyncio.run(_gen_tmp())
             return tmp_path
-        except Exception as err:
-            logger.debug(f"Neural MP3 sentez hatası: {err}")
+        except Exception as e:
+            logger.debug(f"Neural temp MP3 sentez hatası: {e}")
             return None
 
-    def _play_single_mp3(self, tmp_path: str, text: str) -> bool:
-        """Sentezlenmiş MP3 dosyasını çalar ve ardından temizler."""
-        import os
-        import time
+    def _play_single_mp3(self, mp3_path: str, text: str) -> bool:
+        """Sentezlenmiş MP3 dosyasını çalar; geçici ise temizler, önbellekteyse korur."""
         played = False
         try:
             import pygame
             if not pygame.mixer.get_init():
                 pygame.mixer.init()
-            pygame.mixer.music.load(tmp_path)
+            pygame.mixer.music.load(mp3_path)
             pygame.mixer.music.play()
             time.sleep(0.06)
             while pygame.mixer.music.get_busy():
@@ -139,16 +188,35 @@ class VoiceOutputService:
         except Exception as e:
             logger.debug(f"pygame çalma hatası: {e}")
 
+        # Yalnızca önbellekte olmayan tek kullanımlık geçici dosyaları temizle
         try:
-            os.remove(tmp_path)
+            p = Path(mp3_path)
+            if self._cache_dir not in p.parents and p.exists():
+                os.remove(mp3_path)
         except Exception:
             pass
         return played
 
+    def _speak_sync(self, text: str) -> None:
+        with self._lock:
+            sentences = self.split_into_sentences(text)
+            if not sentences:
+                return
+
+            # Çoklu cümlelerde ilk cümle hemen çalarken sonrakiler paralel sentezlenir (Streaming TTS)
+            if len(sentences) > 1:
+                if self._speak_streaming_pipeline(sentences):
+                    return
+
+            # Tek cümle veya neural konuşma
+            if self._speak_neural_sync(text):
+                return
+
+            # İnternet yoksa veya neural motor hata verirse SAPI fallback
+            self._speak_sapi_sync(text)
+
     def _speak_streaming_pipeline(self, sentences: list[str]) -> bool:
         """Cümleleri kuyruğa alarak ilk cümleyi hemen çalar, diğerlerini paralel sentezler."""
-        import queue
-
         audio_queue: queue.Queue[Optional[tuple[str, str]]] = queue.Queue(maxsize=3)
         producer_failed = False
 
@@ -186,7 +254,7 @@ class VoiceOutputService:
         return self._play_single_mp3(tmp_path, text)
 
     def _speak_sapi_sync(self, text: str) -> None:
-        """Windows yerel SAPI ile seslendirme (Yedek motor)."""
+        """Windows yerel SAPI ile seslendirme (Çevrimdışı yedek motor)."""
         try:
             import base64
             escaped = text.replace("'", "''").replace('"', '""')
@@ -199,7 +267,7 @@ class VoiceOutputService:
             startupinfo = subprocess.STARTUPINFO()
             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
             startupinfo.wShowWindow = subprocess.SW_HIDE
-            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008  # DETACHED_PROCESS
+            creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000) | 0x00000008
             subprocess.run(
                 ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", encoded],
                 stdout=subprocess.DEVNULL,
@@ -211,3 +279,57 @@ class VoiceOutputService:
             )
         except Exception as e:
             logger.debug(f"Yerel SAPI seslendirme hatası: {e}")
+
+
+_GLOBAL_SPEAKER: Optional[VoiceOutputService] = None
+
+
+def get_voice_output_service(enabled: bool = True) -> VoiceOutputService:
+    global _GLOBAL_SPEAKER
+    if _GLOBAL_SPEAKER is None:
+        _GLOBAL_SPEAKER = VoiceOutputService(enabled=enabled)
+    return _GLOBAL_SPEAKER
+
+
+def resolve_voice_settings_command(user_text: str) -> Optional[str]:
+    """
+    Kullanıcının Türkçe doğal dildeki ses tercihlerini ve profilini yönetir.
+    Örnek: 'sesini değiştir', 'kadın sesine geç', 'erkek sesi yap', 'ses durumu'
+    """
+    cleaned = user_text.lower().strip().strip(".!?,")
+    speaker = get_voice_output_service()
+
+    if any(k in cleaned for k in (
+        "sesini değiştir", "ses tonunu değiştir", "farklı bir sese geç",
+        "başka bir sesle konuş", "sesi değiştir", "ses değiştir"
+    )):
+        new_name = speaker.toggle_voice()
+        msg = f"Ses profilimi değiştirdim. Şu an {new_name} ile konuşuyorum."
+        speaker.speak(msg)
+        return msg
+
+    if any(k in cleaned for k in (
+        "kadın sesine geç", "kadın sesi yap", "bayan sesine geç", "bayan sesi yap",
+        "emel sesine geç", "emel sesini aç", "kadın sesi olsun", "kadın sesine dön"
+    )):
+        speaker.set_voice("emel")
+        msg = "Sesim Emel olarak ayarlandı. Size bu sesle eşlik etmekten mutluluk duyarım!"
+        speaker.speak(msg)
+        return msg
+
+    if any(k in cleaned for k in (
+        "erkek sesine geç", "erkek sesi yap", "ahmet sesine geç", "ahmet sesini aç",
+        "erkek sesi olsun", "erkek sesine dön"
+    )):
+        speaker.set_voice("ahmet")
+        msg = "Sesim Ahmet olarak ayarlandı. Emrinizdeyim, nasıl yardımcı olabilirim?"
+        speaker.speak(msg)
+        return msg
+
+    if any(k in cleaned for k in (
+        "hangi sesi kullanıyorsun", "ses durumu", "ses ayarı", "aktif sesin ne", "ses ayarları"
+    )):
+        cur = speaker.get_current_voice()
+        return f"Şu anda aktif olan ses motorum: {cur} ({speaker.voice}). İsterseniz 'kadın sesine geç' veya 'erkek sesine geç' diyerek değiştirebilirsiniz."
+
+    return None
