@@ -15,5 +15,6 @@ __pycache__/
 user_notes.json
 /data/reminders.json*
 /data/desktop_cleanup_journal.json*
+/data/boru.db*
 .pytest_tmp/
 .pytest_cache/

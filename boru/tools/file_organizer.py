@@ -165,6 +165,11 @@ def organize_desktop(
             with open(tmp_j, "w", encoding="utf-8") as jf:
                 json.dump(existing_journal, jf, ensure_ascii=False, indent=2)
             os.replace(tmp_j, j_path)
+            try:
+                from boru.persistence.database import BoruDatabase
+                BoruDatabase.get_instance().add_cleanup_entries(journal_entries)
+            except Exception:
+                pass
         except Exception as e:
             logger.debug(f"Masaüstü geri alma günlüğü kaydedilemedi: {e}")
 
@@ -215,6 +220,11 @@ def undo_organize_desktop(journal_file: Optional[Path | str] = None) -> Tuple[bo
         # Günlüğü temizle
         try:
             os.remove(j_path)
+        except Exception:
+            pass
+        try:
+            from boru.persistence.database import BoruDatabase
+            BoruDatabase.get_instance().clear_cleanup_journal()
         except Exception:
             pass
 

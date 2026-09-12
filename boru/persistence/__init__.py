@@ -1,3 +1,4 @@
+from boru.persistence.database import BoruDatabase
 from boru.persistence.json_file import (
     AtomicJsonFileStore,
     JsonFileReadError,
@@ -6,6 +7,7 @@ from boru.persistence.json_file import (
 
 
 __all__ = [
+    "BoruDatabase",
     "AtomicJsonFileStore",
     "JsonFileReadError",
     "JsonFileWriteError",

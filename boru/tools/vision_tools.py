@@ -40,7 +40,7 @@ def get_available_vision_model() -> Optional[str]:
 
         models_response = ollama.list()
         models = [m.model for m in models_response.models] if hasattr(models_response, "models") else []
-        vision_candidates = ["llava", "qwen2-vl", "minicpm-v", "bakllava", "moondream", "llama3.2-vision"]
+        vision_candidates = ["moondream", "llava", "qwen2-vl", "minicpm-v", "bakllava", "llama3.2-vision"]
 
         for candidate in vision_candidates:
             for installed in models:
@@ -71,12 +71,21 @@ def analyze_screen(query: str = "Şu anda ekranda ne var, hata veya önemli bilg
             with open(screenshot_path, "rb") as f:
                 img_bytes = f.read()
 
+            ctx_hint = ""
+            try:
+                from boru.tools.screen_agent import get_screen_agent
+                ctx = get_screen_agent().get_active_context()
+                if ctx and (ctx.last_title or ctx.display_name):
+                    ctx_hint = f"Aktif pencere: {ctx.last_title or ctx.display_name}. "
+            except Exception:
+                pass
+
             response = ollama.chat(
                 model=vision_model,
                 messages=[
                     {
                         "role": "user",
-                        "content": f"{query}\nLütfen Türkçe, net ve kısa bir özet ver.",
+                        "content": f"{ctx_hint}{query}\nLütfen Türkçe, net ve kısa bir özet ver.",
                         "images": [img_bytes],
                     }
                 ],

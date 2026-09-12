@@ -88,6 +88,13 @@ class NotesService:
         notes.append(new_entry)
         self._save(notes)
 
+        # SQLite veritabanı ile eşzamanla
+        try:
+            from boru.persistence.database import BoruDatabase
+            BoruDatabase.get_instance().add_note(text=cleaned, date_str=date_str, timestamp=now.timestamp())
+        except Exception:
+            pass
+
         return True, f"Notunuz kaydedildi: '{cleaned}'"
 
     def list_notes(self) -> Tuple[bool, str]:
@@ -116,6 +123,11 @@ class NotesService:
             return True, "Temizlenecek herhangi bir not bulunmuyor."
 
         self._save([])
+        try:
+            from boru.persistence.database import BoruDatabase
+            BoruDatabase.get_instance().clear_notes()
+        except Exception:
+            pass
         return True, f"Tüm notlarınız ({count} adet) başarıyla temizlendi."
 
 

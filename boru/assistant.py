@@ -331,6 +331,16 @@ class AssistantService:
         except Exception:
             pass
 
+        # 3. Esnek Anlamsal Niyet Çözücü (Semantic Intent Resolver)
+        # Katı regex'lere takılmayan devrik, konuşma dili veya esnek Türkçe komutları doğrudan çözer
+        try:
+            from boru.tools.semantic_router import SemanticIntentResolver
+            semantic_ans = SemanticIntentResolver.resolve_and_execute(user_message)
+            if semantic_ans is not None:
+                return semantic_ans
+        except Exception:
+            pass
+
         return None
 
     def _build_model_messages(

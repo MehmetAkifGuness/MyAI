@@ -110,6 +110,11 @@ class ReminderService:
             item = ReminderItem(item_id, due_at, label, timer)
             self._reminders[item_id] = item
             self._save_persistent()
+            try:
+                from boru.persistence.database import BoruDatabase
+                BoruDatabase.get_instance().save_reminder(due_at=due_at, label=label, custom_id=item_id)
+            except Exception:
+                pass
 
             # Zaman formatı
             if seconds >= 3600:
@@ -135,6 +140,11 @@ class ReminderService:
         with self._lock:
             self._reminders.pop(item_id, None)
             self._save_persistent()
+            try:
+                from boru.persistence.database import BoruDatabase
+                BoruDatabase.get_instance().mark_reminder_fired(item_id)
+            except Exception:
+                pass
 
         logger.info(f"Hatırlatıcı tetiklendi: {label}")
 
@@ -183,6 +193,11 @@ class ReminderService:
                 r.timer.cancel()
             self._reminders.clear()
             self._save_persistent()
+            try:
+                from boru.persistence.database import BoruDatabase
+                BoruDatabase.get_instance().cancel_all_reminders()
+            except Exception:
+                pass
             if count > 0:
                 return f"{count} adet aktif hatırlatıcı iptal edildi."
             return "İptal edilecek aktif hatırlatıcı yok."
