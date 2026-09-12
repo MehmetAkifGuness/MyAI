@@ -77,17 +77,27 @@ def _get_downloads_path() -> Path:
     return Path.home() / "Downloads"
 
 
-def organize_desktop(desktop_dir: Optional[Path] = None) -> Tuple[bool, str, Dict[str, int]]:
+DEFAULT_CLEANUP_JOURNAL = Path(__file__).resolve().parent.parent.parent / "data" / "desktop_cleanup_journal.json"
+
+
+def organize_desktop(
+    desktop_dir: Optional[Path | str] = None,
+    preview: bool = False,
+    journal_file: Optional[Path | str] = None,
+) -> Tuple[bool, str, Dict[str, int]]:
     """
     Masaüstündeki gevşek dosyaları ilgili alt klasörlere (Belgeler, Görseller vb.) taşır.
     Masaüstü kısayollarına (.lnk, .url) ve klasörlere kesinlikle dokunmaz.
+    preview=True olduğunda dosyaları taşımaz, yalnızca yapılacak işlemin önizlemesini sunar.
     """
-    desk_path = desktop_dir or _get_desktop_path()
+    import json
+    import time
+    desk_path = Path(desktop_dir) if desktop_dir else _get_desktop_path()
     if not desk_path.exists():
         return False, "Masaüstü klasörü bulunamadı.", {}
 
     moved_counts: Dict[str, int] = {}
-    total_moved = 0
+    planned_moves: List[Tuple[Path, Path, str]] = []
 
     try:
         for item in desk_path.iterdir():
@@ -105,28 +115,115 @@ def organize_desktop(desktop_dir: Optional[Path] = None) -> Tuple[bool, str, Dic
                 continue
 
             target_folder = desk_path / category
-            target_folder.mkdir(exist_ok=True)
-
             target_file = target_folder / item.name
-            # İsim çakışması varsa numaralandır
             counter = 1
             while target_file.exists():
                 target_file = target_folder / f"{item.stem}_{counter}{item.suffix}"
                 counter += 1
 
-            shutil.move(str(item), str(target_file))
+            planned_moves.append((item, target_file, category))
             moved_counts[category] = moved_counts.get(category, 0) + 1
-            total_moved += 1
 
-        if total_moved == 0:
+        total_files = len(planned_moves)
+        if total_files == 0:
             return True, "Masaüstünüz zaten tamamen düzenli. Taşınacak dosya bulunamadı.", {}
 
         parts = [f"{count} {cat.lower()}" for cat, count in moved_counts.items()]
-        msg = f"Masaüstündeki toplam {total_moved} dosya düzenlendi ({', '.join(parts)} ilgili klasörlere taşındı)."
+
+        if preview:
+            msg = (
+                f"📋 Masaüstü Düzenleme Önizlemesi:\n"
+                f"Toplam {total_files} dosya düzenlenecek ({', '.join(parts)} ilgili klasörlere taşınacak).\n"
+                f"Onaylıyorsanız 'Masaüstümü düzenle' diyerek taşıma işlemini hemen başlatabilirsiniz."
+            )
+            return True, msg, moved_counts
+
+        # Gerçek taşıma ve geri alma günlüğü (journal)
+        journal_entries = []
+        for src, dst, cat in planned_moves:
+            dst.parent.mkdir(exist_ok=True)
+            shutil.move(str(src), str(dst))
+            journal_entries.append({
+                "source": str(src),
+                "destination": str(dst),
+                "category": cat,
+                "timestamp": time.time(),
+            })
+
+        j_path = Path(journal_file) if journal_file else DEFAULT_CLEANUP_JOURNAL
+        try:
+            j_path.parent.mkdir(parents=True, exist_ok=True)
+            existing_journal = []
+            if j_path.exists():
+                try:
+                    with open(j_path, "r", encoding="utf-8") as jf:
+                        existing_journal = json.load(jf)
+                except Exception:
+                    pass
+            existing_journal.extend(journal_entries)
+            tmp_j = j_path.with_suffix(".tmp")
+            with open(tmp_j, "w", encoding="utf-8") as jf:
+                json.dump(existing_journal, jf, ensure_ascii=False, indent=2)
+            os.replace(tmp_j, j_path)
+        except Exception as e:
+            logger.debug(f"Masaüstü geri alma günlüğü kaydedilemedi: {e}")
+
+        msg = (
+            f"Masaüstündeki toplam {total_files} dosya düzenlendi "
+            f"({', '.join(parts)} ilgili klasörlere taşındı).\n"
+            f"İstediğiniz zaman 'Masaüstü düzenlemesini geri al' diyerek eski haline döndürebilirsiniz."
+        )
         return True, msg, moved_counts
     except Exception as e:
         logger.error(f"Masaüstü düzenleme hatası: {e}")
         return False, f"Masaüstü düzenlenirken hata oluştu: {e}", {}
+
+
+def undo_organize_desktop(journal_file: Optional[Path | str] = None) -> Tuple[bool, str]:
+    """
+    Son masaüstü düzenleme işleminde taşınan dosyaları orijinal konumlarına geri döndürür.
+    """
+    import json
+    j_path = Path(journal_file) if journal_file else DEFAULT_CLEANUP_JOURNAL
+    if not j_path.exists():
+        return False, "Geri alınacak bir masaüstü düzenleme geçmişi bulunamadı."
+
+    try:
+        with open(j_path, "r", encoding="utf-8") as f:
+            entries = json.load(f)
+        if not entries or not isinstance(entries, list):
+            return False, "Geri alınacak işlem kaydı bulunamadı."
+
+        restored_count = 0
+        for entry in reversed(entries):
+            src_str = entry.get("source")
+            dst_str = entry.get("destination")
+            if not src_str or not dst_str:
+                continue
+            src = Path(src_str)
+            dst = Path(dst_str)
+            if dst.exists():
+                src.parent.mkdir(parents=True, exist_ok=True)
+                final_src = src
+                counter = 1
+                while final_src.exists():
+                    final_src = src.parent / f"{src.stem}_geri_{counter}{src.suffix}"
+                    counter += 1
+                shutil.move(str(dst), str(final_src))
+                restored_count += 1
+
+        # Günlüğü temizle
+        try:
+            os.remove(j_path)
+        except Exception:
+            pass
+
+        if restored_count == 0:
+            return True, "Geri taşınacak dosya bulunamadı veya dosyalar zaten taşınmış."
+        return True, f"Masaüstü düzenlemesi başarıyla geri alındı. Toplam {restored_count} dosya orijinal yerine döndürüldü."
+    except Exception as e:
+        logger.error(f"Masaüstü geri alma hatası: {e}")
+        return False, f"Geri alma sırasında hata oluştu: {e}"
 
 
 def get_downloads_info(downloads_dir: Optional[Path] = None) -> Tuple[bool, str, Dict]:
@@ -185,6 +282,30 @@ def resolve_file_organizer_command(user_text: str) -> Optional[str]:
       - 'indirilenler boyutu'
     """
     cleaned = user_text.lower().strip().strip("?!.,")
+
+    # Geri alma (Undo)
+    if any(k in cleaned for k in (
+        "masaüstü düzenlemesini geri al",
+        "masaüstünü geri al",
+        "masaüstü geri al",
+        "düzenlemeyi geri al",
+        "taşınan dosyaları geri al",
+        "masaüstünü geri yükle",
+    )):
+        ok, msg = undo_organize_desktop()
+        return msg
+
+    # Önizleme (Dry-run / Preview)
+    if any(k in cleaned for k in (
+        "masaüstü düzenleme önizleme",
+        "düzenlemeden önce göster",
+        "masaüstünü düzenlemeden önce göster",
+        "masaüstü önizleme",
+        "masaüstü önizlemesi",
+        "ne taşınacak",
+    )):
+        ok, msg, _ = organize_desktop(preview=True)
+        return msg
 
     if any(k in cleaned for k in (
         "masaüstümü düzenle",

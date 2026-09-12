@@ -975,7 +975,8 @@ def build_application(
     evaluator = None
     sandbox_image = os.getenv("BORU_SANDBOX_IMAGE", "boru-sandbox:1.0")
     if sandbox_enabled:
-        sandbox_executor = DockerSandboxExecutor(project_root, sandbox_image)
+        from boru.sandbox import HybridSandboxExecutor
+        sandbox_executor = HybridSandboxExecutor(project_root, sandbox_image)
         command_executor = sandbox_executor
     if runtime_test_agent_enabled:
         if sandbox_executor is None:

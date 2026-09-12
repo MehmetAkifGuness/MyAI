@@ -13,5 +13,7 @@ __pycache__/
 /data/verified_experience/
 /data/conversation_evals/
 user_notes.json
+/data/reminders.json*
+/data/desktop_cleanup_journal.json*
 .pytest_tmp/
 .pytest_cache/

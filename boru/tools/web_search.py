@@ -49,13 +49,28 @@ def search_web_live(query: str, max_results: int = 3) -> Tuple[bool, str]:
         _SEARCH_CACHE[cache_key] = (now, results)
         return True, _format_search_results(q, results)
 
+    # 2. Wikipedia ve Canlı Ansiklopedik Bilgi Sağlayıcısı Fallback
     try:
         from boru.tools.web_qa_tools import search_wikipedia_summary
         ok, wiki_summary = search_wikipedia_summary(q)
         if ok and wiki_summary:
-            return True, f"Web aramasinda one cikan bilgi:\n{wiki_summary}"
-    except Exception:
-        pass
+            _SEARCH_CACHE[cache_key] = (now, [{"title": q, "body": wiki_summary, "href": "https://tr.wikipedia.org"}])
+            return True, f"🌐 '{q}' hakkında doğrulanmış web bilgisi:\n\n{wiki_summary}"
+
+        # Soru kalıplarını temizleyip ana konuyu ara ("asgari ücret nedir" -> "asgari ücret")
+        clean_subj = re.sub(
+            r"\s+(?:nedir|kimdir|nerededir|ne\s+zaman|nasıl|hakkında\s+bilgi|bilgi\s+ver)[?.!]*$",
+            "",
+            q,
+            flags=re.IGNORECASE,
+        ).strip()
+        if clean_subj and clean_subj.lower() != q.lower():
+            ok2, wiki_summary2 = search_wikipedia_summary(clean_subj)
+            if ok2 and wiki_summary2:
+                _SEARCH_CACHE[cache_key] = (now, [{"title": clean_subj, "body": wiki_summary2, "href": "https://tr.wikipedia.org"}])
+                return True, f"🌐 '{clean_subj}' hakkında doğrulanmış web bilgisi:\n\n{wiki_summary2}"
+    except Exception as e:
+        logger.debug(f"Web QA fallback hatası ({q}): {e}")
 
     return False, f"'{q}' icin guncel arama sonucu bulunamadi."
 

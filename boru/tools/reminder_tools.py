@@ -1,13 +1,18 @@
 from __future__ import annotations
 
 import datetime
+import json
 import logging
+import os
+from pathlib import Path
 import re
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_REMINDERS_PATH = Path(__file__).resolve().parent.parent.parent / "data" / "reminders.json"
 
 
 class ReminderItem:
@@ -21,19 +26,68 @@ class ReminderItem:
 class ReminderService:
     """
     Arka planda çalışan, sesli ve bildirimli akıllı sayaç ve hatırlatıcı servisi.
+    Hatırlatıcıları diske kalıcı (persistent) olarak kaydeder; uygulama kapansa bile
+    açılışta otomatik olarak geri yükler.
     """
     _instance: Optional[ReminderService] = None
 
-    def __init__(self):
+    def __init__(self, storage_path: Path | str | None = None):
         self._lock = threading.Lock()
         self._reminders: Dict[int, ReminderItem] = {}
         self._counter = 0
+        self._storage_path = Path(storage_path) if storage_path else DEFAULT_REMINDERS_PATH
+        self._load_persistent()
 
     @classmethod
     def get_instance(cls) -> ReminderService:
         if cls._instance is None:
             cls._instance = ReminderService()
         return cls._instance
+
+    def _save_persistent(self) -> None:
+        try:
+            self._storage_path.parent.mkdir(parents=True, exist_ok=True)
+            data = []
+            now = time.time()
+            for r in self._reminders.values():
+                if r.due_at > now:
+                    data.append({
+                        "id": r.item_id,
+                        "due_at": r.due_at,
+                        "label": r.label,
+                    })
+            tmp_file = self._storage_path.with_suffix(".tmp")
+            with open(tmp_file, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+            os.replace(tmp_file, self._storage_path)
+        except Exception as e:
+            logger.debug(f"Hatırlatıcıları kaydetme hatası: {e}")
+
+    def _load_persistent(self) -> None:
+        if not self._storage_path.exists():
+            return
+        try:
+            with open(self._storage_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if not isinstance(data, list):
+                return
+            now = time.time()
+            for item in data:
+                item_id = int(item.get("id", 0))
+                due_at = float(item.get("due_at", 0))
+                label = str(item.get("label", "Hatırlatıcı"))
+                remain = due_at - now
+                if remain > 0:
+                    self._counter = max(self._counter, item_id)
+                    def _timeout_wrapper(iid=item_id, lbl=label):
+                        self._trigger_fire(iid, lbl, None)
+
+                    timer = threading.Timer(remain, _timeout_wrapper)
+                    timer.daemon = True
+                    timer.start()
+                    self._reminders[item_id] = ReminderItem(item_id, due_at, label, timer)
+        except Exception as e:
+            logger.debug(f"Hatırlatıcıları geri yükleme hatası: {e}")
 
     def schedule(
         self,
@@ -55,6 +109,7 @@ class ReminderService:
 
             item = ReminderItem(item_id, due_at, label, timer)
             self._reminders[item_id] = item
+            self._save_persistent()
 
             # Zaman formatı
             if seconds >= 3600:
@@ -79,6 +134,7 @@ class ReminderService:
     ) -> None:
         with self._lock:
             self._reminders.pop(item_id, None)
+            self._save_persistent()
 
         logger.info(f"Hatırlatıcı tetiklendi: {label}")
 
@@ -126,6 +182,7 @@ class ReminderService:
             for r in self._reminders.values():
                 r.timer.cancel()
             self._reminders.clear()
+            self._save_persistent()
             if count > 0:
                 return f"{count} adet aktif hatırlatıcı iptal edildi."
             return "İptal edilecek aktif hatırlatıcı yok."

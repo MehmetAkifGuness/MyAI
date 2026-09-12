@@ -84,9 +84,17 @@ def analyze_screen(query: str = "Şu anda ekranda ne var, hata veya önemli bilg
             analysis = response.message.content.strip()
             return f"📸 Ekran İncelendi ({vision_model}):\n{analysis}"
         else:
+            try:
+                from boru.tools.screen_agent import get_screen_agent
+                screen_agent = get_screen_agent()
+                summary = screen_agent.get_screen_summary()
+            except Exception:
+                summary = "Masaüstü pencere bilgisi okunamadı."
+
             return (
-                f"📸 Ekran görüntüsü alındı ({screenshot_path}). "
-                "Görsel analiz için Ollama'da bir vision modeli (örneğin: 'ollama run llava' veya 'ollama run qwen2-vl:7b') "
+                f"📸 Ekran görüntüsü alındı ({screenshot_path}).\n\n"
+                f"{summary}\n\n"
+                "💡 Piksel tabanlı görsel analiz için Ollama'da bir vision modeli (örneğin: 'ollama run llava' veya 'ollama run qwen2-vl:7b') "
                 "çalıştırabilirsiniz."
             )
     except Exception as e:

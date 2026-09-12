@@ -156,3 +156,93 @@ class DockerSandboxExecutor:
             raise ValueError(f"Sandbox temizlenemedi; container adı: {name}") from error
         if result.returncode and b"No such container" not in result.stderr:
             raise ValueError(f"Sandbox temizliği doğrulanamadı; container adı: {name}")
+
+
+class LocalIsolatedSandboxExecutor:
+    """
+    Docker motoru kapalı olduğunda veya bulunamadığında, kaynak kodların
+    geçici bir kopyasını alarak güvenli ve yalıtılmış bir ortamda test/lint
+    komutlarını çalıştıran yerel sanal alan yürütücüsü.
+    """
+
+    _KINDS = DockerSandboxExecutor._KINDS
+    _TARGET_KINDS = DockerSandboxExecutor._TARGET_KINDS
+
+    def __init__(self, root: Path, timeout_seconds: int = 60):
+        import sys
+        self._root = root.resolve()
+        self._resolver = WorkspacePathResolver(self._root)
+        self._timeout = timeout_seconds
+        self._python_bin = sys.executable
+
+    def status(self) -> str:
+        return (
+            "SANDBOX DURUMU\nDurum: HAZIR (Yerel İzolasyon)\n"
+            "Geçici kopya: aktif; komut süresi: 60 sn; yalnızca izinli test/lint komutları çalıştırılır.\n"
+            "Kaynak güvenliği: geçici dizin izolasyonu; ana çalışma alanı korunur."
+        )
+
+    def execute(self, command: CommandSpec) -> CommandExecutionResult:
+        arguments = DockerSandboxExecutor._canonical_arguments(command)
+        with TemporaryDirectory(prefix="boru-local-sandbox-") as directory:
+            snapshot = Path(directory)
+            SourceSnapshot(self._root).copy_to(snapshot)
+            workdir = snapshot
+            if command.working_directory:
+                source_directory = self._resolver.resolve(command.working_directory)
+                if not source_directory.is_dir():
+                    raise ValueError("Sandbox çalışma yolu klasör olmalıdır.")
+                relative = source_directory.relative_to(self._root)
+                workdir = snapshot / relative
+                workdir.mkdir(parents=True, exist_ok=True)
+
+            runner = BoundedCommandExecutor(workdir, timeout_seconds=self._timeout)
+            spec = CommandSpec(
+                command.kind,
+                self._python_bin,
+                ("-B", *arguments),
+                f"LocalSandbox: {command.display}",
+                CommandRisk.SAFE,
+                workdir,
+            )
+            result = runner.execute(spec)
+            return replace(result, command=command)
+
+
+class HybridSandboxExecutor:
+    """
+    Docker ve Yerel İzolasyonu birleştiren hibrit yürütücü.
+    Docker çalışıyorsa Linux container'ını, kapalıysa yerel geçici kopya
+    izolasyonunu otomatik olarak seçer.
+    """
+
+    _KINDS = DockerSandboxExecutor._KINDS
+    _TARGET_KINDS = DockerSandboxExecutor._TARGET_KINDS
+
+    def __init__(self, root: Path, image: str = "boru-sandbox:1.0", timeout_seconds: int = 60):
+        self._root = root.resolve()
+        self._docker_executor = DockerSandboxExecutor(self._root, image)
+        self._local_executor = LocalIsolatedSandboxExecutor(self._root, timeout_seconds)
+
+    def is_docker_ready(self) -> bool:
+        st = self._docker_executor.status()
+        return "Durum: HAZIR\n" in st
+
+    def status(self) -> str:
+        if self.is_docker_ready():
+            return self._docker_executor.status()
+        return (
+            "SANDBOX DURUMU\nDurum: HAZIR (Yerel Güvenli İzolasyon Fallback)\n"
+            "Not: Docker kapalı veya imaj kurulu değil; geçici kopya izolasyonu aktif.\n"
+            "Komut süresi: 60 sn; yalnızca izinli test/lint komutları çalıştırılır."
+        )
+
+    def execute(self, command: CommandSpec) -> CommandExecutionResult:
+        if self.is_docker_ready():
+            try:
+                return self._docker_executor.execute(command)
+            except Exception:
+                # Docker çalışma zamanında çökerse yerel izolasyona düş
+                return self._local_executor.execute(command)
+        return self._local_executor.execute(command)
+

@@ -3,8 +3,10 @@ from __future__ import annotations
 import datetime
 import json
 import logging
+import os
 from pathlib import Path
 import re
+import shutil
 from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
@@ -23,24 +25,46 @@ class NotesService:
     kalıcı olarak JSON dosyasında saklayan ve yöneten servis.
     """
 
-    def __init__(self, notes_path: Path | None = None):
-        self._path = notes_path or DEFAULT_NOTES_PATH
+    def __init__(self, notes_path: Path | str | None = None, notes_file: Path | str | None = None):
+        target = notes_path or notes_file
+        self._path = Path(target) if target else DEFAULT_NOTES_PATH
 
     def _load(self) -> List[Dict]:
-        if not self._path.exists():
-            return []
-        try:
-            with open(self._path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-                return data if isinstance(data, list) else []
-        except Exception as e:
-            logger.debug(f"Notları okuma hatası: {e}")
-            return []
+        for candidate in (self._path, self._path.with_suffix(".backup")):
+            if not candidate.exists():
+                continue
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    if isinstance(data, list):
+                        return data
+            except Exception as e:
+                logger.debug(f"Notları okuma hatası ({candidate}): {e}")
+        return []
 
     def _save(self, notes: List[Dict]) -> None:
         try:
-            with open(self._path, "w", encoding="utf-8") as f:
+            self._path.parent.mkdir(parents=True, exist_ok=True)
+            tmp_path = self._path.with_suffix(".tmp")
+            backup_path = self._path.with_suffix(".backup")
+            with open(tmp_path, "w", encoding="utf-8") as f:
                 json.dump(notes, f, ensure_ascii=False, indent=2)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except Exception:
+                    pass
+            if self._path.exists():
+                try:
+                    shutil.copy2(self._path, backup_path)
+                except Exception:
+                    pass
+            elif not backup_path.exists():
+                try:
+                    shutil.copy2(tmp_path, backup_path)
+                except Exception:
+                    pass
+            os.replace(tmp_path, self._path)
         except Exception as e:
             logger.debug(f"Notları kaydetme hatası: {e}")
 
