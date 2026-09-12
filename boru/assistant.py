@@ -271,7 +271,17 @@ class AssistantService:
         self,
         user_message: str,
     ) -> str | None:
-        # 0. Öncelik: Kullanıcı Geri Bildirimi / Eleştiri / Hata Bildirimi (Feedback Intent)
+        # 0. Öncelik: Otonom Hata Düzeltme & Alternatif Strateji (Self-Correction)
+        # Kullanıcı "Hala açık", "Kapanmadı", "Çalışmadı" dediğinde önceki eylemi düzelt
+        try:
+            from boru.tools.self_corrector import SelfCorrectionDispatcher
+            correction_res = SelfCorrectionDispatcher.handle_correction(user_message)
+            if correction_res is not None:
+                return correction_res
+        except Exception:
+            pass
+
+        # 0.1 Öncelik: Kullanıcı Geri Bildirimi / Eleştiri / Hata Bildirimi (Feedback Intent)
         # Kullanıcının eleştirilerini ve düzeltmelerini asla komut veya arama olarak işletme!
         try:
             from boru.tools.semantic_router import SemanticIntentResolver

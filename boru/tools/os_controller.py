@@ -183,9 +183,11 @@ class AutonomousComputerAgent:
                 except Exception:
                     pass
 
-                # 2. Web Spotify fallback
-                web_url = f"https://open.spotify.com/search/{urllib.parse.quote(clean_query)}"
-                webbrowser.open(web_url)
+                try:
+                    from boru.tools.self_corrector import ActionHistoryTracker
+                    ActionHistoryTracker.get_instance().record_action("play_music", clean_query, strategy_tier=1, success=True)
+                except Exception:
+                    pass
                 return True, f"Spotify'da '{clean_query}' açıldı."
             except Exception as e:
                 return False, f"Spotify açılamadı: {e}"
@@ -356,7 +358,16 @@ def resolve_os_controller_command(user_text: str) -> Optional[str]:
     Kullanıcının Türkçe doğal dildeki sesli / yazılı bilgisayar yönetim komutlarını çözer.
     Eğer tam erişimli otonom ajan eylemlerinden biriyle eşleşirse yürütür ve söylenecek cevabı döndürür.
     """
-    # 0. Geri bildirim, eleştiri ve hata şikayetlerini asla OS komutu olarak işletme
+    # 0. Öncelik: Otonom Hata Düzeltme & Alternatif Strateji (Self-Correction)
+    try:
+        from boru.tools.self_corrector import SelfCorrectionDispatcher
+        correction_res = SelfCorrectionDispatcher.handle_correction(user_text)
+        if correction_res is not None:
+            return correction_res
+    except Exception:
+        pass
+
+    # 0.1 Geri bildirim, eleştiri ve hata şikayetlerini asla OS komutu olarak işletme
     try:
         from boru.tools.semantic_router import SemanticIntentResolver
         fb_res = SemanticIntentResolver.resolve_feedback_intent(user_text)

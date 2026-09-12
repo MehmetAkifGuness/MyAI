@@ -104,7 +104,7 @@ class SemanticIntentResolver:
         """
         cand = text.strip()
         # 1. Platform önekleri
-        cand = re.sub(r"\b(?:spotify(?:'da|'de|da|de|'dan|'den|dan|den)?|youtube(?:'da|'de|da|de|'dan|'den|dan|den)?)\b", "", cand, flags=re.IGNORECASE)
+        cand = re.sub(r"\b(?:spotify(?:'da|'de|da|de|'dan|'den|dan|den|'ı|'i|ı|i|'a|'e|a|e)?|youtube(?:'da|'de|da|de|'dan|'den|dan|den|'u|'a|'e|a|e)?)\b", "", cand, flags=re.IGNORECASE)
         # 2. Sanatçı ayrılma hali ekleri (Ceza'dan -> Ceza, Duman'dan -> Duman, Sezen Aksu'dan -> Sezen Aksu)
         cand = re.sub(r"'(?:dan|den|tan|ten)\b", "", cand, flags=re.IGNORECASE)
         cand = re.sub(r"\b([a-zA-ZçÇğĞıİöÖşŞüÜ]+)(?:dan|den|tan|ten)\b", r"\1", cand, flags=re.IGNORECASE)

@@ -222,10 +222,25 @@ def close_application(app_name: str) -> Tuple[bool, str]:
             timeout=5,
         )
         display_name = normalized.capitalize() if normalized in APP_PROCESS_MAP else app_name.capitalize()
-        if res.returncode == 0:
+        if res.returncode != 0:
+            return False, f"{display_name} açık değil veya kapatılamadı."
+
+        try:
+            from boru.tools.closed_loop import SystemExecutionVerifier
+            is_stopped, _ = SystemExecutionVerifier.verify_app_stopped(proc_name, wait_seconds=0.1, max_attempts=2)
+        except Exception:
+            is_stopped = True
+
+        try:
+            from boru.tools.self_corrector import ActionHistoryTracker
+            ActionHistoryTracker.get_instance().record_action("close_app", normalized, strategy_tier=1, success=is_stopped)
+        except Exception:
+            pass
+
+        if is_stopped:
             return True, f"{display_name} kapatıldı."
         else:
-            return False, f"{display_name} açık değil veya kapatılamadı."
+            return False, f"{display_name} kapatılmaya çalışıldı ancak süreç hala açık görünüyor."
     except Exception as e:
         logger.debug(f"Uygulama kapatma hatası ({app_name}): {e}")
         return False, f"{app_name} kapatılamadı: {e}"
@@ -518,7 +533,17 @@ def resolve_system_command(user_text: str) -> Optional[str]:
     Eğer sistem komutuyla eşleşirse işlemi yürütür ve söylenecek cevabı döndürür.
     Eşleşmezse None döner.
     """
-    # 0. Geri Bildirim, Eleştiri ve Hata Bildirimi Kontrolü
+    # 0. Öncelik: Otonom Hata Düzeltme & Alternatif Strateji (Self-Correction)
+    # Kullanıcı "Hala açık", "Kapanmadı", "Çalışmadı" dediğinde önceki eylemi düzelt
+    try:
+        from boru.tools.self_corrector import SelfCorrectionDispatcher
+        correction_res = SelfCorrectionDispatcher.handle_correction(user_text)
+        if correction_res is not None:
+            return correction_res
+    except Exception as e:
+        logger.debug(f"Self-correction hatası: {e}")
+
+    # 0.1 Geri Bildirim, Eleştiri ve Hata Bildirimi Kontrolü
     # Kullanıcı hata bildirdiğinde veya eleştirdiğinde ASLA komut/arama çalıştırma!
     try:
         from boru.tools.semantic_router import SemanticIntentResolver
