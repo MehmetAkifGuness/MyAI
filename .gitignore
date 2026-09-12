@@ -18,3 +18,4 @@ user_notes.json
 /data/boru.db*
 .pytest_tmp/
 .pytest_cache/
+/data/continuous_knowledge.json*

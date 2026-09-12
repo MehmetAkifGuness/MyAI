@@ -182,6 +182,36 @@ class LocalIsolatedSandboxExecutor:
             "Kaynak güvenliği: geçici dizin izolasyonu; ana çalışma alanı korunur."
         )
 
+    @classmethod
+    def _sanitized_environment(cls, snapshot_root: Path) -> dict[str, str]:
+        """
+        Ana makinedeki gizli ortam değişkenlerini (API token, şifre vb.) temizler;
+        yalnızca temel OS çalışma değişkenlerini ve izole snapshot PYTHONPATH'ini bırakır.
+        """
+        import os
+        safe_system_vars = {
+            "SYSTEMROOT", "SYSTEMDRIVE", "WINDIR", "COMSPEC", "PATHEXT", "PATH",
+            "TEMP", "TMP", "LOCALAPPDATA", "APPDATA", "USERPROFILE", "USERNAME",
+            "HOMEPATH", "HOMEDRIVE",
+            "HOME", "USER", "LOGNAME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "TERM",
+        }
+        sensitive_keywords = (
+            "key", "token", "secret", "auth", "password", "pwd", "credential",
+            "api", "cert", "conn", "database", "dsn", "webhook",
+        )
+        clean_env: dict[str, str] = {}
+        for k, v in os.environ.items():
+            upper_k = k.upper()
+            if upper_k in safe_system_vars:
+                if not any(pattern in k.lower() for pattern in sensitive_keywords):
+                    clean_env[k] = v
+
+        clean_env["PYTHONDONTWRITEBYTECODE"] = "1"
+        clean_env["PYTHONUNBUFFERED"] = "1"
+        clean_env["PYTHONIOENCODING"] = "utf-8"
+        clean_env["PYTHONPATH"] = str(snapshot_root)
+        return clean_env
+
     def execute(self, command: CommandSpec) -> CommandExecutionResult:
         arguments = DockerSandboxExecutor._canonical_arguments(command)
         with TemporaryDirectory(prefix="boru-local-sandbox-") as directory:
@@ -196,7 +226,12 @@ class LocalIsolatedSandboxExecutor:
                 workdir = snapshot / relative
                 workdir.mkdir(parents=True, exist_ok=True)
 
-            runner = BoundedCommandExecutor(workdir, timeout_seconds=self._timeout)
+            sanitized_env = self._sanitized_environment(snapshot)
+            runner = BoundedCommandExecutor(
+                workdir,
+                timeout_seconds=self._timeout,
+                env=sanitized_env,
+            )
             spec = CommandSpec(
                 command.kind,
                 self._python_bin,

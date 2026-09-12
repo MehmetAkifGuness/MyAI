@@ -1,3 +1,16 @@
+"""
+Börü — Geriye Dönük Uyumluluk ve Test Köprüsü (Legacy Compatibility Bridge)
+============================================================================
+MİMARİ NOT:
+Bu modül, test paketindeki (test_v1000.py ... test_v13000.py) 20'den fazla testin
+`patch.object(main_v170, ...)` ile uyguladığı test-double (mock) mekanizmalarını
+korumak ve geriye dönük tam uyumluluk sağlamak amacıyla tutulmaktadır.
+
+Üretim ortamı ve canlı çalıştırma için:
+  - Giriş Noktası: `main.py` (Modern WebView2 / Klasik Tkinter / Headless Daemon)
+  - Uygulama Fabrikası: `boru.factory.build_application` / `boru.release.build_release`
+"""
+
 from pathlib import Path
 import os
 

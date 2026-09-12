@@ -20,6 +20,7 @@ class BoundedCommandExecutor:
         timeout_seconds: float = 120.0,
         max_output_bytes: int = 1024 * 1024,
         allowed_risks: tuple[CommandRisk, ...] = (CommandRisk.SAFE,),
+        env: dict[str, str] | None = None,
     ) -> None:
         root = workspace_root.resolve()
         if not root.is_dir():
@@ -35,8 +36,13 @@ class BoundedCommandExecutor:
         self._timeout_seconds = timeout_seconds
         self._max_output_bytes = max_output_bytes
         self._allowed_risks = frozenset(allowed_risks)
+        self._env = dict(env) if env is not None else None
 
-    def execute(self, command: CommandSpec) -> CommandExecutionResult:
+    def execute(
+        self,
+        command: CommandSpec,
+        env: dict[str, str] | None = None,
+    ) -> CommandExecutionResult:
         if command.risk not in self._allowed_risks:
             raise PermissionError("Komut risk seviyesi çalıştırıcı tarafından engellendi.")
 
@@ -44,6 +50,7 @@ class BoundedCommandExecutor:
         timed_out = False
         output_limit_exceeded = False
         creation_flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        run_env = env if env is not None else self._env
 
         with tempfile.TemporaryFile() as output_file:
             process = subprocess.Popen(
@@ -54,6 +61,7 @@ class BoundedCommandExecutor:
                 stdout=output_file,
                 stderr=subprocess.STDOUT,
                 creationflags=creation_flags,
+                env=run_env,
             )
 
             while process.poll() is None:

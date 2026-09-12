@@ -24,6 +24,29 @@ class FileDependencyReport:
 
 
 @dataclass(frozen=True, slots=True)
+class ClassHierarchyReport:
+    """Sınıfın kalıtım hiyerarşisi, alt/üst sınıfları, metotları ve decorator'ları."""
+    class_name: str
+    definition_path: str | None
+    line_number: int | None
+    base_classes: tuple[str, ...]
+    subclasses: tuple[str, ...]
+    methods: tuple[str, ...]
+    decorators: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class TypeUsageLocation:
+    """Tip anotasyonu (parametre, dönüş veya değişken tipi) kullanım konumu."""
+    path: str
+    line_number: int
+    kind: str  # 'param_type', 'return_type', 'variable_type'
+    symbol_name: str
+    enclosing_symbol: str
+    snippet: str
+
+
+@dataclass(frozen=True, slots=True)
 class SymbolLocation:
     path: str
     line_number: int
@@ -195,11 +218,176 @@ class ProjectDependencyGraph:
                                     snippet=snippet,
                                 )
                             )
+                    elif isinstance(node, ast.Attribute):
+                        if node.attr == clean_symbol and isinstance(node.ctx, ast.Load):
+                            snippet = lines[node.lineno - 1].strip() if node.lineno <= len(lines) else ""
+                            results.append(
+                                SymbolLocation(
+                                    path=rel,
+                                    line_number=node.lineno,
+                                    kind="kullanım",
+                                    snippet=snippet,
+                                )
+                            )
             except Exception:
                 continue
 
         results.sort(key=lambda x: (x.path, x.line_number))
         return tuple(results)
+
+    def find_class_hierarchy(self, class_name: str) -> ClassHierarchyReport | None:
+        """
+        Belirtilen sınıfın (class_name) kalıtım hiyerarşisini, üst sınıflarını (bases),
+        alt sınıflarını (subclasses), tanımlı metotlarını ve decorator'larını çıkarır.
+        """
+        clean_name = class_name.strip()
+        py_files = self._list_python_files()
+
+        class_definitions: dict[str, dict] = {}
+        subclass_map: dict[str, list[str]] = {}
+
+        for file in py_files:
+            rel = file.relative_to(self._root).as_posix()
+            try:
+                content = file.read_text(encoding="utf-8", errors="replace")
+                if "class " not in content:
+                    continue
+                tree = ast.parse(content)
+                for node in ast.walk(tree):
+                    if not isinstance(node, ast.ClassDef):
+                        continue
+                    bases: list[str] = []
+                    for b in node.bases:
+                        if isinstance(b, ast.Name):
+                            bases.append(b.id)
+                        elif isinstance(b, ast.Attribute):
+                            bases.append(b.attr)
+                    methods = [
+                        m.name for m in node.body
+                        if isinstance(m, (ast.FunctionDef, ast.AsyncFunctionDef))
+                    ]
+                    decorators: list[str] = []
+                    for d in node.decorator_list:
+                        if isinstance(d, ast.Name):
+                            decorators.append(d.id)
+                        elif isinstance(d, ast.Attribute):
+                            decorators.append(d.attr)
+                        elif isinstance(d, ast.Call):
+                            if isinstance(d.func, ast.Name):
+                                decorators.append(d.func.id)
+                            elif isinstance(d.func, ast.Attribute):
+                                decorators.append(d.func.attr)
+
+                    class_definitions[node.name] = {
+                        "path": rel,
+                        "line": node.lineno,
+                        "bases": tuple(bases),
+                        "methods": tuple(methods),
+                        "decorators": tuple(decorators),
+                    }
+                    for b in bases:
+                        subclass_map.setdefault(b, []).append(node.name)
+            except Exception:
+                continue
+
+        target_info = class_definitions.get(clean_name)
+        direct_subclasses = subclass_map.get(clean_name, [])
+
+        if target_info is None and not direct_subclasses:
+            return None
+
+        return ClassHierarchyReport(
+            class_name=clean_name,
+            definition_path=target_info["path"] if target_info else None,
+            line_number=target_info["line"] if target_info else None,
+            base_classes=target_info["bases"] if target_info else (),
+            subclasses=tuple(sorted(set(direct_subclasses))),
+            methods=target_info["methods"] if target_info else (),
+            decorators=target_info["decorators"] if target_info else (),
+        )
+
+    def find_typed_usages(self, type_name: str) -> tuple[TypeUsageLocation, ...]:
+        """
+        Belirtilen tip adının (type_name) fonksiyon parametresi, dönüş tipi
+        veya değişken tipi anotasyonlarında nerelerde kullanıldığını tespit eder.
+        """
+        clean_name = type_name.strip().casefold()
+        results: list[TypeUsageLocation] = []
+
+        for file in self._list_python_files():
+            rel = file.relative_to(self._root).as_posix()
+            try:
+                content = file.read_text(encoding="utf-8", errors="replace")
+                if clean_name not in content.casefold():
+                    continue
+                lines = content.splitlines()
+                tree = ast.parse(content)
+
+                for node in ast.walk(tree):
+                    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                        all_args = list(node.args.args) + list(node.args.posonlyargs) + list(node.args.kwonlyargs)
+                        for arg in all_args:
+                            if arg.annotation:
+                                names = self._extract_ast_names(arg.annotation)
+                                if clean_name in names:
+                                    line_no = getattr(arg, "lineno", node.lineno)
+                                    snippet = lines[line_no - 1].strip() if line_no <= len(lines) else ""
+                                    results.append(
+                                        TypeUsageLocation(
+                                            path=rel,
+                                            line_number=line_no,
+                                            kind="param_type",
+                                            symbol_name=type_name.strip(),
+                                            enclosing_symbol=node.name,
+                                            snippet=snippet,
+                                        )
+                                    )
+                        if node.returns:
+                            names = self._extract_ast_names(node.returns)
+                            if clean_name in names:
+                                snippet = lines[node.lineno - 1].strip() if node.lineno <= len(lines) else ""
+                                results.append(
+                                    TypeUsageLocation(
+                                        path=rel,
+                                        line_number=node.lineno,
+                                        kind="return_type",
+                                        symbol_name=type_name.strip(),
+                                        enclosing_symbol=node.name,
+                                        snippet=snippet,
+                                    )
+                                )
+                    elif isinstance(node, ast.AnnAssign):
+                        if node.annotation:
+                            names = self._extract_ast_names(node.annotation)
+                            if clean_name in names:
+                                snippet = lines[node.lineno - 1].strip() if node.lineno <= len(lines) else ""
+                                results.append(
+                                    TypeUsageLocation(
+                                        path=rel,
+                                        line_number=node.lineno,
+                                        kind="variable_type",
+                                        symbol_name=type_name.strip(),
+                                        enclosing_symbol="",
+                                        snippet=snippet,
+                                    )
+                                )
+            except Exception:
+                continue
+
+        results.sort(key=lambda x: (x.path, x.line_number))
+        return tuple(results)
+
+    @staticmethod
+    def _extract_ast_names(node: ast.AST | None) -> set[str]:
+        names: set[str] = set()
+        if node is None:
+            return names
+        for child in ast.walk(node):
+            if isinstance(child, ast.Name):
+                names.add(child.id.casefold())
+            elif isinstance(child, ast.Attribute):
+                names.add(child.attr.casefold())
+        return names
 
     def plan_symbol_rename(
         self,

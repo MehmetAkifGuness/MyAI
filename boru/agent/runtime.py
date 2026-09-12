@@ -123,6 +123,9 @@ class ReadOnlyToolAgent:
         validation_errors: list[str],
         seen_calls: set[str],
     ) -> tuple[str, bool]:
+        repeat_counter: dict[str, int] = {}
+        consecutive_repeats = 0
+
         for step in range(len(observations) + 1, self._max_steps + 1):
             action = self._validated_action(
                 step,
@@ -144,7 +147,27 @@ class ReadOnlyToolAgent:
                     "bir kanıta dayanmıyor."
                 )
                 continue
-            observations.append(self._execute_action(step, action, seen_calls))
+
+            call_key = self._call_key(action)
+            is_repeat = call_key in seen_calls
+            if is_repeat:
+                repeat_counter[call_key] = repeat_counter.get(call_key, 0) + 1
+                consecutive_repeats += 1
+            else:
+                consecutive_repeats = 0
+
+            # Circuit breaker: eğer model aynı çağrıyı art arda 3 kez tekrar edip kilitlendiyse
+            if consecutive_repeats >= 3:
+                validation_errors.append(
+                    f"Adım {step}: [Circuit Breaker] Ajan döngüye girdiği için durduruldu ({action.tool_name}). "
+                    "Mevcut kanıtlarla sentez deneniyor."
+                )
+                grounded_report = self._synthesize_grounded_final(objective, observations)
+                if grounded_report is not None:
+                    return grounded_report, True
+                break
+
+            observations.append(self._execute_action(step, action, seen_calls, validation_errors))
         grounded_report = self._synthesize_grounded_final(objective, observations)
         if grounded_report is not None:
             return grounded_report, True
@@ -160,7 +183,10 @@ class ReadOnlyToolAgent:
         try:
             return self._next_action(objective, observations, validation_errors)
         except (OSError, RuntimeError, TimeoutError, ValueError) as error:
-            validation_errors.append(f"Adım {step}: yapılandırılmış çıktı geçersiz ({error}).")
+            validation_errors.append(
+                f"Adım {step}: yapılandırılmış çıktı geçersiz ({error}). "
+                "Lütfen şemaya uygun bir JSON üretin."
+            )
             return None
 
     def _execute_action(
@@ -168,19 +194,47 @@ class ReadOnlyToolAgent:
         step: int,
         action: AgentAction,
         seen_calls: set[str],
+        validation_errors: list[str] | None = None,
     ) -> AgentObservation:
+        import difflib
         call_key = self._call_key(action)
+
+        # 1. Döngü tespiti (Loop detection)
         if call_key in seen_calls:
             result = ToolResult(
                 tool_name=action.tool_name,
                 success=False,
                 error="Aynı tool çağrısı daha önce yapıldı; farklı kanıt seçin.",
             )
+            if validation_errors is not None:
+                validation_errors.append(
+                    f"Adım {step}: [Döngü Önleyici] '{action.tool_name}' çağrısı daha önce yapıldı. "
+                    "Lütfen farklı parametrelerle yeni bir arama yapın veya 'final' yanıtı üretin."
+                )
+        # 2. Kayıt dışı / Hallucinated araç tespiti ve self-healing geri bildirim
+        elif self._registry.get(action.tool_name) is None:
+            available = [d.name for d in self._registry.definitions()]
+            matches = difflib.get_close_matches(action.tool_name, available, n=1, cutoff=0.4)
+            hint = f" Belki şunu kastettiniz: '{matches[0]}'?" if matches else ""
+            error_msg = (
+                f"Kayıt dışı araç: '{action.tool_name}'.{hint} "
+                f"Kullanılabilir araçlar: [{', '.join(sorted(available))}]. "
+                "Lütfen yalnızca katalogdaki araçları kullanın."
+            )
+            result = ToolResult(
+                tool_name=action.tool_name,
+                success=False,
+                error=error_msg,
+            )
+            if validation_errors is not None:
+                validation_errors.append(f"Adım {step}: {error_msg}")
+        # 3. Geçerli araç yürütmesi
         else:
             seen_calls.add(call_key)
             result = self._executor.execute(
                 ToolCall(tool_name=action.tool_name, arguments=action.arguments)
             )
+
         return AgentObservation(
             step=step,
             tool_name=action.tool_name,

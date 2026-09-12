@@ -130,15 +130,60 @@ class SafeCodeRelationshipIndex:
             resolved.setdefault(path, imported_via)
 
     @staticmethod
-    def _called_names(tree: ast.AST) -> set[str]:
+    def _extract_ast_identifiers(node: ast.AST | None) -> set[str]:
+        """AST düğümü altındaki tüm tanımlayıcı ve sembol adlarını case-insensitive çıkarır."""
+        names: set[str] = set()
+        if node is None:
+            return names
+        for item in ast.walk(node):
+            if isinstance(item, ast.Name):
+                names.add(item.id.casefold())
+            elif isinstance(item, ast.Attribute):
+                names.add(item.attr.casefold())
+        return names
+
+    @classmethod
+    def _called_names(cls, tree: ast.AST) -> set[str]:
+        """
+        AST üzerindeki çağrıları, sınıf kalıtım (bases) ilişkilerini,
+        tip anotasyonlarını ve decorator referanslarını çıkarır.
+        """
         names: set[str] = set()
         for node in ast.walk(tree):
-            if not isinstance(node, ast.Call):
-                continue
-            if isinstance(node.func, ast.Name):
-                names.add(node.func.id.casefold())
-            elif isinstance(node.func, ast.Attribute):
-                names.add(node.func.attr.casefold())
+            # 1. Fonksiyon ve metot çağrıları (ast.Call)
+            if isinstance(node, ast.Call):
+                if isinstance(node.func, ast.Name):
+                    names.add(node.func.id.casefold())
+                elif isinstance(node.func, ast.Attribute):
+                    names.add(node.func.attr.casefold())
+            # 2. Sınıf kalıtımı (bases) ve sınıf decorator'ları
+            elif isinstance(node, ast.ClassDef):
+                for base in node.bases:
+                    names.update(cls._extract_ast_identifiers(base))
+                for dec in node.decorator_list:
+                    names.update(cls._extract_ast_identifiers(dec))
+            # 3. Fonksiyon / metot tip anotasyonları ve decorator'lar
+            elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                if node.returns:
+                    names.update(cls._extract_ast_identifiers(node.returns))
+                all_args = (
+                    list(node.args.args)
+                    + list(node.args.posonlyargs)
+                    + list(node.args.kwonlyargs)
+                )
+                if node.args.vararg and node.args.vararg.annotation:
+                    names.update(cls._extract_ast_identifiers(node.args.vararg.annotation))
+                if node.args.kwarg and node.args.kwarg.annotation:
+                    names.update(cls._extract_ast_identifiers(node.args.kwarg.annotation))
+                for arg in all_args:
+                    if arg.annotation:
+                        names.update(cls._extract_ast_identifiers(arg.annotation))
+                for dec in node.decorator_list:
+                    names.update(cls._extract_ast_identifiers(dec))
+            # 4. Değişken ve alan tip anotasyonları (AnnAssign: x: MyType = ...)
+            elif isinstance(node, ast.AnnAssign):
+                if node.annotation:
+                    names.update(cls._extract_ast_identifiers(node.annotation))
         return names
 
     def _score_dependency(
@@ -181,10 +226,10 @@ class SafeCodeRelationshipIndex:
             tree = ast.parse(content, filename=path)
         except (SyntaxError, ValueError):
             return {}
-        return {
-            node.name.casefold(): (
-                12 if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else 3
-            )
-            for node in ast.walk(tree)
-            if isinstance(node, (ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
-        }
+        symbols: dict[str, int] = {}
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                symbols[node.name.casefold()] = 12
+            elif isinstance(node, ast.ClassDef):
+                symbols[node.name.casefold()] = max(symbols.get(node.name.casefold(), 0), 8)
+        return symbols

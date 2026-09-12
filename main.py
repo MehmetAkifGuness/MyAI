@@ -1,3 +1,14 @@
+"""
+Börü — Canonical Production Entry Point (Üretim Giriş Noktası)
+==============================================================
+Bu dosya, Börü ekosisteminin resmi ve tekil giriş noktasıdır.
+Desteklenen çalıştırma modları:
+  - Modern WebView2 Arayüzü: `python main.py` veya `python main.py --ui modern`
+  - Klasik Tkinter Arayüzü:  `python main.py --ui classic`
+  - Sessiz Arka Plan (Daemon): `python main.py --silent` veya `pythonw main.py`
+  - Sürüm Seçimi:            `python main.py --release V13.0`
+"""
+
 import argparse
 import json
 import logging

@@ -1,6 +1,13 @@
 from boru.code_index.index import SafeCodeIndex
 from boru.code_index.context import RelevantFileRanker
-from boru.code_index.graph import ProjectDependencyGraph, FileDependencyReport, SymbolLocation, SymbolRenamePlan
+from boru.code_index.graph import (
+    ClassHierarchyReport,
+    FileDependencyReport,
+    ProjectDependencyGraph,
+    SymbolLocation,
+    SymbolRenamePlan,
+    TypeUsageLocation,
+)
 from boru.code_index.graph_coordinator import DependencyGraphCoordinator
 from boru.code_index.impact import SafeCodeImpactIndex
 from boru.code_index.models import (
@@ -21,6 +28,7 @@ from boru.code_index.tools import (
 )
 
 __all__ = [
+    "ClassHierarchyReport",
     "CodeIndexSummary",
     "CodeSearchHit",
     "CodeSearchTool",
@@ -41,4 +49,5 @@ __all__ = [
     "SafeCodeRelationshipIndex",
     "SymbolLocation",
     "SymbolRenamePlan",
+    "TypeUsageLocation",
 ]
